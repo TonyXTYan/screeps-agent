@@ -7,6 +7,14 @@ type EnergyStructure =
     StructureTerminal |
     StructureLink;
 
+type WithdrawStructure =
+    StructureContainer |
+    StructureStorage |
+    StructureTerminal |
+    StructureLink |
+    Tombstone |
+    Ruin;
+
 type CreepArchetype =
     'worker' |
     'miner' |
@@ -20,8 +28,11 @@ type CreepArchetype =
 type CreepJobType =
     'harvestSource' |
     'withdrawEnergy' |
+    'withdrawResource' |
     'pickupEnergy' |
+    'pickupResource' |
     'depositEnergy' |
+    'depositResource' |
     'refillSpawn' |
     'refillTower' |
     'build' |
@@ -48,6 +59,7 @@ interface RoomStructureMemory {
         source: string[];
         hub: string[];
         controller: string[];
+        sink: string[];
         other: string[];
     };
     extractor?: string;
@@ -77,6 +89,9 @@ interface RoomLoadMemory {
     constructionSites: number;
     repairTargets: number;
     mineralReady: boolean;
+    salvageResources: number;
+    mineralMinerWork: number;
+    mineralMinerWorkDemand: number;
 }
 
 interface RemoteRoomPlan {
@@ -104,6 +119,7 @@ interface CreepMemory {
     jobTargetId?: string;
     jobRoomName?: string;
     jobAssignedAt?: number;
+    jobResourceType?: ResourceConstant;
     homeRoom?: string;
     remoteRoom?: string;
     remoteMode?: RemoteRoomMode;

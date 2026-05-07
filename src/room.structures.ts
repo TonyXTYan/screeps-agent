@@ -2,6 +2,7 @@ export interface LinkGroups {
     source: StructureLink[];
     hub: StructureLink[];
     controller: StructureLink[];
+    sink: StructureLink[];
     other: StructureLink[];
 }
 
@@ -55,7 +56,7 @@ export function getRoomStructures(room: Room): RoomStructureCache {
         if (structure.structureType === STRUCTURE_NUKER) { nuker = structure as StructureNuker; }
     }
 
-    const links = classifyLinks(room, linksRaw, sources, storage);
+    const links = classifyLinks(room, linksRaw, sources, spawns, extensions, storage);
 
     const cache: RoomStructureCache = {
         spawns,
@@ -77,16 +78,26 @@ export function getRoomStructures(room: Room): RoomStructureCache {
     return cache;
 }
 
-function classifyLinks(room: Room, links: StructureLink[], sources: Source[], storage: StructureStorage | undefined): LinkGroups {
-    const groups: LinkGroups = { source: [], hub: [], controller: [], other: [] };
+function classifyLinks(
+    room: Room,
+    links: StructureLink[],
+    sources: Source[],
+    spawns: StructureSpawn[],
+    extensions: StructureExtension[],
+    storage: StructureStorage | undefined
+): LinkGroups {
+    const groups: LinkGroups = { source: [], hub: [], controller: [], sink: [], other: [] };
 
     for (const link of links) {
         if (sources.some((source) => link.pos.getRangeTo(source) <= 2)) {
             groups.source.push(link);
         } else if (room.controller && link.pos.getRangeTo(room.controller) <= 4) {
             groups.controller.push(link);
-        } else if (storage && link.pos.getRangeTo(storage) <= 3) {
+        } else if ((storage && link.pos.getRangeTo(storage) <= 3) ||
+            spawns.some((spawn) => link.pos.getRangeTo(spawn) <= 3)) {
             groups.hub.push(link);
+        } else if (extensions.filter((extension) => link.pos.getRangeTo(extension) <= 3).length >= 3) {
+            groups.sink.push(link);
         } else {
             groups.other.push(link);
         }
@@ -107,6 +118,7 @@ function rememberRoomStructures(room: Room, cache: RoomStructureCache): void {
             source: ids(cache.links.source),
             hub: ids(cache.links.hub),
             controller: ids(cache.links.controller),
+            sink: ids(cache.links.sink),
             other: ids(cache.links.other)
         },
         extractor: cache.extractor?.id,

@@ -1,3 +1,4 @@
 - [Project Vision](project-vision.md) — AI-assisted play model: user owns strategy (expansion, defense, resource decisions), agents own implementation (code, optimization)
 - [Maestri Portal Usage Guide](maestri_portals.md) — Commands & workflow for reading game state via Maestri portal (navigate, snapshot, evaluate, screenshot) with key URLs
 - [Tooling & Conventions](tooling.md) — Script location, .local-scripts symlink warning, local docs location, and official online docs as source of truth
+- [Roadmap](roadmap.md) — Deferred labs, combat, boosting, factory, power, observer, and other future automation notes

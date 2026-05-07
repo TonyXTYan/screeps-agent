@@ -6,8 +6,11 @@ export function run(creep: Creep): boolean {
 
     if (jobType === 'harvestSource') { result = harvestSource(creep); }
     else if (jobType === 'withdrawEnergy') { result = withdrawEnergy(creep); }
+    else if (jobType === 'withdrawResource') { result = withdrawResource(creep); }
     else if (jobType === 'pickupEnergy') { result = pickupEnergy(creep); }
+    else if (jobType === 'pickupResource') { result = pickupResource(creep); }
     else if (jobType === 'depositEnergy') { result = depositEnergy(creep); }
+    else if (jobType === 'depositResource') { result = depositResource(creep); }
     else if (jobType === 'refillSpawn') { result = transferEnergy(creep); }
     else if (jobType === 'refillTower') { result = transferEnergy(creep); }
     else if (jobType === 'build') { result = build(creep); }
@@ -37,6 +40,7 @@ export function clearJob(creep: Creep): void {
     creep.memory.jobTargetId = undefined;
     creep.memory.jobRoomName = undefined;
     creep.memory.jobAssignedAt = undefined;
+    creep.memory.jobResourceType = undefined;
 }
 
 function harvestSource(creep: Creep): number {
@@ -67,6 +71,21 @@ function withdrawEnergy(creep: Creep): number {
     return code;
 }
 
+function withdrawResource(creep: Creep): number {
+    if (creep.store.getFreeCapacity() === 0) { return OK; }
+    const target = getTarget<WithdrawStructure>(creep);
+    if (!target) { return ERR_INVALID_TARGET; }
+
+    const resource = creep.memory.jobResourceType ?? firstStoredResource(target.store);
+    if (!resource || target.store.getUsedCapacity(resource) === 0) { return ERR_NOT_ENOUGH_RESOURCES; }
+
+    const code = creep.withdraw(target, resource);
+    if (code === ERR_NOT_IN_RANGE) {
+        creep.moveTo(target, { visualizePathStyle: { stroke: '#875641' } });
+    }
+    return code;
+}
+
 function pickupEnergy(creep: Creep): number {
     if (creep.store.getFreeCapacity(RESOURCE_ENERGY) === 0) { return OK; }
     const target = getTarget<Resource<RESOURCE_ENERGY>>(creep);
@@ -79,9 +98,36 @@ function pickupEnergy(creep: Creep): number {
     return code;
 }
 
+function pickupResource(creep: Creep): number {
+    if (creep.store.getFreeCapacity() === 0) { return OK; }
+    const target = getTarget<Resource<ResourceConstant>>(creep);
+    if (!target || target.amount === 0) { return ERR_NOT_ENOUGH_RESOURCES; }
+
+    const code = creep.pickup(target);
+    if (code === ERR_NOT_IN_RANGE) {
+        creep.moveTo(target, { visualizePathStyle: { stroke: '#875641' } });
+    }
+    return code;
+}
+
 function depositEnergy(creep: Creep): number {
     if (creep.store.getUsedCapacity(RESOURCE_ENERGY) === 0) { return ERR_NOT_ENOUGH_RESOURCES; }
     return transferEnergy(creep);
+}
+
+function depositResource(creep: Creep): number {
+    const target = getTarget<StructureStorage | StructureTerminal | StructureContainer>(creep);
+    if (!target) { return ERR_INVALID_TARGET; }
+
+    const resource = creep.memory.jobResourceType ?? firstStoredResource(creep.store);
+    if (!resource || creep.store.getUsedCapacity(resource) === 0) { return ERR_NOT_ENOUGH_RESOURCES; }
+    if (target.store.getFreeCapacity(resource) === 0) { return ERR_FULL; }
+
+    const code = creep.transfer(target, resource);
+    if (code === ERR_NOT_IN_RANGE) {
+        creep.moveTo(target, { visualizePathStyle: { stroke: '#41a7a7' } });
+    }
+    return code;
 }
 
 function transferEnergy(creep: Creep): number {
@@ -162,15 +208,13 @@ function depositMineral(creep: Creep): number {
     const target = getTarget<StructureStorage | StructureTerminal>(creep);
     if (!target) { return ERR_INVALID_TARGET; }
 
-    for (const resourceName in creep.store) {
-        const resource = resourceName as ResourceConstant;
-        if (creep.store.getUsedCapacity(resource) > 0) {
-            const code = creep.transfer(target, resource);
-            if (code === ERR_NOT_IN_RANGE) {
-                creep.moveTo(target, { visualizePathStyle: { stroke: '#41a7a7' } });
-            }
-            return code;
+    const resource = firstStoredResource(creep.store);
+    if (resource) {
+        const code = creep.transfer(target, resource);
+        if (code === ERR_NOT_IN_RANGE) {
+            creep.moveTo(target, { visualizePathStyle: { stroke: '#41a7a7' } });
         }
+        return code;
     }
 
     return ERR_NOT_ENOUGH_RESOURCES;
@@ -216,10 +260,18 @@ function idle(creep: Creep): number {
 }
 
 function offloadEnergyNearby(creep: Creep): boolean {
+    const links = creep.pos.findInRange(FIND_STRUCTURES, 1, {
+        filter: (structure) =>
+            structure.structureType === STRUCTURE_LINK &&
+            (structure as StructureLink).store.getFreeCapacity(RESOURCE_ENERGY) > 0
+    }) as StructureLink[];
+    if (links.length > 0) {
+        return creep.transfer(links[0], RESOURCE_ENERGY) === OK;
+    }
+
     const targets = creep.pos.findInRange(FIND_STRUCTURES, 1, {
         filter: (structure) =>
             (structure.structureType === STRUCTURE_CONTAINER ||
-             structure.structureType === STRUCTURE_LINK ||
              structure.structureType === STRUCTURE_STORAGE) &&
             (structure as EnergyStructure).store.getFreeCapacity(RESOURCE_ENERGY) > 0
     }) as EnergyStructure[];
@@ -239,4 +291,14 @@ function getTarget<T extends RoomObject>(creep: Creep): T | null {
     const id = creep.memory.jobTargetId;
     if (!id) { return null; }
     return Game.getObjectById(id as Id<any>) as T | null;
+}
+
+function firstStoredResource(store: StoreDefinition): ResourceConstant | null {
+    for (const resourceName in store) {
+        const resource = resourceName as ResourceConstant;
+        if (store.getUsedCapacity(resource) > 0) {
+            return resource;
+        }
+    }
+    return null;
 }

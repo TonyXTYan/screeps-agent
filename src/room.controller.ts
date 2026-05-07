@@ -10,6 +10,9 @@ interface RoomControllerContext {
     mineral: Mineral | undefined;
     creeps: Creep[];
     droppedEnergy: Resource<RESOURCE_ENERGY>[];
+    droppedResources: Resource<ResourceConstant>[];
+    tombstones: Tombstone[];
+    ruins: Ruin[];
     constructionSites: ConstructionSite[];
     repairTargets: AnyStructure[];
     injuredCreeps: Creep[];
@@ -22,8 +25,15 @@ interface SpawnRequest {
     remoteMode?: RemoteRoomMode;
 }
 
+interface ResourceTarget {
+    target: WithdrawStructure;
+    resource: ResourceConstant;
+}
+
 const TOWER_RESERVE_RATIO = 0.7;
-const MINERAL_MINING_STORAGE_FLOOR = 10000;
+const MINERAL_MINING_STORAGE_FLOOR = 3000;
+const MINERAL_WORK_DEMAND = 5;
+const LINK_TRANSFER_THRESHOLD = 400;
 
 export function run(room: Room): void {
     const context = buildContext(room);
@@ -109,9 +119,18 @@ function buildContext(room: Room): RoomControllerContext {
     const sources = room.find(FIND_SOURCES);
     const minerals = room.find(FIND_MINERALS);
     const creeps = room.find(FIND_MY_CREEPS);
+    const droppedResources = room.find(FIND_DROPPED_RESOURCES, {
+        filter: (resource) => resource.amount > 0
+    }) as Resource<ResourceConstant>[];
     const droppedEnergy = room.find(FIND_DROPPED_RESOURCES, {
         filter: (resource) => resource.resourceType === RESOURCE_ENERGY && resource.amount >= 50
     }) as Resource<RESOURCE_ENERGY>[];
+    const tombstones = room.find(FIND_TOMBSTONES, {
+        filter: (tombstone) => totalStoredResources(tombstone.store) > 0
+    });
+    const ruins = room.find(FIND_RUINS, {
+        filter: (ruin) => totalStoredResources(ruin.store) > 0
+    });
     const constructionSites = room.find(FIND_MY_CONSTRUCTION_SITES);
     const repairTargets = room.find(FIND_STRUCTURES, { filter: repairStructureFilter });
     const injuredCreeps = room.find(FIND_MY_CREEPS, { filter: (creep) => creep.hits < creep.hitsMax });
@@ -123,6 +142,9 @@ function buildContext(room: Room): RoomControllerContext {
         mineral: minerals[0],
         creeps,
         droppedEnergy,
+        droppedResources,
+        tombstones,
+        ruins,
         constructionSites,
         repairTargets,
         injuredCreeps
@@ -154,6 +176,9 @@ function rememberLoad(context: RoomControllerContext): void {
     const spawnEnergyDeficit = sumFreeEnergy([...context.structures.spawns, ...context.structures.extensions]);
     const towerEnergyDeficit = sumFreeEnergy(context.structures.towers.filter((tower) => towerEnergyRatio(tower) < TOWER_RESERVE_RATIO));
     const mineralReady = mineralReadyToMine(context);
+    const salvageResources = totalStoredTargets(context.tombstones) +
+        totalStoredTargets(context.ruins) +
+        context.droppedResources.reduce((total, resource) => total + resource.amount, 0);
 
     context.room.memory.load = {
         updatedAt: Game.time,
@@ -163,7 +188,7 @@ function rememberLoad(context: RoomControllerContext): void {
         storedEnergy: storedEnergy(context),
         sourceCount: context.sources.length,
         minerWork: capacities.minerWork,
-        minerWorkDemand: context.sources.length * 5,
+        minerWorkDemand: totalSourceWorkDemand(context.sources),
         haulerCapacity: capacities.haulerCapacity,
         haulerCapacityDemand: desiredHaulerCapacity(context),
         workerWork: capacities.workerWork,
@@ -172,18 +197,31 @@ function rememberLoad(context: RoomControllerContext): void {
         towerEnergyDeficit,
         constructionSites: context.constructionSites.length,
         repairTargets: context.repairTargets.length,
-        mineralReady
+        mineralReady,
+        salvageResources,
+        mineralMinerWork: capacities.mineralMinerWork,
+        mineralMinerWorkDemand: mineralReady ? MINERAL_WORK_DEMAND : 0
     };
 }
 
 function runLinks(context: RoomControllerContext): void {
-    const receiver = context.structures.links.controller[0] ?? context.structures.links.hub[0];
-    if (!receiver) { return; }
+    const receivers = linkReceivers(context);
+    if (receivers.length === 0) { return; }
 
-    for (const link of context.structures.links.source) {
+    const senders = [
+        ...context.structures.links.source,
+        ...context.structures.links.hub.filter((link) => spawnEnergyPressure(context) === 0),
+        ...context.structures.links.other
+    ];
+
+    for (const link of senders) {
         if (link.cooldown > 0) { continue; }
-        if (link.store.getUsedCapacity(RESOURCE_ENERGY) < 400) { continue; }
-        if (receiver.store.getFreeCapacity(RESOURCE_ENERGY) < 400) { continue; }
+        if (link.store.getUsedCapacity(RESOURCE_ENERGY) < LINK_TRANSFER_THRESHOLD) { continue; }
+
+        const receiver = receivers.find((candidate) =>
+            candidate.id !== link.id &&
+            candidate.store.getFreeCapacity(RESOURCE_ENERGY) >= LINK_TRANSFER_THRESHOLD);
+        if (!receiver) { continue; }
 
         const code = link.transferEnergy(receiver);
         if (code !== OK && Game.time % 25 === 0) {
@@ -226,9 +264,9 @@ function assignJob(context: RoomControllerContext, creep: Creep, sourceAssignmen
     const hasMinerals = totalUsed > energyUsed;
 
     if (hasMinerals) {
-        const mineralSink = context.structures.terminal ?? context.structures.storage;
-        if (mineralSink) {
-            setJob(creep, 'depositMineral', mineralSink);
+        const resourceSink = resourceDepositTarget(context);
+        if (resourceSink) {
+            setResourceJob(creep, 'depositResource', resourceSink, firstStoredResource(creep.store));
             return;
         }
     }
@@ -257,9 +295,15 @@ function assignJob(context: RoomControllerContext, creep: Creep, sourceAssignmen
     }
 
     if (capabilities.haul > 0) {
-        const dropped = closest(creep, context.droppedEnergy);
+        const salvage = salvageWithdrawalTarget(context, creep);
+        if (salvage) {
+            setResourceJob(creep, 'withdrawResource', salvage.target, salvage.resource);
+            return;
+        }
+
+        const dropped = closest(creep, context.droppedResources);
         if (dropped) {
-            setJob(creep, 'pickupEnergy', dropped);
+            setResourceJob(creep, 'pickupResource', dropped, dropped.resourceType);
             return;
         }
 
@@ -370,7 +414,7 @@ function runSpawnPlanner(context: RoomControllerContext): void {
 
 function chooseSpawnRequest(context: RoomControllerContext): SpawnRequest | null {
     const capacities = measureCapabilities(context.creeps);
-    const minerWorkDemand = context.sources.length * 5;
+    const minerWorkDemand = totalSourceWorkDemand(context.sources);
     const haulerCapacityDemand = desiredHaulerCapacity(context);
     const workerWorkDemand = desiredWorkerWork(context);
 
@@ -394,7 +438,7 @@ function chooseSpawnRequest(context: RoomControllerContext): SpawnRequest | null
         return { archetype: 'worker', reason: 'worker deficit ' + capacities.workerWork + '/' + workerWorkDemand };
     }
 
-    if (mineralReadyToMine(context) && capacities.mineralMinerWork === 0) {
+    if (mineralReadyToMine(context) && capacities.mineralMinerWork < MINERAL_WORK_DEMAND) {
         return { archetype: 'mineralMiner', reason: 'passive mineral extraction' };
     }
 
@@ -479,7 +523,8 @@ function measureCapabilities(creeps: Creep[]): {
 function desiredHaulerCapacity(context: RoomControllerContext): number {
     const base = context.structures.storage ? 600 : 300;
     const rclBonus = (context.room.controller?.level ?? 0) >= 7 ? 300 : 0;
-    return context.sources.length * base + rclBonus;
+    const salvageBonus = context.tombstones.length > 0 || context.ruins.length > 0 || context.droppedResources.length > 3 ? 300 : 0;
+    return context.sources.length * base + rclBonus + salvageBonus;
 }
 
 function desiredWorkerWork(context: RoomControllerContext): number {
@@ -502,6 +547,35 @@ function refillTowerTargets(context: RoomControllerContext): EnergyStructure[] {
         .filter((tower) => towerEnergyRatio(tower) < TOWER_RESERVE_RATIO);
 }
 
+function salvageWithdrawalTarget(context: RoomControllerContext, creep: Creep): ResourceTarget | null {
+    const targets: WithdrawStructure[] = [...context.tombstones, ...context.ruins];
+    let best: ResourceTarget | null = null;
+    let bestRange = Infinity;
+
+    for (const target of targets) {
+        const resource = firstStoredResource(target.store);
+        if (!resource) { continue; }
+
+        const range = creep.pos.getRangeTo(target);
+        if (range < bestRange) {
+            best = { target, resource };
+            bestRange = range;
+        }
+    }
+
+    return best;
+}
+
+function resourceDepositTarget(context: RoomControllerContext): StructureTerminal | StructureStorage | StructureContainer | null {
+    if (context.structures.terminal && context.structures.terminal.store.getFreeCapacity() > 0) {
+        return context.structures.terminal;
+    }
+    if (context.structures.storage && context.structures.storage.store.getFreeCapacity() > 0) {
+        return context.structures.storage;
+    }
+    return context.structures.containers.find((container) => container.store.getFreeCapacity() > 0) ?? null;
+}
+
 function energyWithdrawalTarget(
     context: RoomControllerContext,
     creep: Creep,
@@ -513,7 +587,11 @@ function energyWithdrawalTarget(
         .filter((link) => link.store.getUsedCapacity(RESOURCE_ENERGY) > 0);
 
     if (archetype === 'hauler' || archetype === 'remoteHauler') {
-        return closest(creep, [...sourceContainers, ...sourceLinks]);
+        const localDemandLinks = spawnEnergyPressure(context) > 0
+            ? [...context.structures.links.sink, ...context.structures.links.hub]
+                .filter((link) => link.store.getUsedCapacity(RESOURCE_ENERGY) > 0)
+            : [];
+        return closest(creep, [...localDemandLinks, ...sourceContainers, ...sourceLinks]);
     }
 
     const controllerOrHubLink = closest(creep, [...context.structures.links.controller, ...context.structures.links.hub]
@@ -525,6 +603,51 @@ function energyWithdrawalTarget(
     }
 
     return closest(creep, [...sourceContainers, ...sourceLinks]);
+}
+
+function linkReceivers(context: RoomControllerContext): StructureLink[] {
+    const receivers: StructureLink[] = [];
+    const spawnPressure = spawnEnergyPressure(context);
+    const controllerNeedsEnergy = context.room.controller !== undefined &&
+        context.structures.links.controller.some((link) => link.store.getUsedCapacity(RESOURCE_ENERGY) < 400);
+
+    if (spawnPressure > 0) {
+        receivers.push(...context.structures.links.sink, ...context.structures.links.hub);
+    }
+
+    if (controllerNeedsEnergy) {
+        receivers.push(...context.structures.links.controller);
+    }
+
+    receivers.push(...context.structures.links.hub, ...context.structures.links.controller);
+    return uniqueLinks(receivers);
+}
+
+function uniqueLinks(links: StructureLink[]): StructureLink[] {
+    const seen: { [id: string]: boolean } = {};
+    const result: StructureLink[] = [];
+    for (const link of links) {
+        if (seen[link.id]) { continue; }
+        seen[link.id] = true;
+        result.push(link);
+    }
+    return result;
+}
+
+function spawnEnergyPressure(context: RoomControllerContext): number {
+    return sumFreeEnergy([...context.structures.spawns, ...context.structures.extensions]);
+}
+
+function totalSourceWorkDemand(sources: Source[]): number {
+    let demand = 0;
+    for (const source of sources) {
+        demand += sourceWorkDemand(source);
+    }
+    return demand;
+}
+
+function sourceWorkDemand(source: Source): number {
+    return Math.ceil(source.energyCapacity / ENERGY_REGEN_TIME / HARVEST_POWER);
 }
 
 function assignedSource(creep: Creep, sources: Source[], counts: { [sourceId: string]: number }): Source | null {
@@ -610,6 +733,33 @@ function mineralReadyToMine(context: RoomControllerContext): boolean {
     return storedEnergy(context) >= MINERAL_MINING_STORAGE_FLOOR;
 }
 
+function totalStoredTargets(targets: Array<Tombstone | Ruin>): number {
+    let total = 0;
+    for (const target of targets) {
+        total += totalStoredResources(target.store);
+    }
+    return total;
+}
+
+function totalStoredResources(store: StoreDefinition): number {
+    let total = 0;
+    for (const resourceName in store) {
+        total += store.getUsedCapacity(resourceName as ResourceConstant);
+    }
+    return total;
+}
+
+function firstStoredResource(store: StoreDefinition): ResourceConstant | null {
+    let fallback: ResourceConstant | null = null;
+    for (const resourceName in store) {
+        const resource = resourceName as ResourceConstant;
+        if (store.getUsedCapacity(resource) <= 0) { continue; }
+        if (resource !== RESOURCE_ENERGY) { return resource; }
+        fallback = resource;
+    }
+    return fallback;
+}
+
 function storedEnergy(context: RoomControllerContext): number {
     const storageEnergy = context.structures.storage?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0;
     const terminalEnergy = context.structures.terminal?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0;
@@ -638,6 +788,7 @@ function setJob(creep: Creep, jobType: CreepJobType, target: (RoomObject & { id:
     creep.memory.jobTargetId = target.id;
     creep.memory.jobRoomName = target.pos.roomName;
     creep.memory.jobAssignedAt = Game.time;
+    creep.memory.jobResourceType = undefined;
 }
 
 function setTravelJob(creep: Creep, roomName: string): void {
@@ -645,6 +796,25 @@ function setTravelJob(creep: Creep, roomName: string): void {
     creep.memory.jobTargetId = undefined;
     creep.memory.jobRoomName = roomName;
     creep.memory.jobAssignedAt = Game.time;
+    creep.memory.jobResourceType = undefined;
+}
+
+function setResourceJob(
+    creep: Creep,
+    jobType: CreepJobType,
+    target: (RoomObject & { id: string }) | undefined | null,
+    resource: ResourceConstant | null
+): void {
+    if (!target || !resource) {
+        clearJob(creep);
+        return;
+    }
+
+    creep.memory.jobType = jobType;
+    creep.memory.jobTargetId = target.id;
+    creep.memory.jobRoomName = target.pos.roomName;
+    creep.memory.jobAssignedAt = Game.time;
+    creep.memory.jobResourceType = resource;
 }
 
 function closest<T extends RoomObject>(creep: Creep, targets: T[]): T | null {

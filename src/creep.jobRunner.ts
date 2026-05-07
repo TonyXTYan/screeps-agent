@@ -316,6 +316,7 @@ function shouldClearJob(creep: Creep, jobType: CreepJobType, result: number): bo
 
     if (jobType === 'mineMineral') {
         return result === ERR_INVALID_TARGET ||
+            result === ERR_FULL ||
             (result === ERR_NOT_ENOUGH_RESOURCES && mineralDepleted(creep));
     }
 

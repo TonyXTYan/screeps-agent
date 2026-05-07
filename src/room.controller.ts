@@ -1102,8 +1102,7 @@ function sourceSpawnDeficit(context: RoomControllerContext): SourcePlan | null {
         const assigned = assignedSourceWork(context.creeps, plan.source.id);
         plan.assignedWork = assigned;
         const deficit = plan.requiredWork - assigned;
-        const assignedMiners = assignedSourceMinerCount(context.creeps, plan.source.id);
-        if (assignedMiners < 1 && deficit > bestDeficit) {
+        if (deficit > bestDeficit) {
             best = plan;
             bestDeficit = deficit;
         }

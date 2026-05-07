@@ -63,3 +63,12 @@ The strategic priority is Economy First: storage-centered logistics, containers,
 - The room controller should use PID-like demand balancing conceptually, but the first implementation can use proportional deficit scoring plus demand history rather than a mathematically full PID controller.
 - No automatic market trading, lab reactions, boosts, combat squads, or autonomous claiming are included in the first pass.
 - W7N9 remains the only active owned room until the user explicitly approves remote rooms or claim targets.
+
+## 2026-05-08 Sticky Scheduler Follow-up
+
+- Implemented sticky active jobs and remembered primary WORK jobs so builders, repairers, and upgraders refuel then return to the same target instead of racing for a new target every tick.
+- Added reservation accounting for ruins/tombstones/dropped resources, spawn/tower refill capacity, construction progress, repairs, and controller upgrader work to limit over-assignment.
+- Source miner policy now enforces one dedicated miner per source before other spawn needs. Existing duplicate miners can be reassigned to uncovered sources, and new miner bodies wait for room energy capacity when the room is not in emergency recovery.
+- Static source/mineral mining now uses stationary targets: no-CARRY miners can stand on containers, while link-backed source miners keep CARRY so they can transfer harvested energy into the nearby link.
+- The controller lane is protected: at least one upgrade-capable creep is reserved for controller work and current build/repair jobs can be interrupted to restore that upgrader slot.
+- Validation run: `npx tsc --noEmit` and `npm run build` both passed.

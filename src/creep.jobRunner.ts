@@ -26,7 +26,7 @@ export function run(creep: Creep): boolean {
 
     if (result !== undefined) {
         creep.memory.lastJobResult = result;
-        if (shouldClearJob(result)) {
+        if (shouldClearJob(creep, jobType, result)) {
             clearJob(creep);
         }
         return true;
@@ -44,13 +44,19 @@ export function clearJob(creep: Creep): void {
 }
 
 function harvestSource(creep: Creep): number {
+    const source = getTarget<Source>(creep);
+    if (!source) { return ERR_INVALID_TARGET; }
+
+    const station = stationaryTarget(creep);
+    if (station && !atStation(creep, station)) {
+        creep.moveTo(station, { visualizePathStyle: { stroke: '#3d2a22' } });
+        return ERR_NOT_IN_RANGE;
+    }
+
     if (creep.store.getFreeCapacity(RESOURCE_ENERGY) === 0 && creep.store.getCapacity(RESOURCE_ENERGY) > 0) {
         if (offloadEnergyNearby(creep)) { return OK; }
         return creep.drop(RESOURCE_ENERGY);
     }
-
-    const source = getTarget<Source>(creep);
-    if (!source) { return ERR_INVALID_TARGET; }
 
     const code = creep.harvest(source);
     if (code === ERR_NOT_IN_RANGE) {
@@ -190,12 +196,19 @@ function heal(creep: Creep): number {
 }
 
 function mineMineral(creep: Creep): number {
-    if (creep.store.getFreeCapacity() === 0 && creep.store.getCapacity() > 0) {
-        return ERR_FULL;
-    }
-
     const mineral = getTarget<Mineral>(creep);
     if (!mineral || mineral.mineralAmount === 0) { return ERR_NOT_ENOUGH_RESOURCES; }
+
+    const station = stationaryTarget(creep);
+    if (station && !atStation(creep, station)) {
+        creep.moveTo(station, { visualizePathStyle: { stroke: '#41a7a7' } });
+        return ERR_NOT_IN_RANGE;
+    }
+
+    if (creep.store.getFreeCapacity() === 0 && creep.store.getCapacity() > 0) {
+        if (offloadResourceNearby(creep)) { return OK; }
+        return ERR_FULL;
+    }
 
     const code = creep.harvest(mineral);
     if (code === ERR_NOT_IN_RANGE) {
@@ -280,7 +293,46 @@ function offloadEnergyNearby(creep: Creep): boolean {
     return creep.transfer(targets[0], RESOURCE_ENERGY) === OK;
 }
 
-function shouldClearJob(result: number): boolean {
+function offloadResourceNearby(creep: Creep): boolean {
+    const resource = firstStoredResource(creep.store);
+    if (!resource) { return false; }
+
+    const targets = creep.pos.findInRange(FIND_STRUCTURES, 1, {
+        filter: (structure) =>
+            (structure.structureType === STRUCTURE_CONTAINER ||
+             structure.structureType === STRUCTURE_STORAGE ||
+             structure.structureType === STRUCTURE_TERMINAL) &&
+            (structure as StructureContainer | StructureStorage | StructureTerminal).store.getFreeCapacity(resource) > 0
+    }) as Array<StructureContainer | StructureStorage | StructureTerminal>;
+
+    if (targets.length === 0) { return false; }
+    return creep.transfer(targets[0], resource) === OK;
+}
+
+function shouldClearJob(creep: Creep, jobType: CreepJobType, result: number): boolean {
+    if (jobType === 'harvestSource') {
+        return result === ERR_INVALID_TARGET;
+    }
+
+    if (jobType === 'mineMineral') {
+        return result === ERR_INVALID_TARGET ||
+            (result === ERR_NOT_ENOUGH_RESOURCES && mineralDepleted(creep));
+    }
+
+    if (jobType === 'build' || jobType === 'repair' || jobType === 'upgrade') {
+        return result === ERR_INVALID_TARGET ||
+            result === ERR_NOT_ENOUGH_RESOURCES ||
+            result === ERR_FULL;
+    }
+
+    if (jobType === 'heal') {
+        return result === ERR_INVALID_TARGET;
+    }
+
+    if (jobType === 'reserveController' || jobType === 'claimController' || jobType === 'travelRoom') {
+        return result === OK || result === ERR_INVALID_TARGET;
+    }
+
     return result === OK ||
         result === ERR_INVALID_TARGET ||
         result === ERR_NOT_ENOUGH_RESOURCES ||
@@ -293,6 +345,19 @@ function getTarget<T extends RoomObject>(creep: Creep): T | null {
     return Game.getObjectById(id as Id<any>) as T | null;
 }
 
+function stationaryTarget(creep: Creep): RoomObject | null {
+    const id = creep.memory.stationaryTargetId;
+    if (!id) { return null; }
+    return Game.getObjectById(id as Id<any>) as RoomObject | null;
+}
+
+function atStation(creep: Creep, station: RoomObject): boolean {
+    if (station instanceof StructureContainer) {
+        return creep.pos.isEqualTo(station.pos);
+    }
+    return creep.pos.isNearTo(station);
+}
+
 function firstStoredResource(store: StoreDefinition): ResourceConstant | null {
     for (const resourceName in store) {
         const resource = resourceName as ResourceConstant;
@@ -301,4 +366,11 @@ function firstStoredResource(store: StoreDefinition): ResourceConstant | null {
         }
     }
     return null;
+}
+
+function mineralDepleted(creep: Creep): boolean {
+    const id = creep.memory.jobTargetId;
+    if (!id) { return true; }
+    const mineral = Game.getObjectById(id as Id<Mineral>);
+    return !mineral || mineral.mineralAmount === 0;
 }

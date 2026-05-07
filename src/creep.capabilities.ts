@@ -106,8 +106,18 @@ export function ensureArchetype(creep: Creep): CreepArchetype {
     return archetype;
 }
 
-export function planBodyForArchetype(archetype: CreepArchetype, energyBudget: number): BodyPartConstant[] {
+export function planBodyForArchetype(archetype: CreepArchetype, energyBudget: number, opts?: { staticMining?: boolean }): BodyPartConstant[] {
     if (archetype === 'miner' || archetype === 'remoteMiner' || archetype === 'mineralMiner') {
+        if (opts?.staticMining) {
+            return selectLargestWithinBudget([
+                [WORK, WORK, WORK, WORK, WORK, MOVE],
+                [WORK, WORK, WORK, WORK, MOVE],
+                [WORK, WORK, WORK, MOVE],
+                [WORK, WORK, MOVE],
+                [WORK, MOVE]
+            ], energyBudget);
+        }
+
         return selectLargestWithinBudget([
             [WORK, WORK, WORK, WORK, WORK, CARRY, MOVE, MOVE, MOVE],
             [WORK, WORK, WORK, WORK, CARRY, MOVE, MOVE],

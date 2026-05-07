@@ -94,6 +94,25 @@ interface RoomLoadMemory {
     mineralMinerWorkDemand: number;
 }
 
+interface SourcePlanMemory {
+    sourceId: string;
+    containerId?: string;
+    linkId?: string;
+    requiredWork: number;
+    assignedWork: number;
+    staticMining: boolean;
+}
+
+interface MineralPlanMemory {
+    mineralId: string;
+    extractorId?: string;
+    containerId?: string;
+    linkId?: string;
+    requiredWork: number;
+    assignedWork: number;
+    staticMining: boolean;
+}
+
 interface RemoteRoomPlan {
     enabled: boolean;
     roomName: string;
@@ -106,6 +125,8 @@ interface RoomPlanMemory {
     remoteRooms?: { [roomName: string]: RemoteRoomPlan };
     claimTargets?: string[];
     lastRcl?: number;
+    sources?: { [sourceId: string]: SourcePlanMemory };
+    mineral?: MineralPlanMemory;
 }
 
 declare const console: {
@@ -120,10 +141,20 @@ interface CreepMemory {
     jobRoomName?: string;
     jobAssignedAt?: number;
     jobResourceType?: ResourceConstant;
+    primaryJobType?: CreepJobType;
+    primaryTargetId?: string;
+    primaryRoomName?: string;
+    primaryResourceType?: ResourceConstant;
+    primaryAssignedAt?: number;
+    interruptReason?: string;
     homeRoom?: string;
     remoteRoom?: string;
     remoteMode?: RemoteRoomMode;
     sourceId?: string;
+    assignedSourceId?: string;
+    assignedMineralId?: string;
+    stationaryTargetId?: string;
+    staticMining?: boolean;
     lastJobResult?: number;
     harvestTargetSourceIndex?: number;
     harvestTargetSourceId?: string;

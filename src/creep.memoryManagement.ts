@@ -1,3 +1,5 @@
+import { ensureArchetype } from './creep.capabilities';
+
 export function run(): void {
     for (const name in Memory.creeps) {
         if (!Game.creeps[name]) {
@@ -6,19 +8,21 @@ export function run(): void {
         }
     }
 
-    const dictKey: { [key: number]: string } = {
-        0: 'builder',
-        1: 'harvester',
-        2: 'upgrader'
-    };
-
     for (const name in Game.creeps) {
         const creep = Game.creeps[name];
-        if (creep.memory.role === undefined && !creep.spawning) {
-            const num = Math.floor(Math.random() * 3);
-            const role = dictKey[num];
-            creep.memory.role = role;
-            console.log('creep.MemoryManagement: ' + name + ' have been assigned ' + role);
+        if (creep.spawning) { continue; }
+
+        const archetype = ensureArchetype(creep);
+        if (creep.memory.role === undefined) {
+            creep.memory.role = fallbackRoleForArchetype(archetype);
+            console.log('creep.MemoryManagement: ' + name + ' assigned fallback role ' + creep.memory.role);
         }
     }
+}
+
+function fallbackRoleForArchetype(archetype: CreepArchetype): string {
+    if (archetype === 'doctor') { return 'doctor'; }
+    if (archetype === 'miner' || archetype === 'hauler' || archetype === 'mineralMiner') { return 'harvester'; }
+    if (archetype === 'claimer') { return 'manual'; }
+    return 'builder';
 }

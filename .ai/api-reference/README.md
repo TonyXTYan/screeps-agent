@@ -63,4 +63,4 @@ Quick index of all 53 documented classes and objects:
 
 ---
 
-*Last updated: 2026-05-07*
+*Last updated: 2026-05-08*

@@ -56,20 +56,20 @@ type: project
 - **CPU Bucket:** 1,701 (healthy, increasing trend)
 - **CPU Limit:** 500/tick
 - **Memory Usage:** ~1,350 bytes
-- **Execution Status:** ✅ Stable, no errors
+- **Execution Status:** Stable, no errors
 
 ## Notable Observations
 
-1. **Very low CPU usage** — 2.2/500 leaves massive headroom for expansion
-2. **Bucket trending upward** — consistent generation of surplus CPU
-3. **Low energy storage** — only ~5% of container capacity used; room is not energy-constrained
-4. **Zero casualties** — 0 creeps lost indicates stable bot logic
-5. **Small population** — 5 creeps is likely below optimal for a Level 6 room
-6. **Active construction** — 21 ongoing construction sites suggest defensive/infrastructural expansion
+1. **Very low CPU usage** - 2.2/500 leaves massive headroom for expansion
+2. **Bucket trending upward** - consistent generation of surplus CPU
+3. **Low energy storage** - only ~5% of container capacity used; room is not energy-constrained
+4. **Zero casualties** - 0 creeps lost indicates stable bot logic
+5. **Small population** - 5 creeps is likely below optimal for a Level 6 room
+6. **Active construction** - 21 ongoing construction sites suggest defensive or infrastructural expansion
 
 ## Strategic Implications
 
-- **CPU is not a bottleneck** — can afford more creeps, more complex logic, or expansion to new rooms
-- **Energy is sufficient** — production is stable and growing; not energy-starved
-- **Room expansion potential** — could increase creep count and start planning room expansion
-- **Defense status unclear** — no power creeps; vulnerability to hostiles unknown
+- **CPU is not a bottleneck** - can afford more creeps, more complex logic, or expansion to new rooms
+- **Energy is sufficient** - production is stable and growing; not energy-starved
+- **Room expansion potential** - could increase creep count and start planning room expansion
+- **Defense status unclear** - no power creeps; vulnerability to hostiles unknown

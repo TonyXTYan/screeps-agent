@@ -36,4 +36,4 @@ Complete guides covering gameplay, scripting, and other topics.
 
 ---
 
-*Last updated: 2026-05-07*
+*Last updated: 2026-05-08*

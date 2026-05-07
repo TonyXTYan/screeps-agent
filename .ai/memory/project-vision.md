@@ -28,4 +28,4 @@ The goal of this project is not just a Screeps bot — it's an **AI-assisted Scr
 
 ## Origin
 
-This vision was established in session `2026-05-07-claude-haiku-strategic-vision.md` before the TypeScript migration.
+This vision was established in session `.ai/session/2026-05-07-claude-haiku-strategic-vision/notes.md` before the TypeScript migration.

@@ -69,10 +69,12 @@ This project uses `.ai/` for agent-readable project context that doesn't belong 
 
 **When to write a memory file:** Add to `.ai/memory/` when you learn something durable about the project that isn't derivable from the code — constraints, tradeoffs, gotchas, stakeholder requirements.
 
+**Documentation truth:** `.ai/api-reference/` and `.ai/guides/` are convenience snapshots. When in doubt, check the official online Screeps docs at `https://docs.screeps.com/api/` and `https://docs.screeps.com/` as the source of truth.
+
 ## Memory Index
 
 Quick reference for persistent project knowledge:
 
 - **project-vision.md** — AI-assisted play model: user owns strategy (expansion, defense, resource decisions), agents own implementation (code, optimization)
 - **maestri_portals.md** — Commands & workflow for reading game state via Maestri portal (navigate, snapshot, evaluate, screenshot) with key URLs
-- **game_state_baseline.md** — Current account snapshot (2026-05-08): room W7N9, 5 creeps, 6 control level, stable CPU usage, low energy storage utilization
+- **tooling.md** — Script location (.ai/scripts/), .local-scripts symlink warning, local docs location, and official online docs as source of truth

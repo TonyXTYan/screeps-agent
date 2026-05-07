@@ -1,0 +1,3 @@
+- [Project Vision](project-vision.md) — AI-assisted play model: user owns strategy (expansion, defense, resource decisions), agents own implementation (code, optimization)
+- [Maestri Portal Usage Guide](maestri_portals.md) — Commands & workflow for reading game state via Maestri portal (navigate, snapshot, evaluate, screenshot) with key URLs
+- [Game State Baseline (2026-05-08)](game_state_baseline.md) — Current account snapshot: room W7N9, 5 creeps, 6 control level, stable CPU usage, low energy storage utilization

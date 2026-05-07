@@ -1,0 +1,69 @@
+import * as creepHarvest from './creep.harvest';
+
+export function repairStructureFilter(structure: AnyStructure): boolean {
+    if (structure.structureType === STRUCTURE_WALL) {
+        return structure.hits < 10 * 1000;
+    }
+    return structure.hits < structure.hitsMax;
+}
+
+export function repairTargetToRepair(creep: Creep): AnyStructure | null {
+    return creep.pos.findClosestByPath(FIND_STRUCTURES, { filter: repairStructureFilter });
+}
+
+export function repairJob(creep: Creep): boolean {
+    const repairTarget = repairTargetToRepair(creep);
+    if (repairTarget) {
+        const repairCode = creep.repair(repairTarget);
+        if (repairCode === ERR_NOT_IN_RANGE) {
+            creep.say('🩹');
+            creep.moveTo(repairTarget, { visualizePathStyle: { stroke: '#b0f566' } });
+        } else if (repairCode !== OK) {
+            console.log('role.doctor: for creep ' + creep.name + 'repair return code: ' + repairCode);
+        }
+        return true;
+    }
+    console.log('role.doctor: ' + creep.name + 'all repaired ' + repairTarget);
+    return false;
+}
+
+export function run(creep: Creep): void {
+    if (creep.memory.repairing === undefined) {
+        creep.memory.repairing = creep.store.getUsedCapacity() > 30;
+    }
+
+    if (creep.memory.repairing && creep.store.getUsedCapacity(RESOURCE_ENERGY) === 0) {
+        creep.memory.repairing = false;
+        creep.say('🔄');
+    }
+    if (!creep.memory.repairing && creep.store.getFreeCapacity() === 0) {
+        creep.memory.repairing = true;
+        creep.say('🩹');
+    }
+
+    if (creep.memory.repairing) {
+        const healTargets = creep.room.find(FIND_MY_CREEPS, {
+            filter: (c) => c.hits < c.hitsMax
+        });
+
+        if (healTargets.length > 0) {
+            const transferCode = creep.heal(healTargets[0]);
+            if (transferCode === ERR_NOT_IN_RANGE) {
+                creep.moveTo(healTargets[0], { visualizePathStyle: { stroke: '#65fd62' } });
+            } else {
+                console.log('role.doctor: heal return code: ' + transferCode);
+            }
+        } else if (!repairJob(creep)) {
+            let counter = 0;
+            for (const name in Game.creeps) {
+                if (Game.creeps[name].memory.role === 'doctor') { counter++; }
+            }
+            if (counter <= 2) {
+                console.log('role.doctor: doctor job done, so moving it to Spawn 1');
+                creep.moveTo(Game.spawns['Spawn1'], { visualizePathStyle: { stroke: '#fafafa' } });
+            }
+        }
+    } else {
+        creepHarvest.run(creep);
+    }
+}

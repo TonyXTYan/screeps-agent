@@ -2,9 +2,11 @@ import * as roleHarvester from './role.harvester';
 import * as roleUpgrader from './role.upgrader';
 import * as roleBuilder from './role.builder';
 import * as roleDoctor from './role.doctor';
+import * as roleDefender from './role.defender';
 import * as roleManual from './role.manual';
 import * as creepMemoryManagement from './creep.memoryManagement';
 import * as creepJobRunner from './creep.jobRunner';
+import * as populationControl from './creep.populationControl';
 import * as roomController from './room.controller';
 import * as towerBasics from './tower.basics';
 
@@ -15,6 +17,7 @@ export function loop(): void {
 
     const controlledRooms = ownedRooms();
     for (const room of controlledRooms) {
+        populationControl.checkDefenders(room); // runs before roomController to win the spawn slot
         roomController.run(room);
         towerBasics.run(room);
     }
@@ -31,12 +34,33 @@ export function loop(): void {
 
         if (creepJobRunner.run(creep)) { continue; }
 
+        if (creep.memory.role !== 'defender' && fleeFromHostiles(creep)) { continue; }
+
         if (creep.memory.role === 'builder') { roleBuilder.run(creep); }
         if (creep.memory.role === 'harvester') { roleHarvester.run(creep); }
         if (creep.memory.role === 'upgrader') { roleUpgrader.run(creep); }
         if (creep.memory.role === 'doctor') { roleDoctor.run(creep); }
+        if (creep.memory.role === 'defender') { roleDefender.run(creep); }
         if (creep.memory.role === 'manual') { roleManual.run(creep); }
     }
+}
+
+function fleeFromHostiles(creep: Creep): boolean {
+    const hostiles = creep.room.find(FIND_HOSTILE_CREEPS);
+    if (hostiles.length === 0) { return false; }
+    const nearbyHostile = hostiles.find(h => creep.pos.getRangeTo(h) <= 5);
+    if (!nearbyHostile) { return false; }
+
+    creep.say('😱');
+    const result = PathFinder.search(
+        creep.pos,
+        hostiles.map(h => ({ pos: h.pos, range: 5 })),
+        { flee: true, maxRooms: 1 }
+    );
+    if (result.path.length > 0) {
+        creep.move(creep.pos.getDirectionTo(result.path[0]));
+    }
+    return true;
 }
 
 function ownedRooms(): Room[] {

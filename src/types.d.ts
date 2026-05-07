@@ -162,6 +162,7 @@ interface CreepMemory {
     repairing?: boolean;
     dumping?: boolean;
     upgrading?: boolean;
+    attacking?: boolean;
     stationaryWorking?: boolean;
 }
 

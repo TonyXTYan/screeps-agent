@@ -42,3 +42,20 @@ export function run(room: Room): void {
         }
     }
 }
+
+export function tryFillTowerUnderSiege(creep: Creep): boolean {
+    if (creep.room.find(FIND_HOSTILE_CREEPS).length === 0) { return false; }
+
+    const tower = creep.pos.findClosestByRange(FIND_MY_STRUCTURES, {
+        filter: (s) => s.structureType === STRUCTURE_TOWER &&
+            (s as StructureTower).store.getFreeCapacity(RESOURCE_ENERGY) > 0
+    }) as StructureTower | null;
+
+    if (!tower) { return false; }
+
+    creep.say('🔴tower');
+    if (creep.transfer(tower, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+        creep.moveTo(tower, { visualizePathStyle: { stroke: '#ff6600' } });
+    }
+    return true;
+}

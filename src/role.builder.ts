@@ -1,5 +1,6 @@
 import * as creepHarvest from './creep.harvest';
 import * as roleDoctor from './role.doctor';
+import * as towerBasics from './tower.basics';
 
 export function run(creep: Creep): void {
     if (creep.memory.building === undefined) {
@@ -16,6 +17,8 @@ export function run(creep: Creep): void {
     }
 
     if (creep.memory.building) {
+        if (towerBasics.tryFillTowerUnderSiege(creep)) { return; }
+
         const target = creep.pos.findClosestByPath(FIND_CONSTRUCTION_SITES);
 
         creep.memory.harvestTargetSourceId = undefined;

@@ -549,10 +549,7 @@ function runSpawnPlanner(context: RoomControllerContext): void {
 
 function spawnBodyBudget(context: RoomControllerContext, request: SpawnRequest): number {
     if (context.creeps.length === 0) { return context.room.energyAvailable; }
-    if (request.archetype === 'miner' || request.archetype === 'mineralMiner') {
-        return context.room.energyCapacityAvailable;
-    }
-    return context.room.energyAvailable;
+    return context.room.energyCapacityAvailable;
 }
 
 function workerWorkRatio(context: RoomControllerContext): number {

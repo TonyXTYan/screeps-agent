@@ -29,6 +29,7 @@ interface SpawnRequest {
     staticMining?: boolean;
     remoteRoom?: string;
     remoteMode?: RemoteRoomMode;
+    workRatio?: number;
 }
 
 interface ResourceTarget {
@@ -72,7 +73,6 @@ const TOWER_RESERVE_RATIO = 0.7;
 const MINERAL_MINING_STORAGE_FLOOR = 3000;
 const MINERAL_WORK_DEMAND = 5;
 const LINK_TRANSFER_THRESHOLD = 400;
-const MIN_UPGRADER_WORK = 1;
 const BUILD_RESERVATION_TICKS = 10;
 const REPAIR_RESERVATION_TICKS = 5;
 
@@ -512,7 +512,7 @@ function runSpawnPlanner(context: RoomControllerContext): void {
     if (!request) { return; }
 
     const bodyBudget = spawnBodyBudget(context, request);
-    const body = planBodyForArchetype(request.archetype, bodyBudget, { staticMining: request.staticMining });
+    const body = planBodyForArchetype(request.archetype, bodyBudget, { staticMining: request.staticMining, workRatio: request.workRatio });
     if (body.length === 0) {
         if (Game.time % 25 === 0) {
             console.log('room.controller: waiting for energy to spawn ' + request.archetype + ' for ' + request.reason);
@@ -555,6 +555,16 @@ function spawnBodyBudget(context: RoomControllerContext, request: SpawnRequest):
     return context.room.energyAvailable;
 }
 
+function workerWorkRatio(context: RoomControllerContext): number {
+    const rcl = context.room.controller?.level ?? 0;
+    if (rcl < 4) { return 1; }
+    const remainingWork = context.constructionSites.reduce(
+        (sum, site) => sum + (site.progressTotal - site.progress), 0);
+    if (rcl >= 6 && remainingWork > 30000) { return 3; }
+    if (remainingWork > 10000) { return 2; }
+    return 1;
+}
+
 function chooseSpawnRequest(context: RoomControllerContext): SpawnRequest | null {
     const capacities = measureCapabilities(context.creeps);
     const haulerCapacityDemand = desiredHaulerCapacity(context);
@@ -575,16 +585,16 @@ function chooseSpawnRequest(context: RoomControllerContext): SpawnRequest | null
         };
     }
 
+    if (capacities.heal === 0 && context.room.energyCapacityAvailable >= 450) {
+        return { archetype: 'doctor', reason: 'no heal-capable creep' };
+    }
+
     if (capacities.haulerCapacity < haulerCapacityDemand) {
         return { archetype: 'hauler', reason: 'haul deficit ' + capacities.haulerCapacity + '/' + haulerCapacityDemand };
     }
 
-    if (capacities.heal === 0 && context.room.energyAvailable >= 500) {
-        return { archetype: 'doctor', reason: 'no heal-capable creep' };
-    }
-
     if (capacities.workerWork < workerWorkDemand) {
-        return { archetype: 'worker', reason: 'worker deficit ' + capacities.workerWork + '/' + workerWorkDemand };
+        return { archetype: 'worker', reason: 'worker deficit ' + capacities.workerWork + '/' + workerWorkDemand, workRatio: workerWorkRatio(context) };
     }
 
     if (mineralReadyToMine(context) && context.mineralPlan && capacities.mineralMinerWork < context.mineralPlan.requiredWork) {
@@ -1087,28 +1097,11 @@ function sourceWorkDemand(source: Source): number {
 }
 
 function sourceSpawnDeficit(context: RoomControllerContext): SourcePlan | null {
-    const plans = context.sourcePlans;
-    let best: SourcePlan | null = null;
-    let bestDeficit = 0;
-
-    for (const plan of plans) {
+    for (const plan of context.sourcePlans) {
         const assignedMiners = assignedSourceMinerCount(context.creeps, plan.source.id);
-        if (assignedMiners === 0) {
-            return plan;
-        }
+        if (assignedMiners === 0) { return plan; }
     }
-
-    for (const plan of plans) {
-        const assigned = assignedSourceWork(context.creeps, plan.source.id);
-        plan.assignedWork = assigned;
-        const deficit = plan.requiredWork - assigned;
-        if (deficit > bestDeficit) {
-            best = plan;
-            bestDeficit = deficit;
-        }
-    }
-
-    return best;
+    return null;
 }
 
 function assignedSourceMinerCount(creeps: Creep[], sourceId: string): number {
@@ -1402,9 +1395,16 @@ function shouldRepairWithCreeps(context: RoomControllerContext): boolean {
     return context.structures.storage.store.getUsedCapacity(RESOURCE_ENERGY) > 5000;
 }
 
+function desiredUpgraderWork(rcl: number): number {
+    if (rcl >= 8) { return 1; }
+    if (rcl >= 7) { return 10; }
+    if (rcl >= 5) { return 5; }
+    return 2;
+}
+
 function shouldReserveUpgrade(context: RoomControllerContext, reservations: JobReservations): boolean {
     if (!context.room.controller) { return false; }
-    if (reservations.upgraderWork >= MIN_UPGRADER_WORK) { return false; }
+    if (reservations.upgraderWork >= desiredUpgraderWork(context.room.controller.level)) { return false; }
     if (context.room.energyAvailable === 0 && storedEnergy(context) === 0) { return false; }
     return true;
 }

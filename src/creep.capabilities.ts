@@ -106,7 +106,7 @@ export function ensureArchetype(creep: Creep): CreepArchetype {
     return archetype;
 }
 
-export function planBodyForArchetype(archetype: CreepArchetype, energyBudget: number, opts?: { staticMining?: boolean }): BodyPartConstant[] {
+export function planBodyForArchetype(archetype: CreepArchetype, energyBudget: number, opts?: { staticMining?: boolean; workRatio?: number }): BodyPartConstant[] {
     if (archetype === 'miner' || archetype === 'remoteMiner' || archetype === 'mineralMiner') {
         if (opts?.staticMining) {
             return selectLargestWithinBudget([
@@ -139,8 +139,7 @@ export function planBodyForArchetype(archetype: CreepArchetype, energyBudget: nu
     if (archetype === 'doctor') {
         return selectLargestWithinBudget([
             [WORK, WORK, CARRY, CARRY, MOVE, MOVE, HEAL, MOVE],
-            [WORK, CARRY, MOVE, HEAL, MOVE],
-            [WORK, CARRY, MOVE]
+            [WORK, CARRY, MOVE, HEAL, MOVE]
         ], energyBudget);
     }
 
@@ -151,13 +150,16 @@ export function planBodyForArchetype(archetype: CreepArchetype, energyBudget: nu
         ], energyBudget);
     }
 
-    return buildWorkerBody(energyBudget);
+    return buildWorkerBody(energyBudget, opts?.workRatio ?? 1);
 }
 
-function buildWorkerBody(energyBudget: number): BodyPartConstant[] {
+function buildWorkerBody(energyBudget: number, workRatio: number = 1): BodyPartConstant[] {
     const body: BodyPartConstant[] = [];
-    while (body.length + 3 <= 50 && bodyCost(body) + 200 <= energyBudget) {
-        body.push(WORK, CARRY, MOVE);
+    const unitParts = workRatio + 2;
+    const unitCost = workRatio * 100 + 100;
+    while (body.length + unitParts <= 50 && bodyCost(body) + unitCost <= energyBudget) {
+        for (let i = 0; i < workRatio; i++) { body.push(WORK); }
+        body.push(CARRY, MOVE);
     }
     if (body.length > 0) { return body; }
     return selectLargestWithinBudget([[WORK, CARRY, MOVE]], energyBudget);

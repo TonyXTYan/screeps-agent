@@ -22,31 +22,39 @@ SCREEPS_BRANCH=default
 
 This is a Screeps bot written in TypeScript, bundled by Rollup into a single `dist/main.js` that gets pushed to the Screeps server via `grunt-screeps`.
 
-**Entry point:** `src/main.ts` exports `loop()` — the function Screeps calls every game tick. It drives all systems in order: spawn balancing → tower → memory cleanup → population control → per-creep role execution.
+**Strategy source of truth:** `.ai/memory/STRATEGY.md` describes the intended game behavior. Code changes should align with that strategy, or the strategy should be updated first.
+
+**Entry point:** `src/main.ts` exports `loop()` — the function Screeps calls every game tick. It drives all systems in order: memory cleanup → emergency defender population control → room controller → tower behavior → assigned job runner → legacy role fallback.
 
 **Module groups:**
 
 - `src/creep.*.ts` — shared systems that run once per tick across all creeps:
-  - `creep.roleBalance.ts` — energy counting, body-part scaling, auto-spawn, builder/upgrader/harvester rebalancing
-  - `creep.populationControl.ts` — enforces minimum populations (2 harvesters, 1 builder, 1 upgrader, 1 doctor)
-  - `creep.memoryManagement.ts` — clears dead creep memory; assigns random roles to unassigned creeps
+  - `creep.capabilities.ts` — derives capabilities from body parts, infers archetypes, plans bodies per archetype
+  - `creep.jobRunner.ts` — executes assigned jobs (`harvestSource`, `withdrawEnergy`, `build`, `repair`, `upgrade`, remotes, minerals, idle, etc.)
+  - `creep.populationControl.ts` — emergency defender spawning when hostiles are present
+  - `creep.memoryManagement.ts` — clears dead creep memory; assigns fallback roles to unassigned creeps
   - `creep.harvest.ts` — shared harvest logic used by all roles when they need energy; handles source selection, container fallback, and source load balancing
+  - `creep.roleBalance.ts` — legacy role body balancing utilities, still used for defender bodies
 
 - `src/role.*.ts` — per-creep state machines, each with a `run(creep)` export:
-  - `harvester` — dumps energy into extensions/spawn/towers; falls back to repair via `role.doctor`
-  - `builder` — builds construction sites; falls back to repair via `role.doctor`
-  - `upgrader` — upgrades the room controller
-  - `doctor` — heals damaged creeps, then repairs structures
+  - `harvester`, `builder`, `upgrader`, `doctor` — legacy fallback behavior after the job runner
+  - `defender` — emergency hostile response creep behavior
   - `manual` — stub for manually controlled creeps
+
+- `src/room.*.ts` — room-level control:
+  - `room.controller.ts` — measures room load, manages source/mineral plans, assigns jobs with reservations, runs spawn planning, handles passive remotes/claim scaffolding
+  - `room.structures.ts` — discovers room structures and classifies links
 
 - `src/tower.basics.ts` — runs all towers in the room each tick: attack hostiles → heal creeps → repair urgent structures (cascading priority)
 
 **Key patterns:**
 
-- All roles use a boolean state flag in creep memory (`dumping`, `building`, `repairing`, `upgrading`) to toggle between harvesting and their primary action.
+- The main strategic path assigns `jobType`, `jobTargetId`, and related memory through `room.controller.ts`; `creep.jobRunner.ts` executes those jobs.
+- Legacy roles use boolean state flags in creep memory (`dumping`, `building`, `repairing`, `upgrading`) to toggle between harvesting and their primary action.
 - `role.doctor.repairJob()` and `role.doctor.repairStructureFilter()` are shared utilities imported by `role.builder`, `role.harvester`, and `tower.basics`.
 - `creep.harvest.ts` is imported by every role that needs to collect energy.
-- `creep.roleBalance.balanceSpec(spec, energy)` scales body-part ratios to the available energy budget.
+- `creep.capabilities.planBodyForArchetype(archetype, energy, opts)` is the current strategic body planner.
+- `creep.roleBalance.balanceSpec(spec, energy)` is a legacy body scaler still used by emergency defenders.
 - Clearing a creep's memory is done via `delete Memory.creeps[creep.name]` (not `creep.memory = undefined`).
 
 **Custom types** are in `src/types.d.ts`: extends `CreepMemory`, `RoomMemory`, `SpawnMemory` with bot-specific fields, declares `console`, and defines the `EnergyStructure` union type.

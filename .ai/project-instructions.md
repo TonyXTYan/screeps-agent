@@ -24,6 +24,8 @@ This is a Screeps bot written in TypeScript, bundled by Rollup into a single `di
 
 **Strategy source of truth:** `.ai/memory/STRATEGY.md` describes the intended game behavior. Code changes should align with that strategy, or the strategy should be updated first.
 
+**Memory consistency:** After each non-trivial code or strategy job, check `.ai/memory/STRATEGY.md`, `.ai/memory/CODEMAP.md`, `.ai/memory/CURRENT_ARCHITECTURE.md`, `.ai/memory/KNOWN_ISSUES.md`, `.ai/memory/ROADMAP.md`, and `.ai/memory/MEMORY.md` for consistency with the change. Update them when behavior, file ownership, architecture, deferred work, or known issues have changed.
+
 **Entry point:** `src/main.ts` exports `loop()` — the function Screeps calls every game tick. It drives all systems in order: memory cleanup → emergency defender population control → room controller → tower behavior → assigned job runner → legacy role fallback.
 
 **Module groups:**

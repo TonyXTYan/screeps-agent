@@ -143,6 +143,30 @@ Remote v1 policy:
 - Hostile danger pauses remote spawning until the danger window expires.
 - Remote defense beyond retreat/pause is deferred.
 
+Example remote Memory config:
+
+```js
+Memory.rooms.W7N9.plan.remoteRooms.W7N8 = {
+    enabled: true,
+    roomName: 'W7N8',
+    mode: 'harvest'
+};
+```
+
+Example reserve or claim config:
+
+```js
+Memory.rooms.W7N9.plan.remoteRooms.W8N9 = {
+    enabled: true,
+    roomName: 'W8N9',
+    mode: 'reserve'
+};
+
+Memory.rooms.W7N9.plan.claimTargets = ['W8N9'];
+```
+
+Only use one claim target after the user approves the target room.
+
 ## RCL Direction
 
 RCL6 focus:
@@ -181,18 +205,34 @@ When adding or changing code:
 - Use Memory configuration for remote rooms, claim targets, labs, market, combat, and power decisions.
 - Update this document when the intended game behavior changes.
 
+## Change Checklist
+
+For a new job:
+
+1. Update `CreepJobType` in `src/types.d.ts`.
+2. Add execution behavior in `src/creep.jobRunner.ts`.
+3. Add assignment logic in `src/room.controller.ts`.
+4. Add reservation accounting when multiple creeps could target the same work.
+5. Update capability or body planning in `src/creep.capabilities.ts` if the job needs a new body shape.
+6. Run `npx tsc --noEmit` and `npm run build`.
+
+For a new Memory setting:
+
+1. Update the relevant Memory interface in `src/types.d.ts`.
+2. Initialize safe defaults in `src/room.controller.ts`.
+3. Keep risky behavior disabled unless Memory explicitly enables it.
+4. Add an example to this strategy when it helps future edits.
+
+For a strategic behavior change:
+
+1. Update this strategy first.
+2. Update `.ai/memory/CODEMAP.md` or `.ai/memory/CURRENT_ARCHITECTURE.md` if file ownership or flow changes.
+3. Move resolved items out of `.ai/memory/KNOWN_ISSUES.md`.
+4. Validate with TypeScript, build, and live-room observation before deploying.
+
 ## Known Alignment Work
 
-These items were found while reviewing the current `.ai` context and code:
-
-- `src/main.ts` still logs `sync test 1`; remove or replace with useful telemetry.
-- `sourceSpawnDeficit` currently guarantees one miner per source, but does not clearly spawn extra miner work for underpowered assigned miners.
-- `.DS_Store` files exist in the repo and `.ai`; they are not part of strategy or runtime.
-- Legacy role scripts can still delete creep memory when idle; this should not be part of the long-term strategic path.
-- Structure discovery writes IDs to Memory every tick, but the cache is not yet read back.
-- Remote spawn capacity is currently measured broadly, not per configured remote room.
-
-These are not all blockers, but they are the next places to reconcile code with this strategy.
+Known follow-up work lives in `.ai/memory/KNOWN_ISSUES.md`. Keep this strategy mostly normative; use the known issues file for operational cleanup and temporary gaps.
 
 ## Verification
 

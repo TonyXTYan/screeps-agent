@@ -3,3 +3,6 @@
 - [Tooling & Conventions](tooling.md) — Script location, .local-scripts symlink warning, local docs location, and official online docs as source of truth
 - [Roadmap](ROADMAP.md) — Deferred labs, combat, boosting, factory, power, observer, and other future automation notes
 - [Game Strategy](STRATEGY.md) — Source of truth for intended Screeps behavior that code should align to
+- [Code Map](CODEMAP.md) — Quick mapping from strategy concepts to implementation files
+- [Current Architecture](CURRENT_ARCHITECTURE.md) — Code-facing control flow and module architecture notes
+- [Known Issues](KNOWN_ISSUES.md) — Current cleanup, alignment, and deferred automation follow-up work

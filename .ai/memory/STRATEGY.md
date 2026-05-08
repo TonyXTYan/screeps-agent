@@ -100,7 +100,19 @@ Towers handle immediate defense:
 
 Defender spawning is an emergency override and may take the spawn slot before economic spawning.
 
-Workers may repair when there are no construction sites, or when storage energy is healthy enough to support repair work. Walls are capped at a low repair target until a higher defense policy is added.
+Workers may repair when there are no construction sites, or when storage energy is healthy enough to support repair work.
+
+Walls and ramparts use a staged hit cap by RCL to prevent low-RCL rooms from sinking energy into fortifications:
+
+| RCL   | Cap      |
+|-------|----------|
+| ≤ 2   | 10,000   |
+| ≤ 4   | 30,000   |
+| ≤ 6   | 100,000  |
+| 7     | 300,000  |
+| 8     | uncapped |
+
+Towers only repair walls/ramparts when charged to ≥ 90 % and no other repair work or combat is active. Normal structure repair (roads, containers, etc.) proceeds at > 10 % energy as before.
 
 Non-combat creeps should flee nearby hostiles. Remote work should pause or abandon rooms with active danger until a future combat policy exists.
 

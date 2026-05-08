@@ -1,7 +1,7 @@
 import { bodyCost, ensureArchetype, getCreepCapabilities, planBodyForArchetype } from './creep.capabilities';
 import { clearJob } from './creep.jobRunner';
 import { getRoomStructures, RoomStructureCache } from './room.structures';
-import { repairStructureFilter } from './role.doctor';
+import { repairStructureFilter, wallRampartRepairCap } from './role.doctor';
 
 interface RoomControllerContext {
     room: Room;
@@ -175,7 +175,8 @@ function buildContext(room: Room): RoomControllerContext {
         filter: (ruin) => totalStoredResources(ruin.store) > 0
     });
     const constructionSites = room.find(FIND_MY_CONSTRUCTION_SITES);
-    const repairTargets = room.find(FIND_STRUCTURES, { filter: repairStructureFilter });
+    const rcl = room.controller?.level ?? 0;
+    const repairTargets = room.find(FIND_STRUCTURES, { filter: (s) => repairStructureFilter(s as AnyStructure, rcl) });
     const injuredCreeps = room.find(FIND_MY_CREEPS, { filter: (creep) => creep.hits < creep.hitsMax });
     const sourcePlans = buildSourcePlans(sources, structures);
     const mineralPlan = minerals[0] ? buildMineralPlan(minerals[0], structures) : null;
@@ -881,9 +882,12 @@ function currentJobStillValid(
     }
     if (jobType === 'repair') {
         const structure = target as AnyStructure;
+        const isDefense = structure.structureType === STRUCTURE_WALL || structure.structureType === STRUCTURE_RAMPART;
+        const repairRcl = creep.room.controller?.level ?? 0;
+        const maxHits = isDefense ? Math.min(wallRampartRepairCap(repairRcl), structure.hitsMax) : structure.hitsMax;
         return capabilities.repair > 0 &&
             creep.store.getUsedCapacity(RESOURCE_ENERGY) > 0 &&
-            structure.hits < structure.hitsMax &&
+            structure.hits < maxHits &&
             remainingRepairProgress(structure, reservations) > 0;
     }
     if (jobType === 'upgrade') {

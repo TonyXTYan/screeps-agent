@@ -19,6 +19,7 @@ This file tracks known follow-up work that future agents should consider before 
 - Legacy role scripts can still delete creep memory when idle; this should not be part of the long-term strategic path.
 - Remote spawn capacity is measured broadly, not per configured remote room.
 - Remote danger policy exists in Memory but needs stronger detection/update logic.
+- Wall/rampart repair caps (`wallRampartRepairCap` in `role.doctor.ts`) are hardcoded; a future improvement would make them configurable via `room.memory.plan` for rooms that want custom defense budgets.
 
 ## Architecture Cleanup
 

@@ -127,6 +127,17 @@ Defense has three layers:
 - `creep.populationControl.ts` spawns defenders before economic spawn planning.
 - Non-defender creeps flee nearby hostiles.
 
+Tower repair priority (when no hostiles present):
+
+1. Heal injured creeps.
+2. Very urgent structure repair (< 500 hits).
+3. Urgent structure repair (< 10 000 hits).
+4. Normal structure repair via `repairStructureFilter` — non-wall/rampart only.
+5. Absolute fallback repair (> 50 % energy) — non-wall/rampart only.
+6. Wall/rampart repair via staged cap — **only at ≥ 90 % energy**; cap scales by RCL (see STRATEGY.md).
+
+Walls and ramparts are intentionally separated from normal repair to prevent low-RCL rooms from sinking energy into fortifications. The staged caps live in `wallRampartRepairCap()` in `src/role.doctor.ts`.
+
 There is no strategic combat squad logic yet.
 
 ## Remotes

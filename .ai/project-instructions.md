@@ -47,13 +47,16 @@ This is a Screeps bot written in TypeScript, bundled by Rollup into a single `di
   - `room.controller.ts` — measures room load, manages source/mineral plans, assigns jobs with reservations, runs spawn planning, handles passive remotes/claim scaffolding
   - `room.structures.ts` — discovers room structures and classifies links
 
-- `src/tower.basics.ts` — runs all towers in the room each tick: attack hostiles → heal creeps → repair urgent structures (cascading priority)
+- `src/tower.basics.ts` — runs all towers in the room each tick: attack hostiles → heal creeps → repair urgent structures (cascading priority); walls/ramparts only repaired at ≥ 90 % charge via RCL-staged caps
 
 **Key patterns:**
 
 - The main strategic path assigns `jobType`, `jobTargetId`, and related memory through `room.controller.ts`; `creep.jobRunner.ts` executes those jobs.
 - Legacy roles use boolean state flags in creep memory (`dumping`, `building`, `repairing`, `upgrading`) to toggle between harvesting and their primary action.
-- `role.doctor.repairJob()` and `role.doctor.repairStructureFilter()` are shared utilities imported by `role.builder`, `role.harvester`, and `tower.basics`.
+- `role.doctor` exports shared repair utilities used beyond the legacy role:
+  - `repairStructureFilter(structure, rcl)` — imported by `tower.basics` and `room.controller`; applies RCL-staged hit caps for walls/ramparts
+  - `wallRampartRepairCap(rcl)` — imported by `room.controller` for repair-job validity checks
+  - `repairJob(creep)` — called by `role.builder` and `role.harvester` as legacy fallback behavior
 - `creep.harvest.ts` is imported by every role that needs to collect energy.
 - `creep.capabilities.planBodyForArchetype(archetype, energy, opts)` is the current strategic body planner.
 - `creep.roleBalance.balanceSpec(spec, energy)` is a legacy body scaler still used by emergency defenders.

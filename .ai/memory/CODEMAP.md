@@ -42,6 +42,16 @@ Use this as the first stop before editing code.
 - Room plan and load memory — `src/types.d.ts`
 - Runtime Memory writes for structures/load/plans — `src/room.controller.ts`, `src/room.structures.ts`
 
+## Repair Utilities (Shared)
+
+`src/role.doctor.ts` exports strategic repair helpers used across the codebase:
+
+- `repairStructureFilter(structure, rcl)` — RCL-staged hit-cap filter for walls/ramparts; imported by `tower.basics.ts` and `room.controller.ts`
+- `wallRampartRepairCap(rcl)` — returns the hit cap for the given RCL; imported by `room.controller.ts`
+- `repairJob(creep)` / `repairTargetToRepair(creep)` — used by legacy fallback roles
+
+Wall/rampart hit caps live in `wallRampartRepairCap()`. Tower threshold (90 % charge gate) lives in `tower.basics.ts`. To change staged caps, edit `role.doctor.ts` and update STRATEGY.md.
+
 ## Legacy Compatibility
 
 - Legacy role balancing helpers — `src/creep.roleBalance.ts`
@@ -81,3 +91,10 @@ Changing remote behavior:
 2. Update `RemoteRoomPlan` in `src/types.d.ts` if the config changes.
 3. Update `remoteSpawnRequest()` and `assignRemoteCreep()` in `src/room.controller.ts`.
 4. Keep expansion opt-in through Memory.
+
+Changing wall/rampart repair caps or tower repair policy:
+
+1. Update `.ai/memory/STRATEGY.md` first.
+2. Edit `wallRampartRepairCap()` in `src/role.doctor.ts` for the staged hit caps.
+3. Edit the `energyRatio >= 0.9` gate in `src/tower.basics.ts` if the tower threshold changes.
+4. The repair-job validity check in `currentJobStillValid()` (`src/room.controller.ts`) automatically uses `wallRampartRepairCap` — no separate update needed.

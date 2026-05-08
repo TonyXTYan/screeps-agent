@@ -1,14 +1,23 @@
 import * as creepHarvest from './creep.harvest';
 
-export function repairStructureFilter(structure: AnyStructure): boolean {
-    if (structure.structureType === STRUCTURE_WALL) {
-        return structure.hits < 10 * 1000;
+export function wallRampartRepairCap(rcl: number): number {
+    if (rcl <= 2) return 10_000;
+    if (rcl <= 4) return 30_000;
+    if (rcl <= 6) return 100_000;
+    if (rcl === 7) return 300_000;
+    return Infinity;
+}
+
+export function repairStructureFilter(structure: AnyStructure, rcl: number): boolean {
+    if (structure.structureType === STRUCTURE_WALL || structure.structureType === STRUCTURE_RAMPART) {
+        return structure.hits < Math.min(wallRampartRepairCap(rcl), structure.hitsMax);
     }
     return structure.hits < structure.hitsMax;
 }
 
 export function repairTargetToRepair(creep: Creep): AnyStructure | null {
-    return creep.pos.findClosestByPath(FIND_STRUCTURES, { filter: repairStructureFilter });
+    const rcl = creep.room.controller?.level ?? 0;
+    return creep.pos.findClosestByPath(FIND_STRUCTURES, { filter: (s) => repairStructureFilter(s as AnyStructure, rcl) });
 }
 
 export function repairJob(creep: Creep): boolean {

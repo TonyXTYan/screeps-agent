@@ -79,6 +79,8 @@ const REMOTE_DANGER_TICKS = 1500;
 const REMOTE_PATH_REFRESH_INTERVAL = 5000;
 const REMOTE_ROAD_SITES_PER_TICK = 4;
 const REMOTE_CONTAINER_BUILD_DISTANCE = 1;
+const REMOTE_SCOUT_KEEP_COUNT = 2;
+const REMOTE_SCOUT_WANDER_TICKS = 120;
 
 export function run(room: Room): void {
     const context = buildContext(room);
@@ -139,11 +141,26 @@ export function assignRemoteCreep(creep: Creep): boolean {
     }
 
     if (archetype === 'remoteScout') {
+        const scoutPack = remoteScoutPack(homeRoom, remoteRoom);
+        const scoutRank = scoutPack.indexOf(creep.name);
+        if (scoutPack.length > REMOTE_SCOUT_KEEP_COUNT && scoutRank >= REMOTE_SCOUT_KEEP_COUNT) {
+            return assignOverflowRemoteScout(creep, homeRoom);
+        }
+
+        if (creep.room.find(FIND_HOSTILE_CREEPS).length > 0 && creep.room.name !== homeRoom) {
+            setTravelJob(creep, homeRoom);
+            return true;
+        }
+
         if (creep.room.name !== remoteRoom) {
             setTravelJob(creep, remoteRoom);
             return true;
         }
-        setTravelJob(creep, homeRoom);
+        const hold = new RoomPosition(25, 25, remoteRoom);
+        if (creep.pos.getRangeTo(hold) > 8) {
+            creep.moveTo(hold, { visualizePathStyle: { stroke: '#a0b7ff' } });
+        }
+        clearJob(creep);
         return true;
     }
 
@@ -937,15 +954,79 @@ function creepsForHomeRoom(homeRoomName: string): Creep[] {
 }
 
 function countRemoteScouts(homeRoomName: string, remoteRoom: string): number {
-    let count = 0;
+    return remoteScoutPack(homeRoomName, remoteRoom).length;
+}
+
+function remoteScoutPack(homeRoomName: string, remoteRoom: string): string[] {
+    const names: string[] = [];
     for (const name in Game.creeps) {
         const creep = Game.creeps[name];
         if (ensureArchetype(creep) !== 'remoteScout') { continue; }
         if (creep.memory.remoteRoom !== remoteRoom) { continue; }
         if (creep.memory.homeRoom && creep.memory.homeRoom !== homeRoomName) { continue; }
-        count++;
+        names.push(creep.name);
     }
-    return count;
+    names.sort();
+    return names;
+}
+
+function assignOverflowRemoteScout(creep: Creep, homeRoomName: string): boolean {
+    const hostiles = creep.room.find(FIND_HOSTILE_CREEPS);
+    if (hostiles.length > 0) {
+        setTravelJob(creep, homeRoomName);
+        return true;
+    }
+
+    const wanderExpired = !creep.memory.scoutWanderUntil || creep.memory.scoutWanderUntil <= Game.time;
+    const reachedWanderRoom = creep.memory.scoutWanderRoom === creep.room.name;
+    if (!creep.memory.scoutWanderRoom || wanderExpired || reachedWanderRoom) {
+        creep.memory.scoutWanderRoom = chooseWanderRoom(creep, homeRoomName);
+        creep.memory.scoutWanderUntil = Game.time + REMOTE_SCOUT_WANDER_TICKS;
+    }
+
+    const targetRoom = creep.memory.scoutWanderRoom ?? homeRoomName;
+    if (creep.room.name !== targetRoom) {
+        setTravelJob(creep, targetRoom);
+        return true;
+    }
+
+    const targetPos = wanderPointInRoom(creep, targetRoom);
+    if (!creep.pos.inRangeTo(targetPos, 3)) {
+        creep.moveTo(targetPos, { visualizePathStyle: { stroke: '#9ec8ff' } });
+    }
+    clearJob(creep);
+    return true;
+}
+
+function chooseWanderRoom(creep: Creep, fallbackRoom: string): string {
+    const exits = Game.map.describeExits(creep.room.name);
+    const rooms: string[] = [];
+    if (exits) {
+        for (const key in exits) {
+            const roomName = exits[key as unknown as keyof typeof exits];
+            if (roomName) { rooms.push(roomName); }
+        }
+    }
+    if (rooms.length === 0) { return fallbackRoom; }
+    const seed = hashString(creep.name) + Game.time;
+    return rooms[Math.abs(seed) % rooms.length];
+}
+
+function wanderPointInRoom(creep: Creep, roomName: string): RoomPosition {
+    const seedA = hashString(creep.name + ':x') + Game.time;
+    const seedB = hashString(creep.name + ':y') + Game.time;
+    const x = 10 + (Math.abs(seedA) % 31);
+    const y = 10 + (Math.abs(seedB) % 31);
+    return new RoomPosition(x, y, roomName);
+}
+
+function hashString(value: string): number {
+    let hash = 0;
+    for (let i = 0; i < value.length; i++) {
+        hash = ((hash << 5) - hash) + value.charCodeAt(i);
+        hash |= 0;
+    }
+    return hash;
 }
 
 function remoteClaimerCount(creeps: Creep[], remoteRoom: string, mode: RemoteRoomMode): number {

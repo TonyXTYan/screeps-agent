@@ -1703,7 +1703,11 @@ function remainingConstructionProgress(site: ConstructionSite, reservations: Job
 }
 
 function remainingRepairProgress(structure: AnyStructure, reservations: JobReservations): number {
-    return structure.hitsMax - structure.hits - (reservations.repairProgress[structure.id] ?? 0);
+    const isDefense = structure.structureType === STRUCTURE_WALL || structure.structureType === STRUCTURE_RAMPART;
+    const repairRcl = structure.room.controller?.level ?? 0;
+    const maxHits = isDefense ? Math.min(wallRampartRepairCap(repairRcl), structure.hitsMax) : structure.hitsMax;
+    const cappedRemaining = Math.max(0, maxHits - structure.hits);
+    return cappedRemaining - (reservations.repairProgress[structure.id] ?? 0);
 }
 
 function reserveConstructionProgress(reservations: JobReservations, site: ConstructionSite, workParts: number): void {

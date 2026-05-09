@@ -111,11 +111,11 @@ export function planBodyForArchetype(archetype: CreepArchetype, energyBudget: nu
     if (archetype === 'miner' || archetype === 'remoteMiner' || archetype === 'mineralMiner') {
         if (opts?.staticMining) {
             return selectLargestWithinBudget([
-                [WORK, WORK, WORK, WORK, WORK, MOVE],
-                [WORK, WORK, WORK, WORK, MOVE],
-                [WORK, WORK, WORK, MOVE],
-                [WORK, WORK, MOVE],
-                [WORK, MOVE]
+                [WORK, WORK, WORK, WORK, WORK, CARRY, MOVE],
+                [WORK, WORK, WORK, WORK, CARRY, MOVE],
+                [WORK, WORK, WORK, CARRY, MOVE],
+                [WORK, WORK, CARRY, MOVE],
+                [WORK, CARRY, MOVE]
             ], energyBudget);
         }
 

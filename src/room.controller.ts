@@ -347,7 +347,7 @@ function updateRemoteRoomPlans(homeRoom: Room): void {
             const income = source.energyCapacity / ENERGY_REGEN_TIME;
             existing.haulerCapacityDemand = Math.ceil(income * distance * 2 * 1.2);
 
-            if (station && !container) {
+            if (station && !container && canPlaceContainerSite(station)) {
                 station.createConstructionSite(STRUCTURE_CONTAINER);
             }
             if (remote.buildRoads && latestPath.length > 0 && roadsPlaced < REMOTE_ROAD_SITES_PER_TICK && allSites.length < 95) {
@@ -382,7 +382,15 @@ function findStationForSource(room: Room, source: Source): RoomPosition | null {
         if (tile.terrain === 'wall') { continue; }
         return new RoomPosition(tile.x, tile.y, room.name);
     }
-    return source.pos;
+    return null;
+}
+
+function canPlaceContainerSite(position: RoomPosition): boolean {
+    if (position.lookFor(LOOK_CONSTRUCTION_SITES).length > 0) { return false; }
+    const blockingStructure = position.lookFor(LOOK_STRUCTURES).some((s) =>
+        s.structureType !== STRUCTURE_ROAD &&
+        s.structureType !== STRUCTURE_RAMPART);
+    return !blockingStructure;
 }
 
 function rememberPlans(context: RoomControllerContext): void {
@@ -714,7 +722,7 @@ function runSpawnPlanner(context: RoomControllerContext): void {
         const cost = bodyCost(body);
         if (cost > remainingEnergy) { break; }
 
-        const name = request.archetype + '-' + Game.time + (pending.length > 0 ? '-' + pending.length : '');
+        const name = request.archetype + '-' + spawn.name + '-' + Game.time + (pending.length > 0 ? '-' + pending.length : '');
         const role = legacyRoleForArchetype(request.archetype);
         const code = spawn.spawnCreep(body, name, {
             memory: {

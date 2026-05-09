@@ -12,10 +12,16 @@ export function run(room: Room): void {
     // Pre-compute repair targets once per tick so all towers focus on the same most-critical structure.
     // Lowest hits wins within each priority band.
     const veryUrgentRepairTarget = lowestHits(room.find(FIND_STRUCTURES, {
-        filter: (s) => s.hits < 500 && s.hitsMax > 500
+        filter: (s) => s.hits < 500 &&
+            s.hitsMax > 500 &&
+            s.structureType !== STRUCTURE_WALL &&
+            s.structureType !== STRUCTURE_RAMPART
     }) as AnyStructure[]);
     const urgentRepairTarget = lowestHits(room.find(FIND_STRUCTURES, {
-        filter: (s) => s.hits < 10_000 && s.hitsMax > 10_000
+        filter: (s) => s.hits < 10_000 &&
+            s.hitsMax > 10_000 &&
+            s.structureType !== STRUCTURE_WALL &&
+            s.structureType !== STRUCTURE_RAMPART
     }) as AnyStructure[]);
     // Non-defense structures only: walls/ramparts handled at the ≥90% gate below
     const normalRepairTarget = lowestHits(room.find(FIND_STRUCTURES, {

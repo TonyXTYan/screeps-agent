@@ -24,7 +24,7 @@ export function checkDefenders(room: Room): void {
         ? creepRoleBalance.balanceSpec(creepRoleBalance.specification.defender, energy)
         : [TOUGH, MOVE, ATTACK];
 
-    const newName = 'Defender' + Game.time;
+    const newName = 'Defender-' + spawn.name + '-' + Game.time;
     const o = spawn.spawnCreep(defenderBody, newName, { memory: { role: 'defender', attacking: true, homeRoom: room.name } });
     console.log('creep.populationControl: Spawning new defender: ' + newName + ', returned: ' + o);
 }

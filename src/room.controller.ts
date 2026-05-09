@@ -160,13 +160,13 @@ export function assignRemoteCreep(creep: Creep): boolean {
 
     if (archetype === 'remoteMiner') {
         const assignedSourceId = creep.memory.assignedSourceId ?? creep.memory.sourceId;
+        let stationaryTargetId: string | undefined;
         if (assignedSourceId) {
             const sourceCfg = remotePlan.sources?.[assignedSourceId];
-            if (sourceCfg?.stationX !== undefined && sourceCfg.stationY !== undefined) {
-                creep.memory.stationaryTargetId = undefined;
-                if (!creep.pos.isEqualTo(new RoomPosition(sourceCfg.stationX, sourceCfg.stationY, remoteRoom))) {
-                    setTravelJob(creep, remoteRoom);
-                }
+            if (sourceCfg?.containerId) {
+                stationaryTargetId = sourceCfg.containerId;
+            } else {
+                stationaryTargetId = assignedSourceId;
             }
         }
         const source = assignedSourceId
@@ -175,6 +175,7 @@ export function assignRemoteCreep(creep: Creep): boolean {
         if (source) {
             creep.memory.sourceId = source.id;
             creep.memory.assignedSourceId = source.id;
+            creep.memory.stationaryTargetId = stationaryTargetId ?? source.id;
             setJob(creep, 'harvestSource', source);
             return true;
         }
@@ -1575,7 +1576,10 @@ function resumePrimaryEnergyJob(
 
     if (jobType === 'repair') {
         const structure = target as AnyStructure;
-        if (capabilities.repair <= 0 || structure.hits >= structure.hitsMax || remainingRepairProgress(structure, reservations) <= 0) {
+        const isDefense = structure.structureType === STRUCTURE_WALL || structure.structureType === STRUCTURE_RAMPART;
+        const repairRcl = creep.room.controller?.level ?? 0;
+        const maxHits = isDefense ? Math.min(wallRampartRepairCap(repairRcl), structure.hitsMax) : structure.hitsMax;
+        if (capabilities.repair <= 0 || structure.hits >= maxHits || remainingRepairProgress(structure, reservations) <= 0) {
             clearPrimaryJob(creep);
             return false;
         }

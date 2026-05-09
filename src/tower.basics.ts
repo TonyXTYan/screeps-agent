@@ -28,10 +28,6 @@ export function run(room: Room): void {
         filter: (s) => repairStructureFilter(s as AnyStructure, rcl) &&
             s.structureType !== STRUCTURE_WALL && s.structureType !== STRUCTURE_RAMPART
     }) as AnyStructure[]);
-    const absoluteRepairTarget = lowestHits(room.find(FIND_STRUCTURES, {
-        filter: (s) => s.hits < s.hitsMax &&
-            s.structureType !== STRUCTURE_WALL && s.structureType !== STRUCTURE_RAMPART
-    }) as AnyStructure[]);
     const defenseRepairTarget = lowestHits(room.find(FIND_STRUCTURES, {
         filter: (s) => repairStructureFilter(s as AnyStructure, rcl) &&
             (s.structureType === STRUCTURE_WALL || s.structureType === STRUCTURE_RAMPART)
@@ -57,8 +53,6 @@ export function run(room: Room): void {
                 tower.repair(urgentRepairTarget);
             } else if (normalRepairTarget) {
                 tower.repair(normalRepairTarget);
-            } else if (absoluteRepairTarget && energyRatio > 0.5) {
-                tower.repair(absoluteRepairTarget);
             } else if (energyRatio >= 0.9) {
                 // Only invest in walls/ramparts when well-charged and nothing else needs attention
                 if (defenseRepairTarget) {

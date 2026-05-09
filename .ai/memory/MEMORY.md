@@ -1,6 +1,6 @@
 - [Project Vision](project-vision.md) — AI-assisted play model: user owns strategy (expansion, defense, resource decisions), agents own implementation (code, optimization)
 - [Maestri Portal Usage Guide](maestri_portals.md) — Commands & workflow for reading game state via Maestri portal (navigate, snapshot, evaluate, screenshot) with key URLs
-- [Tooling & Conventions](tooling.md) — Script location, .local-scripts symlink warning, local docs location, and official online docs as source of truth
+- [Tooling & Conventions](tooling.md) — Script location, .local-scripts symlink warning, local docs location, online docs source of truth, and GitHub tool preference (`gh` for writes)
 - [Roadmap](ROADMAP.md) — Deferred labs, combat, boosting, factory, power, observer, and other future automation notes
 - [Game Strategy](STRATEGY.md) — Source of truth for intended Screeps behavior that code should align to
 - [Code Map](CODEMAP.md) — Quick mapping from strategy concepts to implementation files

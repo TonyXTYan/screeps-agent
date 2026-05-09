@@ -55,7 +55,8 @@ function harvestSource(creep: Creep): number {
 
     const station = stationaryTarget(creep);
     if (station && !atStation(creep, station)) {
-        moveToJobTarget(creep, station, '#3d2a22');
+        const isPositionTarget = station instanceof RoomPosition;
+        moveToJobTarget(creep, station, '#3d2a22', { range: isPositionTarget ? 0 : 1 });
         return ERR_NOT_IN_RANGE;
     }
 
@@ -211,7 +212,8 @@ function mineMineral(creep: Creep): number {
 
     const station = stationaryTarget(creep);
     if (station && !atStation(creep, station)) {
-        moveToJobTarget(creep, station, '#41a7a7');
+        const isPositionTarget = station instanceof RoomPosition;
+        moveToJobTarget(creep, station, '#41a7a7', { range: isPositionTarget ? 0 : 1 });
         return ERR_NOT_IN_RANGE;
     }
 
@@ -283,7 +285,7 @@ function travelRoom(creep: Creep): number {
 
     const centerCode = creep.moveTo(new RoomPosition(25, 25, roomName), {
         visualizePathStyle: { stroke: '#ffffff' },
-        reusePath: 15,
+        reusePath: 5,
         ignoreCreeps: true
     });
     if (centerCode !== ERR_NO_PATH) {
@@ -435,13 +437,21 @@ function getTarget<T extends RoomObject>(creep: Creep): T | null {
     return Game.getObjectById(id as Id<any>) as T | null;
 }
 
-function stationaryTarget(creep: Creep): RoomObject | null {
+function stationaryTarget(creep: Creep): RoomPosition | RoomObject | null {
+    const x = creep.memory.stationX;
+    const y = creep.memory.stationY;
+    if (x != null && y != null) {
+        return new RoomPosition(x, y, creep.room.name);
+    }
     const id = creep.memory.stationaryTargetId;
     if (!id) { return null; }
     return Game.getObjectById(id as Id<any>) as RoomObject | null;
 }
 
-function atStation(creep: Creep, station: RoomObject): boolean {
+function atStation(creep: Creep, station: RoomPosition | RoomObject): boolean {
+    if (station instanceof RoomPosition) {
+        return creep.pos.isEqualTo(station);
+    }
     if (station instanceof StructureContainer) {
         return creep.pos.isEqualTo(station.pos);
     }

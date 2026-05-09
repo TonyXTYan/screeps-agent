@@ -236,8 +236,16 @@ export function assignRemoteCreep(creep: Creep): boolean {
             const sourceCfg = remotePlan.sources?.[assignedSourceId];
             if (sourceCfg?.containerId) {
                 stationaryTargetId = sourceCfg.containerId;
+                creep.memory.stationX = undefined;
+                creep.memory.stationY = undefined;
+            } else if (sourceCfg?.stationX != null && sourceCfg?.stationY != null) {
+                stationaryTargetId = undefined;
+                creep.memory.stationX = sourceCfg.stationX;
+                creep.memory.stationY = sourceCfg.stationY;
             } else {
                 stationaryTargetId = assignedSourceId;
+                creep.memory.stationX = undefined;
+                creep.memory.stationY = undefined;
             }
         }
         const source = assignedSourceId

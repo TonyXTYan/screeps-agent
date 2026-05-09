@@ -190,6 +190,8 @@ interface CreepMemory {
     attacking?: boolean;
     stationaryWorking?: boolean;
     rallySpawnId?: string;
+    stationX?: number;
+    stationY?: number;
     scoutWanderRoom?: string;
     scoutWanderUntil?: number;
     remoteRenewing?: boolean;

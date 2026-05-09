@@ -55,7 +55,7 @@ declare const globalThis: {
         }) => string;
         pause: (homeRoom: string, remoteRoom: string, ticks?: number) => string;
         disable: (homeRoom: string, remoteRoom: string) => string;
-        status: (homeRoom: string, remoteRoom?: string) => unknown;
+        status: (homeRoom: string, remoteRoom?: string) => string;
     };
 };
 
@@ -88,10 +88,10 @@ function installConsoleHelpers(): void {
             plan.enabled = false;
             return `remoteMining: disabled ${homeRoom} -> ${remoteRoom}`;
         },
-        status(homeRoom: string, remoteRoom?: string): unknown {
+        status(homeRoom: string, remoteRoom?: string): string {
             const remotes = Memory.rooms[homeRoom]?.plan?.remoteRooms ?? {};
-            if (!remoteRoom) { return remotes; }
-            return remotes[remoteRoom] ?? null;
+            if (!remoteRoom) { return JSON.stringify(remotes, null, 2); }
+            return JSON.stringify(remotes[remoteRoom] ?? null, null, 2);
         }
     };
 }

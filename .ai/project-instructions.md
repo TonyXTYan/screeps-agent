@@ -26,7 +26,7 @@ This is a Screeps bot written in TypeScript, bundled by Rollup into a single `di
 
 **Memory consistency:** After each non-trivial code or strategy job, check `.ai/memory/STRATEGY.md`, `.ai/memory/CODEMAP.md`, `.ai/memory/CURRENT_ARCHITECTURE.md`, `.ai/memory/KNOWN_ISSUES.md`, `.ai/memory/ROADMAP.md`, and `.ai/memory/MEMORY.md` for consistency with the change. Update them when behavior, file ownership, architecture, deferred work, or known issues have changed.
 
-**Entry point:** `src/main.ts` exports `loop()` — the function Screeps calls every game tick. It drives all systems in order: memory cleanup → emergency defender population control → room controller → tower behavior → assigned job runner → legacy role fallback.
+**Entry point:** `src/main.ts` exports `loop()` — the function Screeps calls every game tick. It drives all systems in order: memory cleanup → memory audit (on build change) → emergency defender population control → room controller → tower behavior → assigned job runner → legacy role fallback.
 
 **Module groups:**
 
@@ -37,6 +37,9 @@ This is a Screeps bot written in TypeScript, bundled by Rollup into a single `di
   - `creep.memoryManagement.ts` — clears dead creep memory; assigns fallback roles to unassigned creeps
   - `creep.harvest.ts` — shared harvest logic used by all roles when they need energy; handles source selection, container fallback, and source load balancing
   - `creep.roleBalance.ts` — legacy role body balancing utilities, still used for defender bodies
+
+- `src/env.ts` — exports `BUILD_COMMIT` from the build-time injected git hash (via rollup `output.banner`)
+- `src/memoryAudit.ts` — memory consistency audit that runs once on deploy (commit hash change); cleans orphaned rooms, stale remote plans, invalid creep assignments; reports duplicate source assignments
 
 - `src/role.*.ts` — per-creep state machines, each with a `run(creep)` export:
   - `harvester`, `builder`, `upgrader`, `doctor` — legacy fallback behavior after the job runner
@@ -67,6 +70,7 @@ This is a Screeps bot written in TypeScript, bundled by Rollup into a single `di
 **Toolchain:**
 - TypeScript 6, `"moduleResolution": "Bundler"`, `"types": ["screeps"]` (required — Screeps globals aren't in the default lib)
 - Rollup outputs CJS (`format: 'cjs'`) since Screeps uses CommonJS internally
+- Build injects the current 8-char git commit hash into the bundle banner (`var __BUILD_COMMIT__ = "hash";`) so server-side code can detect new deployments and trigger the memory audit
 - `grunt-screeps` reads from `dist/` and pushes `**/*.{js,wasm}`; source maps stay local
 
 ## .ai Folder Convention

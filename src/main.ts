@@ -9,6 +9,7 @@ import * as creepJobRunner from './creep.jobRunner';
 import * as populationControl from './creep.populationControl';
 import * as roomController from './room.controller';
 import * as towerBasics from './tower.basics';
+import * as memoryAudit from './memoryAudit';
 
 const DOCTOR_EMERGENCY_HITS_RATIO = 0.35;
 const DOCTOR_THREAT_RADIUS = 4;
@@ -47,6 +48,7 @@ export function loop(): void {
     }
 
     creepMemoryManagement.run();
+    memoryAudit.runIfBuildChanged();
 
     const controlledRooms = ownedRooms();
     for (const room of controlledRooms) {

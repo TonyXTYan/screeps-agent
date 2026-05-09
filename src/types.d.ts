@@ -212,3 +212,7 @@ interface RoomMemory {
 interface SpawnMemory {
     full?: number;
 }
+
+interface Memory {
+    lastBuildCommit?: string;
+}

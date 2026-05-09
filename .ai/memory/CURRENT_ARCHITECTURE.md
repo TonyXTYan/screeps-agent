@@ -14,7 +14,8 @@ The bot is in a migration state: the strategic path is capability-based room con
 
 1. Log the current game tick.
 2. Run `creepMemoryManagement.run()`.
-3. For each owned room:
+3. Run `memoryAudit.runIfBuildChanged()` — runs a memory consistency audit when the 8-char git build commit hash differs from `Memory.lastBuildCommit` (skipped if CPU bucket < 500).
+4. For each owned room:
    - `populationControl.checkDefenders(room)`
    - `roomController.run(room)`
    - `towerBasics.run(room)`

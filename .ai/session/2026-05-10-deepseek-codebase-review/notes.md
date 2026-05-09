@@ -129,14 +129,41 @@ Written by `keepCurrentJob` for observability but never read. Already flagged in
 9. **Add remote room memory cleanup** when rooms are disabled.
 10. **Read from structure cache** instead of always calling `FIND_STRUCTURES`.
 
+## Additional Changes: Build Commit Hash & Memory Audit
+
+### Build commit hash injection
+
+- `rollup.config.mjs` — added `output.banner` that injects `var __BUILD_COMMIT__ = "abc12345";` (8-char short hash) at the top of the bundle. Zero source transforms, zero sourcemap issues.
+- `src/env.ts` — exports `BUILD_COMMIT` from the runtime `__BUILD_COMMIT__` variable
+
+### Memory consistency audit
+
+- `src/memoryAudit.ts` — new module with two entry points:
+  - `runIfBuildChanged()` — compares `Memory.lastBuildCommit` against `BUILD_COMMIT`; runs full audit on first tick after deploy (skipped if CPU bucket < 500)
+  - `runFullAudit()` — callable from console for manual inspection
+
+  Audit checks:
+  1. **Orphaned room memory** — removes `Memory.rooms` entries for rooms with no owned spawns and no references from other rooms (remote plans, claim targets)
+  2. **Stale remote plans** — clears expired `dangerUntil`, stale `skipReason` when no hostiles visible, stale `lastSeenHostiles`, and removes source plans for sources that no longer exist
+  3. **Invalid creep memory** — clears `remoteRoom`/`sourceId`/`remoteStandby` if the remote room is no longer in any plan; clears `homeRoom` if the room is not an active owned room
+  4. **Duplicate source assignments** — reports (not fixes) cases where two creeps share the same `assignedSourceId`
+
+- `src/types.d.ts` — added `Memory.lastBuildCommit?: string` declaration
+- `src/main.ts` — calls `memoryAudit.runIfBuildChanged()` after `creepMemoryManagement.run()` each tick
+
 ## Files Changed This Session
 
 - `src/room.controller.ts` — home room priority gate, remote standby miner system, hauler capacity cap, per-source hauler limit, `countRemoteHaulersForSource()`
 - `src/creep.capabilities.ts` — remoteHauler body changed from hybrid WORK+CARRY to pure CARRY+MOVE
-- `src/main.ts` — `tryRenewStandbyMiner()` extended to handle remote standby miners
+- `src/main.ts` — `tryRenewStandbyMiner()` extended to handle remote standby miners; added `memoryAudit.runIfBuildChanged()` call
+- `rollup.config.mjs` — build commit hash injection via `output.banner`
+- `src/env.ts` — new file: BUILD_COMMIT export from build banner
+- `src/memoryAudit.ts` — new file: memory consistency audit
+- `src/types.d.ts` — added `Memory.lastBuildCommit`
 
 ## Verification
 
 - `npx tsc --noEmit`: clean
-- `npm run build`: clean
+- `npm run build`: clean (no warnings)
+- Commit hash verified in `dist/main.js`: correctly injected at top of bundle
 - `npm run deploy`: not run (requires Screeps credentials)

@@ -23,11 +23,12 @@ Primary strategic posture: economy first, survival always, expansion only when e
 Each tick should follow this control order:
 
 1. Clean and normalize creep memory.
-2. Run emergency defense spawning before normal economic spawning.
-3. Run the room controller for each owned room.
-4. Run tower behavior.
-5. Run assigned creep jobs.
-6. Use legacy role behavior only when no job is assigned.
+2. Run memory consistency audit when a new build is detected (commit hash changed).
+3. Run emergency defense spawning before normal economic spawning.
+4. Run the room controller for each owned room.
+5. Run tower behavior.
+6. Run assigned creep jobs.
+7. Use legacy role behavior only when no job is assigned.
 
 The strategic path is:
 
@@ -43,8 +44,11 @@ Local energy economy is the foundation.
 - Static miners stand on source containers when possible.
 - One local miner per room is kept as a standby substitute near spawn and renewed toward max TTL.
 - When an active local miner is near death, the standby miner swaps in on that source and the low-TTL miner rotates to standby/renew duty.
+- Remote rooms mirror this: `sources + 1` miners per remote room, with one `remoteStandby` miner idle at the home spawn, dispatched to replace a dying active miner when its TTL drops below 300.
 - Link-backed miners may keep carry capacity so they can fill nearby links.
 - Haulers move energy from containers, links, dropped resources, ruins, and tombstones into storage, spawn/extensions, towers, and other sinks.
+- Remote haulers use pure CARRY+MOVE bodies (no WORK) to maximize carry capacity, minimizing the number of creeps needed per source.
+- Hauler capacity demand per remote source is capped at 500, and at most 2 remote haulers are spawned per source regardless of distance.
 - Workers build, repair, and upgrade from stored energy before falling back to direct harvesting.
 - Direct harvesting by non-miners is an emergency or fallback behavior, not the steady-state goal.
 
@@ -153,10 +157,13 @@ The bot may spawn remote creeps only for configured targets. It must not choose 
 
 Remote harvest policy:
 
+- Home room spawn requests have absolute priority over remote spawns. If any home-room spawn is pending energy, all remote spawn requests are skipped.
 - Bootstrap with `remoteScout` when source metadata is unknown.
 - While scouting overflow exists, extra scouts should wander instead of idling at home exits.
 - Discover and cache per-source remote plan fields (station tile, container id, path, path distance, miner/hauler demand).
 - Spawn dedicated per-source `remoteMiner` and `remoteHauler`.
+- Remote miners target `sources + 1` per room: one active per source plus one `remoteStandby` idle at home spawn that dispatches when an active miner's TTL drops below 300.
+- Remote haulers are capped at 2 per source and use pure CARRY+MOVE bodies (no WORK) to maximize capacity.
 - Spawn `remoteMaintainer` when enabled remote roads/containers need build or repair.
 - Use `claimer` for reserve/claim modes; reserve mode should require at least 2 `CLAIM` parts.
 - Apply danger pause (`dangerUntil`) on visible hostile signals and retreat remote creeps home during danger windows.
@@ -165,7 +172,8 @@ Remote harvest policy:
 Remote throughput model:
 
 - `workDemand = ceil(source.energyCapacity / ENERGY_REGEN_TIME / HARVEST_POWER)`
-- `haulerCapacityDemand = ceil((source.energyCapacity / ENERGY_REGEN_TIME) * pathDistance * 2 * 1.2)`
+- `haulerCapacityDemand = min(500, ceil((source.energyCapacity / ENERGY_REGEN_TIME) * pathDistance * 2 * 1.2))`
+- The hauler capacity cap (500) prevents the distance-multiplied formula from spawning excessive tiny haulers for distant rooms. Combined with the 2-hauler-per-source hard limit, a 2-source room spawns at most 4 remote haulers total.
 
 Example remote Memory config:
 
@@ -261,11 +269,27 @@ For a strategic behavior change:
 
 Known follow-up work lives in `.ai/memory/KNOWN_ISSUES.md`. Keep this strategy mostly normative; use the known issues file for operational cleanup and temporary gaps.
 
+## Build Identity And Memory Audit
+
+The build system injects the current 8-character git commit hash into the bundled output at build time. The server-side code stores the last-seen commit hash in `Memory.lastBuildCommit`. On the first tick after a new build is deployed, the memory consistency audit runs once.
+
+The audit performs cleanup that shouldn't run every tick:
+
+- Removes orphaned room memory for rooms with no owned spawns and no references from other rooms.
+- Clears expired `dangerUntil` timestamps from remote plans.
+- Clears stale `skipReason` when the remote room is visible and has no hostiles.
+- Removes stale source plans for sources that no longer exist in the room.
+- Clears invalid creep remote assignments where the remote room is no longer in any plan.
+- Reports (but does not fix) duplicate source assignments.
+
+The audit skips when CPU bucket is below 500. It can also be invoked manually from the console via `require('memoryAudit').runFullAudit()`.
+
 ## Verification
 
 Before deploying strategic code changes:
 
 1. Run `npx tsc --noEmit`.
 2. Run `npm run build`.
-3. Check the live room after deployment for spawn refill, tower reserves, miner coverage, hauling flow, construction progress, upgrade progress, and idle creeps.
-4. Record durable decisions in `.ai/memory/` or a dated `.ai/session/` note when the strategy changes.
+3. Verify the build banner contains the correct 8-char git hash: `head -1 dist/main.js` should show `var __BUILD_COMMIT__ = "abcd1234";`.
+4. Check the live room after deployment for spawn refill, tower reserves, miner coverage, hauling flow, construction progress, upgrade progress, idle creeps, and the `[memoryAudit]` log line on the first tick after deploy.
+5. Record durable decisions in `.ai/memory/` or a dated `.ai/session/` note when the strategy changes.

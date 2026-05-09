@@ -20,6 +20,9 @@ This file tracks known follow-up work that future agents should consider before 
 - Remote spawn capacity is measured broadly, not per configured remote room.
 - Remote danger policy exists in Memory but needs stronger detection/update logic.
 - Wall/rampart repair caps (`wallRampartRepairCap` in `role.doctor.ts`) are hardcoded; a future improvement would make them configurable via `room.memory.plan` for rooms that want custom defense budgets.
+- Hauler deposit fallback (no storage): `containers[0]` is used without checking free space or whether it is a source container. In the pre-storage phase this can cause energy to cycle back into a source container. Low priority once storage is built.
+- Hauler source-link withdrawal: **fixed** — haulers no longer include `sourceLinks` in their energy withdrawal candidates. They now draw from hub/sink demand links (when spawn pressure exists) and source containers only.
+- Multi-spawn: fixed — `runSpawnPlanner` now loops all free spawns with per-tick pending tracking to avoid double-spawning the same need.
 
 ## Architecture Cleanup
 

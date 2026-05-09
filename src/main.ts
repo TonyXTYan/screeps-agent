@@ -32,15 +32,18 @@ export function loop(): void {
             roomController.assignRemoteCreep(creep);
         }
 
+        // Defenders must run before the job runner — they get misclassified as 'worker'
+        // archetype and would receive economic jobs that bypass their combat behavior.
+        if (creep.memory.role === 'defender') { roleDefender.run(creep); continue; }
+
         if (creepJobRunner.run(creep)) { continue; }
 
-        if (creep.memory.role !== 'defender' && fleeFromHostiles(creep)) { continue; }
+        if (fleeFromHostiles(creep)) { continue; }
 
         if (creep.memory.role === 'builder') { roleBuilder.run(creep); }
         if (creep.memory.role === 'harvester') { roleHarvester.run(creep); }
         if (creep.memory.role === 'upgrader') { roleUpgrader.run(creep); }
         if (creep.memory.role === 'doctor') { roleDoctor.run(creep); }
-        if (creep.memory.role === 'defender') { roleDefender.run(creep); }
         if (creep.memory.role === 'manual') { roleManual.run(creep); }
     }
 }

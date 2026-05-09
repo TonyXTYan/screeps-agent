@@ -58,6 +58,7 @@ export function run(creep: Creep): void {
         if (healTargets.length > 0) {
             const transferCode = creep.heal(healTargets[0]);
             if (transferCode === ERR_NOT_IN_RANGE) {
+                creep.rangedHeal(healTargets[0]);
                 creep.moveTo(healTargets[0], { visualizePathStyle: { stroke: '#65fd62' } });
             } else {
                 console.log('role.doctor: heal return code: ' + transferCode);

@@ -61,6 +61,9 @@ function harvestSource(creep: Creep): number {
     const code = creep.harvest(source);
     if (code === ERR_NOT_IN_RANGE) {
         creep.moveTo(source, { visualizePathStyle: { stroke: '#3d2a22' } });
+    } else if (creep.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
+        // harvest (work) + transfer (carry) are independent intent categories — both fire this tick
+        offloadEnergyNearby(creep);
     }
     return code;
 }
@@ -190,6 +193,7 @@ function heal(creep: Creep): number {
 
     const code = creep.heal(target);
     if (code === ERR_NOT_IN_RANGE) {
+        creep.rangedHeal(target);
         creep.moveTo(target, { visualizePathStyle: { stroke: '#65fd62' } });
     }
     return code;
@@ -213,6 +217,8 @@ function mineMineral(creep: Creep): number {
     const code = creep.harvest(mineral);
     if (code === ERR_NOT_IN_RANGE) {
         creep.moveTo(mineral, { visualizePathStyle: { stroke: '#41a7a7' } });
+    } else if (creep.store.getUsedCapacity() > 0) {
+        offloadResourceNearby(creep);
     }
     return code;
 }

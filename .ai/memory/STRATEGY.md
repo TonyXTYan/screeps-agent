@@ -64,12 +64,13 @@ Energy spending priority for creeps is:
 2. Keep towers above reserve.
 3. Resume the creep's remembered primary build, repair, or upgrade job.
 4. Deposit hauler energy into storage or terminal.
-5. Maintain minimum controller upgrade work.
-6. Build construction sites.
-7. Repair structures when construction pressure and storage reserves allow.
-8. Upgrade with remaining local energy.
+5. Guarantee at least one worker building when construction sites exist (before any worker upgrades).
+6. Maintain minimum controller upgrade work (filled by remaining workers after the first builder is assigned).
+7. Build more construction sites with remaining worker capacity.
+8. Repair structures when construction pressure and storage reserves allow.
+9. Upgrade with remaining local energy.
 
-Controller upgrading is required to prevent stagnation, but it should not starve spawn refill, tower reserves, construction priorities, or basic hauling.
+Controller upgrading is required to prevent stagnation, but it should not starve spawn refill, tower reserves, or construction. When sites exist, at least one worker always builds before any worker upgrades.
 
 ## Construction
 

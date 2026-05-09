@@ -344,7 +344,7 @@ function reportPassiveInfrastructure(context: RoomControllerContext): void {
 function assignJobs(context: RoomControllerContext): void {
     const reservations = createReservations(context);
     const creeps = context.creeps
-        .filter((creep) => !creep.spawning)
+        .filter((creep) => !creep.spawning && creep.memory.role !== 'defender')
         .sort((a, b) => assignmentPriority(ensureArchetype(a)) - assignmentPriority(ensureArchetype(b)));
 
     for (const creep of creeps) {
@@ -467,6 +467,16 @@ function assignEnergySpendingJob(
         }
     }
 
+    if (Object.keys(reservations.constructionProgress).length === 0 && capabilities.build > 0 && context.constructionSites.length > 0) {
+        const guaranteedSite = bestConstructionSite(creep, context.constructionSites, reservations, capabilities.build);
+        if (guaranteedSite) {
+            reserveConstructionProgress(reservations, guaranteedSite, capabilities.build);
+            rememberPrimaryJob(creep, 'build', guaranteedSite);
+            setJob(creep, 'build', guaranteedSite);
+            return;
+        }
+    }
+
     if (capabilities.upgrade > 0 && context.room.controller && shouldReserveUpgrade(context, reservations)) {
         reservations.upgraderWork += capabilities.upgrade;
         rememberPrimaryJob(creep, 'upgrade', context.room.controller);
@@ -506,52 +516,58 @@ function assignEnergySpendingJob(
 }
 
 function runSpawnPlanner(context: RoomControllerContext): void {
-    const spawn = context.structures.spawns.find((candidate) => !candidate.spawning);
-    if (!spawn) { return; }
+    const freeSpawns = context.structures.spawns.filter((s) => !s.spawning);
+    if (freeSpawns.length === 0) { return; }
 
-    const request = chooseSpawnRequest(context);
-    if (!request) { return; }
+    const pending: SpawnRequest[] = [];
+    let remainingEnergy = context.room.energyAvailable;
 
-    const bodyBudget = spawnBodyBudget(context, request);
-    const body = planBodyForArchetype(request.archetype, bodyBudget, { staticMining: request.staticMining, workRatio: request.workRatio });
-    if (body.length === 0) {
-        if (Game.time % 25 === 0) {
-            console.log('room.controller: waiting for energy to spawn ' + request.archetype + ' for ' + request.reason);
+    for (const spawn of freeSpawns) {
+        const request = chooseSpawnRequest(context, pending);
+        if (!request) { break; }
+
+        const bodyBudget = context.creeps.length === 0
+            ? remainingEnergy
+            : Math.min(context.room.energyCapacityAvailable, remainingEnergy);
+        const body = planBodyForArchetype(request.archetype, bodyBudget, { staticMining: request.staticMining, workRatio: request.workRatio });
+        if (body.length === 0) {
+            if (Game.time % 25 === 0) {
+                console.log('room.controller: waiting for energy to spawn ' + request.archetype + ' for ' + request.reason);
+            }
+            break;
         }
-        return;
-    }
 
-    const cost = bodyCost(body);
-    if (cost > context.room.energyAvailable) { return; }
+        const cost = bodyCost(body);
+        if (cost > remainingEnergy) { break; }
 
-    const name = request.archetype + '-' + Game.time;
-    const role = legacyRoleForArchetype(request.archetype);
-    const code = spawn.spawnCreep(body, name, {
-        memory: {
-            archetype: request.archetype,
-            role,
-            sourceId: request.sourceId,
-            assignedSourceId: request.sourceId,
-            assignedMineralId: request.mineralId,
-            stationaryTargetId: request.stationaryTargetId,
-            staticMining: request.staticMining,
-            homeRoom: context.room.name,
-            remoteRoom: request.remoteRoom,
-            remoteMode: request.remoteMode
+        const name = request.archetype + '-' + Game.time + (pending.length > 0 ? '-' + pending.length : '');
+        const role = legacyRoleForArchetype(request.archetype);
+        const code = spawn.spawnCreep(body, name, {
+            memory: {
+                archetype: request.archetype,
+                role,
+                sourceId: request.sourceId,
+                assignedSourceId: request.sourceId,
+                assignedMineralId: request.mineralId,
+                stationaryTargetId: request.stationaryTargetId,
+                staticMining: request.staticMining,
+                homeRoom: context.room.name,
+                remoteRoom: request.remoteRoom,
+                remoteMode: request.remoteMode
+            }
+        });
+
+        if (code === OK) {
+            console.log('room.controller: spawning ' + name + ' for ' + request.reason + ' cost=' + cost);
+            pending.push(request);
+            remainingEnergy -= cost;
+        } else if (code !== ERR_BUSY && Game.time % 25 === 0) {
+            console.log('room.controller: spawn request for ' + request.archetype + ' failed with code ' + code);
+            break;
         }
-    });
-
-    if (code === OK) {
-        console.log('room.controller: spawning ' + name + ' for ' + request.reason + ' cost=' + cost);
-    } else if (code !== ERR_BUSY && Game.time % 25 === 0) {
-        console.log('room.controller: spawn request for ' + request.archetype + ' failed with code ' + code);
     }
 }
 
-function spawnBodyBudget(context: RoomControllerContext, request: SpawnRequest): number {
-    if (context.creeps.length === 0) { return context.room.energyAvailable; }
-    return context.room.energyCapacityAvailable;
-}
 
 function workerWorkRatio(context: RoomControllerContext): number {
     const rcl = context.room.controller?.level ?? 0;
@@ -563,7 +579,7 @@ function workerWorkRatio(context: RoomControllerContext): number {
     return 1;
 }
 
-function chooseSpawnRequest(context: RoomControllerContext): SpawnRequest | null {
+function chooseSpawnRequest(context: RoomControllerContext, pending: SpawnRequest[] = []): SpawnRequest | null {
     const capacities = measureCapabilities(context.creeps);
     const haulerCapacityDemand = desiredHaulerCapacity(context);
     const workerWorkDemand = desiredWorkerWork(context);
@@ -572,7 +588,10 @@ function chooseSpawnRequest(context: RoomControllerContext): SpawnRequest | null
         return { archetype: 'worker', reason: 'emergency recovery' };
     }
 
-    const sourceDeficit = sourceSpawnDeficit(context);
+    const pendingSourceIds = new Set(
+        pending.filter(r => r.archetype === 'miner' && r.sourceId).map(r => r.sourceId!)
+    );
+    const sourceDeficit = sourceSpawnDeficit(context, pendingSourceIds);
     if (sourceDeficit) {
         return {
             archetype: 'miner',
@@ -583,19 +602,22 @@ function chooseSpawnRequest(context: RoomControllerContext): SpawnRequest | null
         };
     }
 
-    if (capacities.heal === 0 && context.room.energyCapacityAvailable >= 450) {
+    if (capacities.heal === 0 && !pending.some(r => r.archetype === 'doctor') &&
+        context.room.energyCapacityAvailable >= 450) {
         return { archetype: 'doctor', reason: 'no heal-capable creep' };
     }
 
-    if (capacities.haulerCapacity < haulerCapacityDemand) {
+    if (capacities.haulerCapacity < haulerCapacityDemand && !pending.some(r => r.archetype === 'hauler')) {
         return { archetype: 'hauler', reason: 'haul deficit ' + capacities.haulerCapacity + '/' + haulerCapacityDemand };
     }
 
-    if (capacities.workerWork < workerWorkDemand) {
+    if (capacities.workerWork < workerWorkDemand && !pending.some(r => r.archetype === 'worker')) {
         return { archetype: 'worker', reason: 'worker deficit ' + capacities.workerWork + '/' + workerWorkDemand, workRatio: workerWorkRatio(context) };
     }
 
-    if (mineralReadyToMine(context) && context.mineralPlan && capacities.mineralMinerWork < context.mineralPlan.requiredWork) {
+    if (mineralReadyToMine(context) && context.mineralPlan &&
+        capacities.mineralMinerWork < context.mineralPlan.requiredWork &&
+        !pending.some(r => r.archetype === 'mineralMiner')) {
         return {
             archetype: 'mineralMiner',
             reason: 'passive mineral extraction',
@@ -606,29 +628,33 @@ function chooseSpawnRequest(context: RoomControllerContext): SpawnRequest | null
     }
 
     const claimTargets = context.room.memory.plan?.claimTargets ?? [];
-    if (claimTargets.length > 0 && capacities.claim === 0) {
+    if (claimTargets.length > 0 && capacities.claim === 0 && !pending.some(r => r.archetype === 'claimer')) {
         return { archetype: 'claimer', reason: 'configured claim target ' + claimTargets[0], remoteRoom: claimTargets[0], remoteMode: 'claim' };
     }
 
-    return remoteSpawnRequest(context, capacities);
+    return remoteSpawnRequest(context, capacities, pending);
 }
 
 function remoteSpawnRequest(
     context: RoomControllerContext,
-    capacities: ReturnType<typeof measureCapabilities>
+    capacities: ReturnType<typeof measureCapabilities>,
+    pending: SpawnRequest[] = []
 ): SpawnRequest | null {
     const remoteRooms = context.room.memory.plan?.remoteRooms ?? {};
     for (const roomName in remoteRooms) {
         const remote = remoteRooms[roomName];
         if (!remote.enabled) { continue; }
         if (remote.dangerUntil && remote.dangerUntil > Game.time) { continue; }
-        if (remote.mode === 'harvest' && capacities.remoteMinerWork === 0) {
+        if (remote.mode === 'harvest' && capacities.remoteMinerWork === 0 &&
+            !pending.some(r => r.archetype === 'remoteMiner' && r.remoteRoom === roomName)) {
             return { archetype: 'remoteMiner', reason: 'configured remote harvest ' + roomName, remoteRoom: roomName, remoteMode: remote.mode };
         }
-        if (remote.mode === 'harvest' && capacities.remoteHaulerCapacity === 0) {
+        if (remote.mode === 'harvest' && capacities.remoteHaulerCapacity === 0 &&
+            !pending.some(r => r.archetype === 'remoteHauler' && r.remoteRoom === roomName)) {
             return { archetype: 'remoteHauler', reason: 'configured remote haul ' + roomName, remoteRoom: roomName, remoteMode: remote.mode };
         }
-        if ((remote.mode === 'reserve' || remote.mode === 'claim') && capacities.claim === 0) {
+        if ((remote.mode === 'reserve' || remote.mode === 'claim') && capacities.claim === 0 &&
+            !pending.some(r => r.archetype === 'claimer')) {
             return { archetype: 'claimer', reason: 'configured remote ' + remote.mode + ' ' + roomName, remoteRoom: roomName, remoteMode: remote.mode };
         }
     }
@@ -811,6 +837,15 @@ function keepCurrentJob(
             shouldReserveUpgrade(context, reservations)) {
             clearJob(creep);
             creep.memory.interruptReason = 'controller';
+            return false;
+        }
+
+        if (jobType === 'upgrade' &&
+            context.constructionSites.length > 0 &&
+            capabilities.build > 0 &&
+            !shouldReserveUpgrade(context, reservations)) {
+            clearJob(creep);
+            creep.memory.interruptReason = 'build';
             return false;
         }
     }
@@ -1009,7 +1044,7 @@ function energyWithdrawalTarget(
             ? [...context.structures.links.sink, ...context.structures.links.hub]
                 .filter((link) => link.store.getUsedCapacity(RESOURCE_ENERGY) > 0)
             : [];
-        return closest(creep, [...localDemandLinks, ...sourceContainers, ...sourceLinks]);
+        return closest(creep, [...localDemandLinks, ...sourceContainers]);
     }
 
     const controllerOrHubLink = closest(creep, [...context.structures.links.controller, ...context.structures.links.hub]
@@ -1097,8 +1132,9 @@ function sourceWorkDemand(source: Source): number {
     return Math.ceil(source.energyCapacity / ENERGY_REGEN_TIME / HARVEST_POWER);
 }
 
-function sourceSpawnDeficit(context: RoomControllerContext): SourcePlan | null {
+function sourceSpawnDeficit(context: RoomControllerContext, pendingSourceIds: Set<string> = new Set()): SourcePlan | null {
     for (const plan of context.sourcePlans) {
+        if (pendingSourceIds.has(plan.source.id)) { continue; }
         const assignedMiners = assignedSourceMinerCount(context.creeps, plan.source.id);
         if (assignedMiners === 0) { return plan; }
     }
@@ -1255,6 +1291,14 @@ function resumePrimaryEnergyJob(
     }
 
     if (!context.room.controller || target.id !== context.room.controller.id || capabilities.upgrade <= 0) {
+        clearPrimaryJob(creep);
+        return false;
+    }
+    if (!shouldReserveUpgrade(context, reservations) && context.constructionSites.length > 0) {
+        clearPrimaryJob(creep);
+        return false;
+    }
+    if (Object.keys(reservations.constructionProgress).length === 0 && context.constructionSites.length > 0 && capabilities.build > 0) {
         clearPrimaryJob(creep);
         return false;
     }

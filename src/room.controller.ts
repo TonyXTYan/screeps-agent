@@ -346,7 +346,7 @@ function updateRemoteRoomPlans(homeRoom: Room): void {
                 existing.pathDistance = route.path.length;
                 existing.pathSerialized = serializeRemotePath(route.path);
                 existing.pathUpdatedAt = Game.time;
-            } else if (remote.buildRoads && !pathStale) {
+            } else if (!pathStale) {
                 latestPath = deserializeRemotePath(existing.pathSerialized);
             }
             const distance = Math.max(1, existing.pathDistance ?? 25);

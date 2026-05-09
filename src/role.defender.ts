@@ -23,7 +23,15 @@ export function run(creep: Creep): void {
             creepHarvest.run(creep);
             return;
         }
-        const rally = creep.room.find(FIND_MY_SPAWNS)[0];
+        let rally = creep.memory.rallySpawnId ? Game.getObjectById<StructureSpawn>(creep.memory.rallySpawnId) : null;
+        if (!rally || rally.room.name !== creep.room.name) {
+            rally = creep.room.find(FIND_MY_SPAWNS)[0] ?? null;
+            if (rally) {
+                creep.memory.rallySpawnId = rally.id;
+            } else {
+                creep.memory.rallySpawnId = undefined;
+            }
+        }
         if (rally) {
             creep.moveTo(rally, { reusePath: 20, visualizePathStyle: { stroke: '#ffaa00' } });
         }

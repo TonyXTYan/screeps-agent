@@ -187,6 +187,7 @@ interface CreepMemory {
     upgrading?: boolean;
     attacking?: boolean;
     stationaryWorking?: boolean;
+    rallySpawnId?: string;
 }
 
 interface RoomMemory {

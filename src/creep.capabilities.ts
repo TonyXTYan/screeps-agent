@@ -193,13 +193,30 @@ export function planBodyForArchetype(
     }
 
     if (archetype === 'claimer') {
-        return selectLargestWithinBudget([
-            [CLAIM, CLAIM, MOVE, MOVE],
-            [CLAIM, MOVE]
-        ], energyBudget);
+        return buildClaimerBody(energyBudget, opts?.minClaimParts ?? 1);
     }
 
     return buildWorkerBody(energyBudget, opts?.workRatio ?? 1);
+}
+
+function buildClaimerBody(energyBudget: number, minClaimParts: number): BodyPartConstant[] {
+    const claimSegmentCost = bodyCost([CLAIM, MOVE]);
+    const body: BodyPartConstant[] = [];
+
+    for (let i = 0; i < minClaimParts; i++) {
+        body.push(CLAIM, MOVE);
+    }
+
+    if (bodyCost(body) > energyBudget) { return []; }
+
+    while (body.length + 2 <= 50 && bodyCost(body) + claimSegmentCost <= energyBudget) {
+        body.push(CLAIM, MOVE);
+    }
+
+    if (bodyCost(body) <= energyBudget && body.length <= 50) {
+        return body;
+    }
+    return [];
 }
 
 function buildWorkerBody(energyBudget: number, workRatio: number = 1): BodyPartConstant[] {

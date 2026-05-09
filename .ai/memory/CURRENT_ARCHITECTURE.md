@@ -106,7 +106,7 @@ Archetypes are spawn intent and debugging metadata. Job assignment is driven by 
 | `remoteMaintainer` | Fixed templates: WORK+WORK+CARRY+CARRY+MOVE×3, scaled down |
 | `remoteScout` | Single MOVE or double MOVE |
 | `doctor` | WORK+CARRY+MOVE+HEAL templates |
-| `claimer` | CLAIM×2+MOVE×2 or CLAIM×1+MOVE×1 |
+| `claimer` | Dynamic CLAIM+MOVE scaling — builds at least `minClaimParts` CLAIM+MOVE pairs, adds more while budget allows. Returns `[]` if budget can't meet minimum. Reserve mode requires `minClaimParts: 2`; claim mode allows 1. |
 
 There is a legacy body planning system (`creep.roleBalance.ts:balanceSpec()`) used only by defender spawning and the legacy role system. It uses a different encoding (array-index-based part ratios) and should not be used for new strategic path creeps.
 

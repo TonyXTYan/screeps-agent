@@ -1317,13 +1317,14 @@ function remoteSpawnRequest(
             }
             continue;
         }
-        if (remote.mode === 'harvest' && remote.reserve !== false && remoteClaimerCount(homeFleet, roomName, 'reserve', 1) === 0 &&
+        if (remote.mode === 'harvest' && remote.reserve !== false && remoteClaimerCount(homeFleet, roomName, 'reserve', 2) === 0 &&
             !pending.some(r => r.archetype === 'claimer' && r.remoteRoom === roomName)) {
             return {
                 archetype: 'claimer',
                 reason: 'remote reserve ' + roomName,
                 remoteRoom: roomName,
-                remoteMode: 'reserve'
+                remoteMode: 'reserve',
+                minClaimParts: 2
             };
         }
         if (remote.mode === 'harvest' && remote.sources) {

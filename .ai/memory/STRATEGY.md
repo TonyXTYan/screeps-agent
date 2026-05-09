@@ -165,7 +165,7 @@ Remote harvest policy:
 - Remote miners target `sources + 1` per room: one active per source plus one `remoteStandby` idle at home spawn that dispatches when an active miner's TTL drops below 300.
 - Remote haulers are capped at 2 per source and use pure CARRY+MOVE bodies (no WORK) to maximize capacity.
 - Spawn `remoteMaintainer` when enabled remote roads/containers need build or repair.
-- Use `claimer` for reserve/claim modes; reserve mode should require at least 2 `CLAIM` parts.
+- Use `claimer` for reserve/claim modes; reserve mode requires at least 2 `CLAIM` parts. Claimer body scales CLAIM+MOVE segments with available energy, building the largest effective reserving/claiming body possible.
 - Apply danger pause (`dangerUntil`) on visible hostile signals and retreat remote creeps home during danger windows.
 - Build remote roads/containers only in non-owned rooms so owned-room layouts remain manual.
 

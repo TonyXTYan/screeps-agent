@@ -153,10 +153,30 @@ Written by `keepCurrentJob` for observability but never read. Already flagged in
 - `src/types.d.ts` — added `Memory.lastBuildCommit?: string` declaration
 - `src/main.ts` — calls `memoryAudit.runIfBuildChanged()` after `creepMemoryManagement.run()` each tick
 
+## Additional Changes: Claimer Body Fix
+
+### Root cause
+`planBodyForArchetype` for `claimer` used fixed templates `[CLAIM, CLAIM, MOVE, MOVE]` (1300 energy) and `[CLAIM, MOVE]` (650 energy), ignoring the `minClaimParts` parameter entirely. The `selectLargestWithinBudget` fell back to the 1-CLAIM template when energy < 1300, producing a claimer with 1 CLAIM part.
+
+**1 CLAIM part is functionally useless for reservation:**
+- `creep.reserveController()` adds 1 reservation tick per CLAIM part per action, with a 600 tick cooldown
+- 1 CLAIM = +1 tick every 600 ticks, net loss of 599 ticks → reservation never builds up
+
+The harvest-mode claimer spawn (`remoteSpawnRequest` line 1320) also didn't set `minClaimParts`, and used `remoteClaimerCount(..., 1)` which would count 1-part claimers as sufficient, suppressing further spawns.
+
+### Fix
+1. **`src/creep.capabilities.ts`** — Replaced static claimer templates with `buildClaimerBody(energyBudget, minClaimParts)`:
+   - Builds at least `minClaimParts` CLAIM+MOVE pairs
+   - Scales up adding more CLAIM+MOVE segments while budget allows
+   - Returns `[]` if budget can't meet `minClaimParts` (no useless spawn)
+   - With `minClaimParts: 2` and 1950 energy → `[CLAIM,MOVE,CLAIM,MOVE,CLAIM,MOVE]` (3 CLAIM)
+   - With `minClaimParts: 2` and <1300 energy → `[]` (don't spawn)
+2. **`src/room.controller.ts:1320-1328`** — Harvest-mode claimer spawn now passes `minClaimParts: 2` and uses `remoteClaimerCount(..., 2)`, matching the reserve/claim-mode block at line 1393
+
 ## Files Changed This Session
 
-- `src/room.controller.ts` — home room priority gate, remote standby miner system, hauler capacity cap, per-source hauler limit, `countRemoteHaulersForSource()`
-- `src/creep.capabilities.ts` — remoteHauler body changed from hybrid WORK+CARRY to pure CARRY+MOVE
+- `src/room.controller.ts` — home room priority gate, remote standby miner system, hauler capacity cap, per-source hauler limit, `countRemoteHaulersForSource()`, `minClaimParts: 2` in harvest-mode claimer spawn
+- `src/creep.capabilities.ts` — remoteHauler body changed from hybrid WORK+CARRY to pure CARRY+MOVE; claimer body now uses dynamic `buildClaimerBody()` that enforces `minClaimParts` and scales CLAIM+MOVE segments
 - `src/main.ts` — `tryRenewStandbyMiner()` extended to handle remote standby miners; added `memoryAudit.runIfBuildChanged()` call
 - `rollup.config.mjs` — build commit hash injection via `output.banner`
 - `src/env.ts` — new file: BUILD_COMMIT export from build banner

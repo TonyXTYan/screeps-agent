@@ -195,6 +195,7 @@ interface CreepMemory {
     scoutWanderRoom?: string;
     scoutWanderUntil?: number;
     remoteRenewing?: boolean;
+    remoteStandby?: boolean;
     travelLastX?: number;
     travelLastY?: number;
     travelLastRoom?: string;

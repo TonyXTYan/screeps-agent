@@ -348,7 +348,7 @@ function ownedRooms(): Room[] {
 }
 
 function tryRenewStandbyMiner(creep: Creep): void {
-    if (creep.memory.minerDuty !== 'standby') { return; }
+    if (creep.memory.minerDuty !== 'standby' && !creep.memory.remoteStandby) { return; }
     const ttl = creep.ticksToLive ?? 0;
 
     const homeSpawn = creep.pos.findClosestByRange(FIND_MY_SPAWNS) as StructureSpawn | null;

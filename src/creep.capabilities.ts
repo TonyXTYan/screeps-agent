@@ -152,7 +152,7 @@ export function planBodyForArchetype(
     }
 
     if (archetype === 'hauler' || archetype === 'remoteHauler') {
-        if (archetype === 'remoteHauler' && energyBudget >= 300) {
+        if (archetype === 'hauler' && energyBudget >= 300) {
             const hybridBody: BodyPartConstant[] = [WORK, CARRY, MOVE];
             while (hybridBody.length + 3 <= 50 && bodyCost(hybridBody) + 150 <= energyBudget) {
                 hybridBody.push(CARRY, CARRY, MOVE);

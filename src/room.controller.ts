@@ -339,10 +339,15 @@ function updateRemoteRoomPlans(homeRoom: Room): void {
             existing.workDemand = sourceWorkDemand(source);
             const anchor = homeRoom.storage ?? homeRoom.find(FIND_MY_SPAWNS)[0];
             let latestPath: RoomPosition[] = [];
-            if (anchor && station && (remote.buildRoads || !existing.pathDistance || !remote.lastScouted || Game.time - remote.lastScouted > REMOTE_PATH_REFRESH_INTERVAL)) {
+            const pathStale = !existing.pathUpdatedAt || Game.time - existing.pathUpdatedAt > REMOTE_PATH_REFRESH_INTERVAL;
+            if (anchor && station && (!existing.pathDistance || !existing.pathSerialized || pathStale)) {
                 const route = PathFinder.search(anchor.pos, { pos: station, range: 1 }, { maxRooms: 8 });
                 latestPath = route.path;
                 existing.pathDistance = route.path.length;
+                existing.pathSerialized = serializeRemotePath(route.path);
+                existing.pathUpdatedAt = Game.time;
+            } else if (remote.buildRoads && !pathStale) {
+                latestPath = deserializeRemotePath(existing.pathSerialized);
             }
             const distance = Math.max(1, existing.pathDistance ?? 25);
             const income = source.energyCapacity / ENERGY_REGEN_TIME;
@@ -373,6 +378,22 @@ function updateRemoteRoomPlans(homeRoom: Room): void {
                 }
             }
         }
+    }
+}
+
+function serializeRemotePath(path: RoomPosition[]): string {
+    return JSON.stringify(path.map((step) => [step.x, step.y, step.roomName]));
+}
+
+function deserializeRemotePath(serialized?: string): RoomPosition[] {
+    if (!serialized) { return []; }
+    try {
+        const raw = JSON.parse(serialized) as Array<[number, number, string]>;
+        return raw
+            .filter((step) => Array.isArray(step) && typeof step[0] === 'number' && typeof step[1] === 'number' && typeof step[2] === 'string')
+            .map((step) => new RoomPosition(step[0], step[1], step[2]));
+    } catch {
+        return [];
     }
 }
 

@@ -57,6 +57,7 @@ interface RemoteSourcePlan {
     containerId?: string;
     pathSerialized?: string;
     pathDistance?: number;
+    pathUpdatedAt?: number;
     workDemand?: number;
     haulerCapacityDemand?: number;
     assignedMinerWork?: number;

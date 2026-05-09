@@ -19,6 +19,13 @@ export function run(creep: Creep): void {
             creep.moveTo(target, { reusePath: 5, visualizePathStyle: { stroke: '#ff0000' } });
         }
     } else {
-        creepHarvest.run(creep);
+        if (creep.getActiveBodyparts(WORK) > 0 && creep.getActiveBodyparts(CARRY) > 0) {
+            creepHarvest.run(creep);
+            return;
+        }
+        const rally = creep.room.find(FIND_MY_SPAWNS)[0];
+        if (rally) {
+            creep.moveTo(rally, { reusePath: 20, visualizePathStyle: { stroke: '#ffaa00' } });
+        }
     }
 }

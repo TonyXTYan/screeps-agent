@@ -11,6 +11,7 @@ import * as roomController from './room.controller';
 import * as towerBasics from './tower.basics';
 
 export function loop(): void {
+    installConsoleHelpers();
     console.log('main: ✅ Current game time is: ' + Game.time + ' -------------------------------');
 
     creepMemoryManagement.run();
@@ -36,9 +37,8 @@ export function loop(): void {
         // archetype and would receive economic jobs that bypass their combat behavior.
         if (creep.memory.role === 'defender') { roleDefender.run(creep); continue; }
 
-        if (creepJobRunner.run(creep)) { continue; }
-
         if (fleeFromHostiles(creep)) { continue; }
+        if (creepJobRunner.run(creep)) { continue; }
 
         if (creep.memory.role === 'builder') { roleBuilder.run(creep); }
         if (creep.memory.role === 'harvester') { roleHarvester.run(creep); }
@@ -46,6 +46,56 @@ export function loop(): void {
         if (creep.memory.role === 'doctor') { roleDoctor.run(creep); }
         if (creep.memory.role === 'manual') { roleManual.run(creep); }
     }
+}
+
+declare const globalThis: {
+    remoteMining?: {
+        activate: (homeRoom: string, remoteRoom: string, options?: {
+            reserve?: boolean;
+            buildRoads?: boolean;
+            maintainRoads?: boolean;
+        }) => string;
+        pause: (homeRoom: string, remoteRoom: string, ticks?: number) => string;
+        disable: (homeRoom: string, remoteRoom: string) => string;
+        status: (homeRoom: string, remoteRoom?: string) => unknown;
+    };
+};
+
+function installConsoleHelpers(): void {
+    if (globalThis.remoteMining) { return; }
+    globalThis.remoteMining = {
+        activate(homeRoom: string, remoteRoom: string, options?: { reserve?: boolean; buildRoads?: boolean; maintainRoads?: boolean }): string {
+            const room = Memory.rooms[homeRoom] ?? (Memory.rooms[homeRoom] = {});
+            room.plan = room.plan ?? {};
+            room.plan.remoteRooms = room.plan.remoteRooms ?? {};
+            room.plan.remoteRooms[remoteRoom] = {
+                enabled: true,
+                roomName: remoteRoom,
+                mode: 'harvest',
+                reserve: options?.reserve ?? true,
+                buildRoads: options?.buildRoads ?? true,
+                maintainRoads: options?.maintainRoads ?? true
+            };
+            return `remoteMining: activated ${homeRoom} -> ${remoteRoom}`;
+        },
+        pause(homeRoom: string, remoteRoom: string, ticks: number = 1500): string {
+            const plan = Memory.rooms[homeRoom]?.plan?.remoteRooms?.[remoteRoom];
+            if (!plan) { return `remoteMining: missing ${homeRoom} -> ${remoteRoom}`; }
+            plan.dangerUntil = Game.time + Math.max(1, ticks);
+            return `remoteMining: paused ${homeRoom} -> ${remoteRoom} until ${plan.dangerUntil}`;
+        },
+        disable(homeRoom: string, remoteRoom: string): string {
+            const plan = Memory.rooms[homeRoom]?.plan?.remoteRooms?.[remoteRoom];
+            if (!plan) { return `remoteMining: missing ${homeRoom} -> ${remoteRoom}`; }
+            plan.enabled = false;
+            return `remoteMining: disabled ${homeRoom} -> ${remoteRoom}`;
+        },
+        status(homeRoom: string, remoteRoom?: string): unknown {
+            const remotes = Memory.rooms[homeRoom]?.plan?.remoteRooms ?? {};
+            if (!remoteRoom) { return remotes; }
+            return remotes[remoteRoom] ?? null;
+        }
+    };
 }
 
 function fleeFromHostiles(creep: Creep): boolean {

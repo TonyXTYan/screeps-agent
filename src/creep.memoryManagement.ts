@@ -22,7 +22,8 @@ export function run(): void {
 
 function fallbackRoleForArchetype(archetype: CreepArchetype): string {
     if (archetype === 'doctor') { return 'doctor'; }
-    if (archetype === 'miner' || archetype === 'hauler' || archetype === 'mineralMiner') { return 'harvester'; }
+    if (archetype === 'miner' || archetype === 'hauler' || archetype === 'mineralMiner' || archetype === 'remoteHauler' || archetype === 'remoteMiner') { return 'harvester'; }
+    if (archetype === 'remoteMaintainer' || archetype === 'remoteScout') { return 'manual'; }
     if (archetype === 'claimer') { return 'manual'; }
     return 'builder';
 }

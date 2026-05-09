@@ -89,6 +89,7 @@ export function inferArchetype(creep: Creep): CreepArchetype {
     const capabilities = getCreepCapabilities(creep);
     if (capabilities.claim > 0) { return 'claimer'; }
     if (capabilities.heal > 0) { return 'doctor'; }
+    if (creep.memory.role === 'manual' && capabilities.work > 0 && capabilities.carry > 0) { return 'remoteMaintainer'; }
     if (capabilities.work > 0 && creep.memory.role === 'harvester') { return 'worker'; }
     if (capabilities.work > 0 && creep.memory.role === 'builder') { return 'worker'; }
     if (capabilities.work > 0 && creep.memory.role === 'upgrader') { return 'worker'; }
@@ -128,12 +129,37 @@ export function planBodyForArchetype(archetype: CreepArchetype, energyBudget: nu
     }
 
     if (archetype === 'hauler' || archetype === 'remoteHauler') {
+        if (archetype === 'remoteHauler' && energyBudget >= 300) {
+            const hybridBody: BodyPartConstant[] = [WORK, CARRY, MOVE];
+            while (hybridBody.length + 3 <= 50 && bodyCost(hybridBody) + 150 <= energyBudget) {
+                hybridBody.push(CARRY, CARRY, MOVE);
+            }
+            if (bodyCost(hybridBody) <= energyBudget && hybridBody.length <= 50) {
+                return hybridBody;
+            }
+        }
+
         const body: BodyPartConstant[] = [];
         while (body.length + 3 <= 50 && bodyCost(body) + 150 <= energyBudget) {
             body.push(CARRY, CARRY, MOVE);
         }
         if (body.length > 0) { return body; }
         return selectLargestWithinBudget([[CARRY, MOVE]], energyBudget);
+    }
+
+    if (archetype === 'remoteMaintainer') {
+        return selectLargestWithinBudget([
+            [WORK, WORK, CARRY, CARRY, MOVE, MOVE, MOVE],
+            [WORK, CARRY, CARRY, MOVE, MOVE],
+            [WORK, CARRY, MOVE]
+        ], energyBudget);
+    }
+
+    if (archetype === 'remoteScout') {
+        return selectLargestWithinBudget([
+            [MOVE, MOVE],
+            [MOVE]
+        ], energyBudget);
     }
 
     if (archetype === 'doctor') {

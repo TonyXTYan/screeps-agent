@@ -23,6 +23,8 @@ type CreepArchetype =
     'claimer' |
     'remoteMiner' |
     'remoteHauler' |
+    'remoteMaintainer' |
+    'remoteScout' |
     'mineralMiner';
 
 type CreepJobType =
@@ -47,6 +49,20 @@ type CreepJobType =
     'idle';
 
 type RemoteRoomMode = 'harvest' | 'reserve' | 'claim';
+
+interface RemoteSourcePlan {
+    sourceId: string;
+    stationX?: number;
+    stationY?: number;
+    containerId?: string;
+    pathSerialized?: string;
+    pathDistance?: number;
+    workDemand?: number;
+    haulerCapacityDemand?: number;
+    assignedMinerWork?: number;
+    assignedHaulerCapacity?: number;
+    lastSeen?: number;
+}
 
 interface RoomStructureMemory {
     updatedAt: number;
@@ -117,8 +133,14 @@ interface RemoteRoomPlan {
     enabled: boolean;
     roomName: string;
     mode: RemoteRoomMode;
+    reserve?: boolean;
+    buildRoads?: boolean;
+    maintainRoads?: boolean;
     dangerUntil?: number;
     lastScouted?: number;
+    lastSeenHostiles?: number;
+    skipReason?: string;
+    sources?: { [sourceId: string]: RemoteSourcePlan };
 }
 
 interface RoomPlanMemory {

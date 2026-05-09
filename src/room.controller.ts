@@ -101,7 +101,6 @@ const REMOTE_REPLACEMENT_BUFFER_TICKS = 60;
 const REMOTE_STANDBY_COUNT = 1;
 const REMOTE_STANDBY_DISPATCH_TTL = 300;
 const MAX_REMOTE_HAULER_CAPACITY_PER_SOURCE = 500;
-const MAX_REMOTE_HAULERS_PER_SOURCE = 2;
 
 export function run(room: Room): void {
     const context = buildContext(room);
@@ -1318,23 +1317,26 @@ function remoteSpawnRequest(
             }
             continue;
         }
-        if (remote.mode === 'harvest' && remote.reserve !== false && remoteClaimerCount(homeFleet, roomName, 'reserve', 2) === 0 &&
+        if (remote.mode === 'harvest' && remote.reserve !== false && remoteClaimerCount(homeFleet, roomName, 'reserve', 1) === 0 &&
             !pending.some(r => r.archetype === 'claimer' && r.remoteRoom === roomName)) {
             return {
                 archetype: 'claimer',
                 reason: 'remote reserve ' + roomName,
                 remoteRoom: roomName,
-                remoteMode: 'reserve',
-                minClaimParts: 2
+                remoteMode: 'reserve'
             };
         }
         if (remote.mode === 'harvest' && remote.sources) {
+            const numSources = Object.keys(remote.sources).length;
+            const totalRoomHaulers = countRemoteHaulersForRoom(homeFleet, roomName);
             for (const sourceId in remote.sources) {
                 const sourcePlan = remote.sources[sourceId];
                 const targetMinerWork = sourcePlan.workDemand ?? 3;
                 const minerCoverageHorizon = remoteSourceReplacementHorizon(context, sourcePlan, 'remoteMiner');
                 const minerProjectedWork = projectedRemoteMinerWork(homeFleet, roomName, sourceId, minerCoverageHorizon);
+                const minerCount = countRemoteMinersForSource(homeFleet, roomName, sourceId);
                 if (minerProjectedWork < targetMinerWork &&
+                    minerCount < 2 &&
                     !pending.some(r => r.archetype === 'remoteMiner' && r.remoteRoom === roomName && r.sourceId === sourceId)) {
                     return {
                         archetype: 'remoteMiner',
@@ -1351,9 +1353,8 @@ function remoteSpawnRequest(
                 const targetHaulerCapacity = sourcePlan.haulerCapacityDemand ?? 150;
                 const haulerCoverageHorizon = remoteSourceReplacementHorizon(context, sourcePlan, 'remoteHauler');
                 const haulerProjectedCapacity = projectedRemoteHaulerCapacity(homeFleet, roomName, sourceId, haulerCoverageHorizon);
-                const haulerCount = countRemoteHaulersForSource(homeFleet, roomName, sourceId);
                 if (haulerProjectedCapacity < targetHaulerCapacity &&
-                    haulerCount < MAX_REMOTE_HAULERS_PER_SOURCE &&
+                    totalRoomHaulers < 2 * numSources &&
                     !pending.some(r => r.archetype === 'remoteHauler' && r.remoteRoom === roomName && r.sourceId === sourceId)) {
                     return {
                         archetype: 'remoteHauler',
@@ -1464,6 +1465,18 @@ function findDyingRemoteMiner(
     return best;
 }
 
+function countRemoteMinersForSource(creeps: Creep[], remoteRoom: string, sourceId: string): number {
+    let count = 0;
+    for (const creep of creeps) {
+        if (creep.spawning) { continue; }
+        if (ensureArchetype(creep) !== 'remoteMiner') { continue; }
+        if (creep.memory.remoteRoom !== remoteRoom) { continue; }
+        if ((creep.memory.assignedSourceId ?? creep.memory.sourceId) !== sourceId) { continue; }
+        count++;
+    }
+    return count;
+}
+
 function countRemoteHaulersForSource(creeps: Creep[], remoteRoom: string, sourceId: string): number {
     let count = 0;
     for (const creep of creeps) {
@@ -1471,6 +1484,17 @@ function countRemoteHaulersForSource(creeps: Creep[], remoteRoom: string, source
         if (ensureArchetype(creep) !== 'remoteHauler') { continue; }
         if (creep.memory.remoteRoom !== remoteRoom) { continue; }
         if ((creep.memory.assignedSourceId ?? creep.memory.sourceId) !== sourceId) { continue; }
+        count++;
+    }
+    return count;
+}
+
+function countRemoteHaulersForRoom(creeps: Creep[], remoteRoom: string): number {
+    let count = 0;
+    for (const creep of creeps) {
+        if (creep.spawning) { continue; }
+        if (ensureArchetype(creep) !== 'remoteHauler') { continue; }
+        if (creep.memory.remoteRoom !== remoteRoom) { continue; }
         count++;
     }
     return count;

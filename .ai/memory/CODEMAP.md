@@ -10,12 +10,18 @@ Use this as the first stop before editing code.
 
 ## Tick Flow
 
-- `src/main.ts` — Screeps `loop()` entry point and top-level ordering
-- `src/creep.memoryManagement.ts` — dead creep memory cleanup and fallback role initialization
+- `src/main.ts` — Screeps `loop()` entry point, standby miner renewal, hostile flee/retreat, debug hooks
+- `src/creep.memoryManagement.ts` — dead creep memory cleanup and fallback role/remote initialization
 - `src/creep.populationControl.ts` — emergency defender spawning before economic spawn planning
-- `src/room.controller.ts` — main room-level economic controller
+- `src/room.controller.ts` — main room-level economic controller (room plans, remotes, spawn planning, job assignment)
 - `src/tower.basics.ts` — tower attack, heal, and repair behavior
 - `src/creep.jobRunner.ts` — executes assigned jobs before legacy role fallback
+
+## Shared Utilities (Duplicate Definitions)
+
+- `isArmedHostile(creep)` — currently duplicated identically in 5 files (`main.ts`, `room.controller.ts`, `tower.basics.ts`, `creep.populationControl.ts`, `role.defender.ts`). When extracted to a shared module, update all imports.
+- `firstStoredResource(store)` — duplicated in `creep.jobRunner.ts` and `room.controller.ts`.
+- `closest()` / `closestByRange()` — overlap in `room.controller.ts`.
 
 ## Strategy To Code
 
@@ -29,8 +35,11 @@ Use this as the first stop before editing code.
 - Source/mineral planning — `src/room.controller.ts`
 - Link classification — `src/room.structures.ts`
 - Spawn demand selection — `src/room.controller.ts`
+- Home room priority gate (blocks remote spawns when home requests pending) — `src/room.controller.ts`
+- Remote standby miner system (dispatch + renewal) — `src/room.controller.ts`, `src/main.ts`
 - Body capability derivation — `src/creep.capabilities.ts`
 - Body planning by archetype — `src/creep.capabilities.ts`
+- Remote hauler capacity cap (per source) — `src/room.controller.ts`
 - Hauling, refill, build, repair, upgrade assignment — `src/room.controller.ts`
 - Job execution for those assignments — `src/creep.jobRunner.ts`
 
@@ -38,7 +47,7 @@ Use this as the first stop before editing code.
 
 - Creep, room, spawn memory extensions — `src/types.d.ts`
 - Job type union — `src/types.d.ts`
-- Archetype union — `src/types.d.ts`
+- Archetype union (worker, miner, hauler, doctor, claimer, remoteMiner, remoteHauler, remoteMaintainer, remoteScout, mineralMiner) — `src/types.d.ts`
 - Room plan and load memory — `src/types.d.ts`
 - Runtime Memory writes for structures/load/plans — `src/room.controller.ts`, `src/room.structures.ts`
 
@@ -55,12 +64,14 @@ Wall/rampart hit caps live in `wallRampartRepairCap()`. Tower threshold (90 % ch
 ## Legacy Compatibility
 
 - Legacy role balancing helpers — `src/creep.roleBalance.ts`
+- Legacy body planner (`balanceSpec()`) — `src/creep.roleBalance.ts` (DO NOT use for strategic-path creeps; use `planBodyForArchetype()` in `creep.capabilities.ts` instead)
 - Legacy direct harvesting helper — `src/creep.harvest.ts`
 - Legacy fallback roles — `src/role.harvester.ts`, `src/role.builder.ts`, `src/role.upgrader.ts`, `src/role.doctor.ts`
 - Emergency defender behavior — `src/role.defender.ts`
 - Manual role stub — `src/role.manual.ts`
 
 Legacy role files should not be the primary path for new strategic behavior.
+**Warning**: legacy roles (`harvester`, `builder`) can delete creep memory (`delete Memory.creeps[creep.name]`) when idle. See `KNOWN_ISSUES.md`.
 
 ## Common Edit Paths
 

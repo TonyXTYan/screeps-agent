@@ -41,7 +41,10 @@ const ROLE_PATH_COLORS: { [role: string]: string } = {
 export function loop(): void {
     installConsoleHelpers();
     installMoveDebugHook();
-    console.log('main: ✅ Current game time is: ' + Game.time + ' -------------------------------');
+    console.log('main: ✅ Current game time is: ' + Game.time + ', cpu.bucket=' + Game.cpu.bucket);
+    if (Game.cpu.bucket >= 10000) {
+        Game.cpu.generatePixel();
+    }
 
     creepMemoryManagement.run();
 

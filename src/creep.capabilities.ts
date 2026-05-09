@@ -193,11 +193,6 @@ export function planBodyForArchetype(
     }
 
     if (archetype === 'claimer') {
-        if ((opts?.minClaimParts ?? 1) >= 2) {
-            return selectLargestWithinBudget([
-                [CLAIM, CLAIM, MOVE, MOVE]
-            ], energyBudget);
-        }
         return selectLargestWithinBudget([
             [CLAIM, CLAIM, MOVE, MOVE],
             [CLAIM, MOVE]

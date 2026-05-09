@@ -1424,7 +1424,6 @@ function creepsForHomeRoom(homeRoomName: string): Creep[] {
 function countActiveRemoteMinersForRoom(creeps: Creep[], remoteRoom: string): number {
     let count = 0;
     for (const creep of creeps) {
-        if (creep.spawning) { continue; }
         if (ensureArchetype(creep) !== 'remoteMiner') { continue; }
         if (creep.memory.remoteRoom !== remoteRoom) { continue; }
         if (creep.memory.remoteStandby) { continue; }
@@ -1436,7 +1435,6 @@ function countActiveRemoteMinersForRoom(creeps: Creep[], remoteRoom: string): nu
 function countRemoteStandbyMiners(creeps: Creep[], remoteRoom: string): number {
     let count = 0;
     for (const creep of creeps) {
-        if (creep.spawning) { continue; }
         if (ensureArchetype(creep) !== 'remoteMiner') { continue; }
         if (creep.memory.remoteRoom !== remoteRoom) { continue; }
         if (creep.memory.remoteStandby) { count++; }
@@ -1469,9 +1467,9 @@ function findDyingRemoteMiner(
 function countRemoteMinersForSource(creeps: Creep[], remoteRoom: string, sourceId: string): number {
     let count = 0;
     for (const creep of creeps) {
-        if (creep.spawning) { continue; }
         if (ensureArchetype(creep) !== 'remoteMiner') { continue; }
         if (creep.memory.remoteRoom !== remoteRoom) { continue; }
+        if (creep.memory.remoteStandby) { continue; }
         if ((creep.memory.assignedSourceId ?? creep.memory.sourceId) !== sourceId) { continue; }
         count++;
     }
@@ -1481,7 +1479,6 @@ function countRemoteMinersForSource(creeps: Creep[], remoteRoom: string, sourceI
 function countRemoteHaulersForSource(creeps: Creep[], remoteRoom: string, sourceId: string): number {
     let count = 0;
     for (const creep of creeps) {
-        if (creep.spawning) { continue; }
         if (ensureArchetype(creep) !== 'remoteHauler') { continue; }
         if (creep.memory.remoteRoom !== remoteRoom) { continue; }
         if ((creep.memory.assignedSourceId ?? creep.memory.sourceId) !== sourceId) { continue; }
@@ -1493,7 +1490,6 @@ function countRemoteHaulersForSource(creeps: Creep[], remoteRoom: string, source
 function countRemoteHaulersForRoom(creeps: Creep[], remoteRoom: string): number {
     let count = 0;
     for (const creep of creeps) {
-        if (creep.spawning) { continue; }
         if (ensureArchetype(creep) !== 'remoteHauler') { continue; }
         if (creep.memory.remoteRoom !== remoteRoom) { continue; }
         count++;
@@ -1645,7 +1641,6 @@ function remoteClaimerCount(creeps: Creep[], remoteRoom: string, mode: RemoteRoo
 function assignedRemoteMinerWork(creeps: Creep[], remoteRoom: string, sourceId: string): number {
     let total = 0;
     for (const creep of creeps) {
-        if (creep.spawning) { continue; }
         if (ensureArchetype(creep) !== 'remoteMiner') { continue; }
         if (creep.memory.remoteRoom !== remoteRoom) { continue; }
         if ((creep.memory.assignedSourceId ?? creep.memory.sourceId) !== sourceId) { continue; }
@@ -1657,7 +1652,6 @@ function assignedRemoteMinerWork(creeps: Creep[], remoteRoom: string, sourceId: 
 function assignedRemoteHaulerCapacity(creeps: Creep[], remoteRoom: string, sourceId: string): number {
     let total = 0;
     for (const creep of creeps) {
-        if (creep.spawning) { continue; }
         if (ensureArchetype(creep) !== 'remoteHauler') { continue; }
         if (creep.memory.remoteRoom !== remoteRoom) { continue; }
         if ((creep.memory.assignedSourceId ?? creep.memory.sourceId) !== sourceId) { continue; }

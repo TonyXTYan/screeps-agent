@@ -27,9 +27,7 @@ export function loop(): void {
         const creep = Game.creeps[name];
         if (creep.spawning) { continue; }
 
-        if (!creep.memory.jobType) {
-            roomController.assignRemoteCreep(creep);
-        }
+        roomController.assignRemoteCreep(creep);
 
         // Defenders must run before the job runner — they get misclassified as 'worker'
         // archetype and would receive economic jobs that bypass their combat behavior.

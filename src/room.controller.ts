@@ -549,6 +549,7 @@ function assignJobs(context: RoomControllerContext): void {
     const reservations = createReservations(context);
     const creeps = context.creeps
         .filter((creep) => !creep.spawning && creep.memory.role !== 'defender')
+        .filter((creep) => !isDedicatedRemoteCreep(creep, context.room.name))
         .sort((a, b) => assignmentPriority(ensureArchetype(a)) - assignmentPriority(ensureArchetype(b)));
 
     for (const creep of creeps) {
@@ -556,6 +557,18 @@ function assignJobs(context: RoomControllerContext): void {
         if (keepCurrentJob(context, creep, archetype, reservations)) { continue; }
         assignJob(context, creep, reservations);
     }
+}
+
+function isDedicatedRemoteCreep(creep: Creep, homeRoomName: string): boolean {
+    const archetype = ensureArchetype(creep);
+    if (archetype !== 'remoteMiner' &&
+        archetype !== 'remoteHauler' &&
+        archetype !== 'remoteMaintainer' &&
+        archetype !== 'remoteScout' &&
+        archetype !== 'claimer') {
+        return false;
+    }
+    return creep.memory.homeRoom === homeRoomName && Boolean(creep.memory.remoteRoom);
 }
 
 function assignJob(context: RoomControllerContext, creep: Creep, reservations: JobReservations): void {
@@ -844,13 +857,15 @@ function remoteSpawnRequest(
     capacities: ReturnType<typeof measureCapabilities>,
     pending: SpawnRequest[] = []
 ): SpawnRequest | null {
+    const homeFleet = creepsForHomeRoom(context.room.name);
     const remoteRooms = context.room.memory.plan?.remoteRooms ?? {};
     for (const roomName in remoteRooms) {
         const remote = remoteRooms[roomName];
         if (!remote.enabled) { continue; }
         if (remote.dangerUntil && remote.dangerUntil > Game.time) { continue; }
         if (remote.mode === 'harvest' && (!remote.sources || Object.keys(remote.sources).length === 0)) {
-            if (!pending.some(r => r.archetype === 'remoteScout' && r.remoteRoom === roomName)) {
+            if (countRemoteScouts(context.room.name, roomName) === 0 &&
+                !pending.some(r => r.archetype === 'remoteScout' && r.remoteRoom === roomName)) {
                 return { archetype: 'remoteScout', reason: 'remote scout ' + roomName, remoteRoom: roomName, remoteMode: remote.mode };
             }
             continue;
@@ -858,7 +873,7 @@ function remoteSpawnRequest(
         if (remote.mode === 'harvest' && remote.sources) {
             for (const sourceId in remote.sources) {
                 const sourcePlan = remote.sources[sourceId];
-                const minerWork = assignedRemoteMinerWork(context.creeps, roomName, sourceId);
+                const minerWork = assignedRemoteMinerWork(homeFleet, roomName, sourceId);
                 const targetMinerWork = sourcePlan.workDemand ?? 3;
                 if (minerWork < targetMinerWork &&
                     !pending.some(r => r.archetype === 'remoteMiner' && r.remoteRoom === roomName && r.sourceId === sourceId)) {
@@ -872,7 +887,7 @@ function remoteSpawnRequest(
                     };
                 }
 
-                const haulerCapacity = assignedRemoteHaulerCapacity(context.creeps, roomName, sourceId);
+                const haulerCapacity = assignedRemoteHaulerCapacity(homeFleet, roomName, sourceId);
                 const targetHaulerCapacity = sourcePlan.haulerCapacityDemand ?? 150;
                 if (haulerCapacity < targetHaulerCapacity &&
                     !pending.some(r => r.archetype === 'remoteHauler' && r.remoteRoom === roomName && r.sourceId === sourceId)) {
@@ -887,22 +902,61 @@ function remoteSpawnRequest(
             }
 
             if (remote.maintainRoads !== false && remoteNeedsMaintainer(roomName) &&
-                !hasRemoteMaintainer(context.creeps, roomName) &&
+                !hasRemoteMaintainer(homeFleet, roomName) &&
                 !pending.some(r => r.archetype === 'remoteMaintainer' && r.remoteRoom === roomName)) {
                 return { archetype: 'remoteMaintainer', reason: 'remote maintenance ' + roomName, remoteRoom: roomName, remoteMode: remote.mode };
             }
         }
-        if (remote.mode === 'harvest' && remote.reserve !== false && capacities.claim === 0 &&
+        if (remote.mode === 'harvest' && remote.reserve !== false && remoteClaimerCount(homeFleet, roomName, 'reserve') === 0 &&
             !pending.some(r => r.archetype === 'claimer' && r.remoteRoom === roomName)) {
             return { archetype: 'claimer', reason: 'remote reserve ' + roomName, remoteRoom: roomName, remoteMode: 'reserve' };
         }
-        if ((remote.mode === 'reserve' || remote.mode === 'claim') && capacities.claim === 0 &&
-            !pending.some(r => r.archetype === 'claimer')) {
+        if ((remote.mode === 'reserve' || remote.mode === 'claim') &&
+            remoteClaimerCount(homeFleet, roomName, remote.mode) === 0 &&
+            !pending.some(r => r.archetype === 'claimer' && r.remoteRoom === roomName)) {
             return { archetype: 'claimer', reason: 'configured remote ' + remote.mode + ' ' + roomName, remoteRoom: roomName, remoteMode: remote.mode };
         }
     }
 
     return null;
+}
+
+function creepsForHomeRoom(homeRoomName: string): Creep[] {
+    const creeps: Creep[] = [];
+    for (const name in Game.creeps) {
+        const creep = Game.creeps[name];
+        if (creep.memory.homeRoom === homeRoomName) {
+            creeps.push(creep);
+            continue;
+        }
+        if (!creep.memory.homeRoom && creep.room.name === homeRoomName) {
+            creeps.push(creep);
+        }
+    }
+    return creeps;
+}
+
+function countRemoteScouts(homeRoomName: string, remoteRoom: string): number {
+    let count = 0;
+    for (const name in Game.creeps) {
+        const creep = Game.creeps[name];
+        if (ensureArchetype(creep) !== 'remoteScout') { continue; }
+        if (creep.memory.remoteRoom !== remoteRoom) { continue; }
+        if (creep.memory.homeRoom && creep.memory.homeRoom !== homeRoomName) { continue; }
+        count++;
+    }
+    return count;
+}
+
+function remoteClaimerCount(creeps: Creep[], remoteRoom: string, mode: RemoteRoomMode): number {
+    let count = 0;
+    for (const creep of creeps) {
+        if (ensureArchetype(creep) !== 'claimer') { continue; }
+        if (creep.memory.remoteRoom !== remoteRoom) { continue; }
+        if (creep.memory.remoteMode !== mode) { continue; }
+        count++;
+    }
+    return count;
 }
 
 function assignedRemoteMinerWork(creeps: Creep[], remoteRoom: string, sourceId: string): number {

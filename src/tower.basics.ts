@@ -8,6 +8,9 @@ export function run(room: Room): void {
     if (towers.length === 0) { return; }
 
     const rcl = room.controller?.level ?? 0;
+    const armedHostiles = room.find(FIND_HOSTILE_CREEPS, {
+        filter: isArmedHostile
+    });
 
     // Pre-compute repair targets once per tick so all towers focus on the same most-critical structure.
     // Lowest hits wins within each priority band.
@@ -34,7 +37,7 @@ export function run(room: Room): void {
     }) as AnyStructure[]);
 
     for (const tower of towers) {
-        const closestHostile = tower.pos.findClosestByRange(FIND_HOSTILE_CREEPS);
+        const closestHostile = tower.pos.findClosestByRange(armedHostiles);
         const energyRatio = tower.store.getUsedCapacity(RESOURCE_ENERGY) / tower.store.getCapacity(RESOURCE_ENERGY)!;
 
         if (closestHostile) {
@@ -77,7 +80,7 @@ function lowestHits(structures: AnyStructure[]): AnyStructure | null {
 }
 
 export function tryFillTowerUnderSiege(creep: Creep): boolean {
-    if (creep.room.find(FIND_HOSTILE_CREEPS).length === 0) { return false; }
+    if (creep.room.find(FIND_HOSTILE_CREEPS, { filter: isArmedHostile }).length === 0) { return false; }
     if (creep.store.getUsedCapacity(RESOURCE_ENERGY) === 0) { return false; }
 
     const tower = creep.pos.findClosestByRange(FIND_MY_STRUCTURES, {
@@ -95,4 +98,8 @@ export function tryFillTowerUnderSiege(creep: Creep): boolean {
     }
 
     return transferCode === OK;
+}
+
+function isArmedHostile(creep: Creep): boolean {
+    return creep.getActiveBodyparts(ATTACK) > 0 || creep.getActiveBodyparts(RANGED_ATTACK) > 0;
 }

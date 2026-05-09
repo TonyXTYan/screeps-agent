@@ -137,6 +137,7 @@ interface RemoteRoomPlan {
     reserve?: boolean;
     buildRoads?: boolean;
     maintainRoads?: boolean;
+    debugPaths?: boolean;
     dangerUntil?: number;
     lastScouted?: number;
     lastSeenHostiles?: number;
@@ -192,6 +193,10 @@ interface CreepMemory {
     scoutWanderRoom?: string;
     scoutWanderUntil?: number;
     remoteRenewing?: boolean;
+    travelLastX?: number;
+    travelLastY?: number;
+    travelLastRoom?: string;
+    travelStuckTicks?: number;
 }
 
 interface RoomMemory {

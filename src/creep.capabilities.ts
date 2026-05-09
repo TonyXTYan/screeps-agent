@@ -119,19 +119,14 @@ export function planBodyForArchetype(
                 [WORK, WORK, WORK, WORK, MOVE, MOVE],
                 [WORK, WORK, WORK, MOVE, MOVE],
                 [WORK, WORK, MOVE],
-                [WORK, MOVE],
-                [WORK, WORK, WORK, WORK, WORK, CARRY, MOVE],
-                [WORK, WORK, WORK, WORK, CARRY, MOVE],
-                [WORK, WORK, WORK, CARRY, MOVE],
-                [WORK, WORK, CARRY, MOVE],
-                [WORK, CARRY, MOVE]
+                [WORK, MOVE]
             ], energyBudget);
         }
         return selectLargestWithinBudget([
-            [WORK, WORK, WORK, WORK, WORK, CARRY, MOVE],
-            [WORK, WORK, WORK, WORK, CARRY, MOVE],
-            [WORK, WORK, WORK, CARRY, MOVE],
-            [WORK, WORK, CARRY, MOVE],
+            [WORK, WORK, WORK, WORK, CARRY, MOVE, MOVE, MOVE],
+            [WORK, WORK, WORK, CARRY, MOVE, MOVE, MOVE],
+            [WORK, WORK, WORK, CARRY, MOVE, MOVE],
+            [WORK, WORK, CARRY, MOVE, MOVE],
             [WORK, CARRY, MOVE]
         ], energyBudget);
     }

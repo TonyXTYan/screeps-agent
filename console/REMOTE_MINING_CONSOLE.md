@@ -19,6 +19,7 @@ Optional `options`:
 - `reserve` (default `true`): allow spawning reservers for the remote controller.
 - `buildRoads` (default `true`): place road construction sites on discovered paths.
 - `maintainRoads` (default `true`): allow remote maintainers and maintenance flow.
+- `debugPaths` (default `false`): render `moveTo` paths in role/archetype colors for creeps assigned to that remote and creeps currently inside that remote room.
 
 Example:
 
@@ -26,7 +27,18 @@ Example:
 remoteMining.activate('W7N9', 'W8N9', {
   reserve: true,
   buildRoads: true,
-  maintainRoads: true
+  maintainRoads: true,
+  debugPaths: true
+})
+```
+
+### `remoteMining.configure(homeRoom, remoteRoom, options?)`
+
+Update existing remote settings without recreating the entry.
+
+```js
+remoteMining.configure('W7N9', 'W8N9', {
+  debugPaths: true
 })
 ```
 
@@ -73,6 +85,7 @@ remoteMining.status('W7N9', 'W8N9')  // one remote room
    - `remoteMaintainer`
    - `claimer` for reserve mode (targeting at least 2 `CLAIM` parts)
 6. Danger pause/retreat behavior when `dangerUntil` is active.
+7. Optional path visualization (`debugPaths: true`) with role-coded colors for creeps involved in/inside that remote.
 
 ## Memory Shape (Reference)
 
@@ -91,7 +104,8 @@ Initial shape:
   mode: 'harvest',
   reserve: true,
   buildRoads: true,
-  maintainRoads: true
+  maintainRoads: true,
+  debugPaths: false
 }
 ```
 

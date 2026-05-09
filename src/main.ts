@@ -13,9 +13,34 @@ import * as towerBasics from './tower.basics';
 const DOCTOR_EMERGENCY_HITS_RATIO = 0.35;
 const DOCTOR_THREAT_RADIUS = 4;
 const STANDBY_MINER_RENEW_THRESHOLD = 1450;
+const STANDBY_MINER_PARK_MIN_RANGE = 2;
+const STANDBY_MINER_PARK_MAX_RANGE = 4;
+const DEFAULT_ROLE_PATH_STYLE = {
+    fill: 'transparent',
+    lineStyle: 'dashed' as const,
+    strokeWidth: 0.15,
+    opacity: 0.45
+};
+const ROLE_PATH_COLORS: { [role: string]: string } = {
+    remoteMiner: '#f59e0b',
+    remoteHauler: '#22d3ee',
+    remoteMaintainer: '#34d399',
+    remoteScout: '#a78bfa',
+    claimer: '#f472b6',
+    miner: '#eab308',
+    hauler: '#38bdf8',
+    worker: '#22c55e',
+    doctor: '#ef4444',
+    builder: '#22c55e',
+    harvester: '#eab308',
+    upgrader: '#60a5fa',
+    manual: '#f97316',
+    defender: '#ef4444'
+};
 
 export function loop(): void {
     installConsoleHelpers();
+    installMoveDebugHook();
     console.log('main: ✅ Current game time is: ' + Game.time + ' -------------------------------');
 
     creepMemoryManagement.run();
@@ -55,6 +80,13 @@ declare const globalThis: {
             reserve?: boolean;
             buildRoads?: boolean;
             maintainRoads?: boolean;
+            debugPaths?: boolean;
+        }) => string;
+        configure: (homeRoom: string, remoteRoom: string, options?: {
+            reserve?: boolean;
+            buildRoads?: boolean;
+            maintainRoads?: boolean;
+            debugPaths?: boolean;
         }) => string;
         pause: (homeRoom: string, remoteRoom: string, ticks?: number) => string;
         disable: (homeRoom: string, remoteRoom: string) => string;
@@ -65,7 +97,7 @@ declare const globalThis: {
 function installConsoleHelpers(): void {
     if (globalThis.remoteMining) { return; }
     globalThis.remoteMining = {
-        activate(homeRoom: string, remoteRoom: string, options?: { reserve?: boolean; buildRoads?: boolean; maintainRoads?: boolean }): string {
+        activate(homeRoom: string, remoteRoom: string, options?: { reserve?: boolean; buildRoads?: boolean; maintainRoads?: boolean; debugPaths?: boolean }): string {
             const room = Memory.rooms[homeRoom] ?? (Memory.rooms[homeRoom] = {});
             room.plan = room.plan ?? {};
             room.plan.remoteRooms = room.plan.remoteRooms ?? {};
@@ -75,9 +107,19 @@ function installConsoleHelpers(): void {
                 mode: 'harvest',
                 reserve: options?.reserve ?? true,
                 buildRoads: options?.buildRoads ?? true,
-                maintainRoads: options?.maintainRoads ?? true
+                maintainRoads: options?.maintainRoads ?? true,
+                debugPaths: options?.debugPaths ?? false
             };
             return `remoteMining: activated ${homeRoom} -> ${remoteRoom}`;
+        },
+        configure(homeRoom: string, remoteRoom: string, options?: { reserve?: boolean; buildRoads?: boolean; maintainRoads?: boolean; debugPaths?: boolean }): string {
+            const plan = Memory.rooms[homeRoom]?.plan?.remoteRooms?.[remoteRoom];
+            if (!plan) { return `remoteMining: missing ${homeRoom} -> ${remoteRoom}`; }
+            if (options?.reserve !== undefined) { plan.reserve = options.reserve; }
+            if (options?.buildRoads !== undefined) { plan.buildRoads = options.buildRoads; }
+            if (options?.maintainRoads !== undefined) { plan.maintainRoads = options.maintainRoads; }
+            if (options?.debugPaths !== undefined) { plan.debugPaths = options.debugPaths; }
+            return `remoteMining: configured ${homeRoom} -> ${remoteRoom}`;
         },
         pause(homeRoom: string, remoteRoom: string, ticks: number = 1500): string {
             const plan = Memory.rooms[homeRoom]?.plan?.remoteRooms?.[remoteRoom];
@@ -99,8 +141,63 @@ function installConsoleHelpers(): void {
     };
 }
 
+function installMoveDebugHook(): void {
+    const proto = Creep.prototype as Creep & {
+        _baseMoveTo?: (...args: any[]) => number;
+    };
+    if (proto._baseMoveTo) { return; }
+    proto._baseMoveTo = proto.moveTo;
+
+    proto.moveTo = function (this: Creep, ...args: any[]): CreepMoveReturnCode {
+        const color = debugPathColorForCreep(this);
+        if (!color) {
+            return proto._baseMoveTo!.apply(this, args as [any, any, any]) as CreepMoveReturnCode;
+        }
+
+        const patchedArgs = args.slice();
+        const optsIndex = typeof patchedArgs[0] === 'number' && typeof patchedArgs[1] === 'number' ? 2 : 1;
+        patchedArgs[optsIndex] = mergeRolePathStyle(patchedArgs[optsIndex] as MoveToOpts | undefined, color);
+        return proto._baseMoveTo!.apply(this, patchedArgs as [any, any, any]) as CreepMoveReturnCode;
+    } as Creep['moveTo'];
+}
+
+function debugPathColorForCreep(creep: Creep): string | null {
+    const homeRoom = creep.memory.homeRoom;
+    if (!homeRoom) { return null; }
+
+    const remotes = Memory.rooms[homeRoom]?.plan?.remoteRooms ?? {};
+    let enabled = false;
+    const assignedRemoteRoom = creep.memory.remoteRoom;
+    if (assignedRemoteRoom) {
+        const assignedPlan = remotes[assignedRemoteRoom];
+        enabled = Boolean(assignedPlan && assignedPlan.enabled && assignedPlan.debugPaths);
+    }
+    if (!enabled) {
+        enabled = Object.keys(remotes).some((roomName) =>
+            roomName === creep.room.name &&
+            remotes[roomName].enabled &&
+            remotes[roomName].debugPaths);
+    }
+    if (!enabled) { return null; }
+
+    const key = creep.memory.archetype ?? creep.memory.role ?? 'worker';
+    return ROLE_PATH_COLORS[key] ?? '#ffffff';
+}
+
+function mergeRolePathStyle(opts: MoveToOpts | undefined, color: string): MoveToOpts {
+    const current = opts?.visualizePathStyle ?? {};
+    return {
+        ...(opts ?? {}),
+        visualizePathStyle: {
+            ...DEFAULT_ROLE_PATH_STYLE,
+            ...current,
+            stroke: color
+        }
+    };
+}
+
 function fleeFromHostiles(creep: Creep): boolean {
-    const hostiles = creep.room.find(FIND_HOSTILE_CREEPS);
+    const hostiles = armedHostilesInRoom(creep.room);
     if (hostiles.length === 0) { return false; }
     const nearbyHostile = hostiles.find(h => creep.pos.getRangeTo(h) <= 5);
     if (!nearbyHostile) { return false; }
@@ -126,6 +223,10 @@ function fleeFromHostiles(creep: Creep): boolean {
     );
     if (result.path.length > 0) {
         creep.move(creep.pos.getDirectionTo(result.path[0]));
+    } else if (creep.memory.homeRoom && creep.room.name !== creep.memory.homeRoom) {
+        creep.moveTo(new RoomPosition(25, 25, creep.memory.homeRoom), { visualizePathStyle: { stroke: '#ff4d4d' } });
+    } else {
+        nudgeFromEdge(creep);
     }
     return true;
 }
@@ -139,10 +240,22 @@ function emergencyHealTarget(creep: Creep): Creep | null {
 
     const emergency = injured.filter((target) =>
         target.hits / Math.max(1, target.hitsMax) <= DOCTOR_EMERGENCY_HITS_RATIO ||
-        target.pos.findInRange(FIND_HOSTILE_CREEPS, DOCTOR_THREAT_RADIUS).length > 0);
+        target.pos.findInRange(FIND_HOSTILE_CREEPS, DOCTOR_THREAT_RADIUS, {
+            filter: isArmedHostile
+        }).length > 0);
     if (emergency.length === 0) { return null; }
 
     return mostCriticalCreep(creep, emergency);
+}
+
+function armedHostilesInRoom(room: Room): Creep[] {
+    return room.find(FIND_HOSTILE_CREEPS, {
+        filter: isArmedHostile
+    });
+}
+
+function isArmedHostile(creep: Creep): boolean {
+    return creep.getActiveBodyparts(ATTACK) > 0 || creep.getActiveBodyparts(RANGED_ATTACK) > 0;
 }
 
 function emergencyHealWhileRetreating(creep: Creep): void {
@@ -191,6 +304,40 @@ function mostCriticalCreep(creep: Creep, injured: Creep[]): Creep | null {
     return best;
 }
 
+function nudgeFromEdge(creep: Creep): void {
+    if (creep.pos.x === 0 && creep.pos.y === 0) {
+        creep.move(BOTTOM_RIGHT);
+        return;
+    }
+    if (creep.pos.x === 0 && creep.pos.y === 49) {
+        creep.move(TOP_RIGHT);
+        return;
+    }
+    if (creep.pos.x === 49 && creep.pos.y === 0) {
+        creep.move(BOTTOM_LEFT);
+        return;
+    }
+    if (creep.pos.x === 49 && creep.pos.y === 49) {
+        creep.move(TOP_LEFT);
+        return;
+    }
+    if (creep.pos.x === 0) {
+        creep.move(RIGHT);
+        return;
+    }
+    if (creep.pos.x === 49) {
+        creep.move(LEFT);
+        return;
+    }
+    if (creep.pos.y === 0) {
+        creep.move(BOTTOM);
+        return;
+    }
+    if (creep.pos.y === 49) {
+        creep.move(TOP);
+    }
+}
+
 function ownedRooms(): Room[] {
     const rooms: { [roomName: string]: Room } = {};
     for (const spawnName in Game.spawns) {
@@ -202,17 +349,69 @@ function ownedRooms(): Room[] {
 
 function tryRenewStandbyMiner(creep: Creep): void {
     if (creep.memory.minerDuty !== 'standby') { return; }
-    if (!creep.ticksToLive || creep.ticksToLive >= STANDBY_MINER_RENEW_THRESHOLD) { return; }
+    const ttl = creep.ticksToLive ?? 0;
 
+    const homeSpawn = creep.pos.findClosestByRange(FIND_MY_SPAWNS) as StructureSpawn | null;
+    if (!homeSpawn) { return; }
     const spawn = creep.pos.findClosestByRange(FIND_MY_SPAWNS, {
         filter: (s) => !s.spawning
     }) as StructureSpawn | null;
-    if (!spawn) { return; }
-
-    if (creep.pos.isNearTo(spawn)) {
-        spawn.renewCreep(creep);
+    const needsRenew = ttl > 0 && ttl < STANDBY_MINER_RENEW_THRESHOLD;
+    if (!needsRenew || !spawn) {
+        parkStandbyMinerAwayFromSpawn(creep, homeSpawn);
         return;
     }
 
-    creep.moveTo(spawn, { visualizePathStyle: { stroke: '#fafafa' } });
+    if (creep.pos.isNearTo(spawn)) {
+        const code = spawn.renewCreep(creep);
+        if (code === OK || code === ERR_BUSY || code === ERR_NOT_ENOUGH_ENERGY) {
+            parkStandbyMinerAwayFromSpawn(creep, spawn);
+        }
+        return;
+    }
+
+    creep.moveTo(spawn, { range: 1, visualizePathStyle: { stroke: '#fafafa' } });
+}
+
+function parkStandbyMinerAwayFromSpawn(creep: Creep, spawn: StructureSpawn): void {
+    const range = creep.pos.getRangeTo(spawn);
+    if (range >= STANDBY_MINER_PARK_MIN_RANGE && range <= STANDBY_MINER_PARK_MAX_RANGE) { return; }
+
+    const park = standbyMinerParkingTarget(creep, spawn);
+    if (!park) { return; }
+    creep.moveTo(park, { reusePath: 6, visualizePathStyle: { stroke: '#d1d5db' } });
+}
+
+function standbyMinerParkingTarget(creep: Creep, spawn: StructureSpawn): RoomPosition | null {
+    const terrain = creep.room.getTerrain();
+    let best: RoomPosition | null = null;
+    let bestRange = Infinity;
+
+    for (let dx = -STANDBY_MINER_PARK_MAX_RANGE; dx <= STANDBY_MINER_PARK_MAX_RANGE; dx++) {
+        for (let dy = -STANDBY_MINER_PARK_MAX_RANGE; dy <= STANDBY_MINER_PARK_MAX_RANGE; dy++) {
+            const x = spawn.pos.x + dx;
+            const y = spawn.pos.y + dy;
+            if (x <= 0 || x >= 49 || y <= 0 || y >= 49) { continue; }
+
+            const rangeFromSpawn = Math.max(Math.abs(dx), Math.abs(dy));
+            if (rangeFromSpawn < STANDBY_MINER_PARK_MIN_RANGE || rangeFromSpawn > STANDBY_MINER_PARK_MAX_RANGE) { continue; }
+            if (terrain.get(x, y) === TERRAIN_MASK_WALL) { continue; }
+
+            const pos = new RoomPosition(x, y, creep.room.name);
+            if (pos.lookFor(LOOK_CREEPS).some((other) => other.id !== creep.id)) { continue; }
+            const blocked = pos.lookFor(LOOK_STRUCTURES).some((structure) =>
+                structure.structureType !== STRUCTURE_ROAD &&
+                structure.structureType !== STRUCTURE_CONTAINER &&
+                structure.structureType !== STRUCTURE_RAMPART);
+            if (blocked) { continue; }
+
+            const rangeFromCreep = creep.pos.getRangeTo(pos);
+            if (rangeFromCreep < bestRange) {
+                best = pos;
+                bestRange = rangeFromCreep;
+            }
+        }
+    }
+
+    return best;
 }

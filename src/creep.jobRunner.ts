@@ -38,6 +38,9 @@ export function run(creep: Creep): boolean {
     return false;
 }
 
+const MOVE_STUCK_REPATH_TICKS = 2;
+const MOVE_STUCK_RESET_PATH_TICKS = 4;
+
 export function clearJob(creep: Creep): void {
     creep.memory.jobType = undefined;
     creep.memory.jobTargetId = undefined;
@@ -52,7 +55,7 @@ function harvestSource(creep: Creep): number {
 
     const station = stationaryTarget(creep);
     if (station && !atStation(creep, station)) {
-        creep.moveTo(station, { visualizePathStyle: { stroke: '#3d2a22' } });
+        moveToJobTarget(creep, station, '#3d2a22');
         return ERR_NOT_IN_RANGE;
     }
 
@@ -63,7 +66,7 @@ function harvestSource(creep: Creep): number {
 
     const code = creep.harvest(source);
     if (code === ERR_NOT_IN_RANGE) {
-        creep.moveTo(source, { visualizePathStyle: { stroke: '#3d2a22' } });
+        moveToJobTarget(creep, source, '#3d2a22');
     } else if (creep.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
         // harvest (work) + transfer (carry) are independent intent categories — both fire this tick
         offloadEnergyNearby(creep);
@@ -78,7 +81,7 @@ function withdrawEnergy(creep: Creep): number {
 
     const code = creep.withdraw(target, RESOURCE_ENERGY);
     if (code === ERR_NOT_IN_RANGE) {
-        creep.moveTo(target, { visualizePathStyle: { stroke: '#875641' } });
+        moveToJobTarget(creep, target, '#875641');
     }
     return code;
 }
@@ -93,7 +96,7 @@ function withdrawResource(creep: Creep): number {
 
     const code = creep.withdraw(target, resource);
     if (code === ERR_NOT_IN_RANGE) {
-        creep.moveTo(target, { visualizePathStyle: { stroke: '#875641' } });
+        moveToJobTarget(creep, target, '#875641');
     }
     return code;
 }
@@ -105,7 +108,7 @@ function pickupEnergy(creep: Creep): number {
 
     const code = creep.pickup(target);
     if (code === ERR_NOT_IN_RANGE) {
-        creep.moveTo(target, { visualizePathStyle: { stroke: '#875641' } });
+        moveToJobTarget(creep, target, '#875641');
     }
     return code;
 }
@@ -117,7 +120,7 @@ function pickupResource(creep: Creep): number {
 
     const code = creep.pickup(target);
     if (code === ERR_NOT_IN_RANGE) {
-        creep.moveTo(target, { visualizePathStyle: { stroke: '#875641' } });
+        moveToJobTarget(creep, target, '#875641');
     }
     return code;
 }
@@ -137,7 +140,7 @@ function depositResource(creep: Creep): number {
 
     const code = creep.transfer(target, resource);
     if (code === ERR_NOT_IN_RANGE) {
-        creep.moveTo(target, { visualizePathStyle: { stroke: '#41a7a7' } });
+        moveToJobTarget(creep, target, '#41a7a7');
     }
     return code;
 }
@@ -149,7 +152,7 @@ function transferEnergy(creep: Creep): number {
 
     const code = creep.transfer(target, RESOURCE_ENERGY);
     if (code === ERR_NOT_IN_RANGE) {
-        creep.moveTo(target, { visualizePathStyle: { stroke: '#ffffff' } });
+        moveToJobTarget(creep, target, '#ffffff');
     }
     return code;
 }
@@ -161,7 +164,7 @@ function build(creep: Creep): number {
 
     const code = creep.build(target);
     if (code === ERR_NOT_IN_RANGE) {
-        creep.moveTo(target, { visualizePathStyle: { stroke: '#ffb752' } });
+        moveToJobTarget(creep, target, '#ffb752');
     }
     return code;
 }
@@ -173,7 +176,7 @@ function repair(creep: Creep): number {
 
     const code = creep.repair(target);
     if (code === ERR_NOT_IN_RANGE) {
-        creep.moveTo(target, { visualizePathStyle: { stroke: '#b0f566' } });
+        moveToJobTarget(creep, target, '#b0f566');
     }
     return code;
 }
@@ -185,7 +188,7 @@ function upgrade(creep: Creep): number {
 
     const code = creep.upgradeController(controller);
     if (code === ERR_NOT_IN_RANGE) {
-        creep.moveTo(controller, { visualizePathStyle: { stroke: '#d9d9d9' } });
+        moveToJobTarget(creep, controller, '#d9d9d9');
     }
     return code;
 }
@@ -197,7 +200,7 @@ function heal(creep: Creep): number {
     const code = creep.heal(target);
     if (code === ERR_NOT_IN_RANGE) {
         creep.rangedHeal(target);
-        creep.moveTo(target, { visualizePathStyle: { stroke: '#65fd62' } });
+        moveToJobTarget(creep, target, '#65fd62');
     }
     return code;
 }
@@ -208,7 +211,7 @@ function mineMineral(creep: Creep): number {
 
     const station = stationaryTarget(creep);
     if (station && !atStation(creep, station)) {
-        creep.moveTo(station, { visualizePathStyle: { stroke: '#41a7a7' } });
+        moveToJobTarget(creep, station, '#41a7a7');
         return ERR_NOT_IN_RANGE;
     }
 
@@ -219,7 +222,7 @@ function mineMineral(creep: Creep): number {
 
     const code = creep.harvest(mineral);
     if (code === ERR_NOT_IN_RANGE) {
-        creep.moveTo(mineral, { visualizePathStyle: { stroke: '#41a7a7' } });
+        moveToJobTarget(creep, mineral, '#41a7a7');
     } else if (creep.store.getUsedCapacity() > 0) {
         offloadResourceNearby(creep);
     }
@@ -234,7 +237,7 @@ function depositMineral(creep: Creep): number {
     if (resource) {
         const code = creep.transfer(target, resource);
         if (code === ERR_NOT_IN_RANGE) {
-            creep.moveTo(target, { visualizePathStyle: { stroke: '#41a7a7' } });
+            moveToJobTarget(creep, target, '#41a7a7');
         }
         return code;
     }
@@ -248,7 +251,7 @@ function reserveController(creep: Creep): number {
 
     const code = creep.reserveController(controller);
     if (code === ERR_NOT_IN_RANGE) {
-        creep.moveTo(controller, { visualizePathStyle: { stroke: '#ffffff' } });
+        moveToJobTarget(creep, controller, '#ffffff');
     }
     return code;
 }
@@ -259,7 +262,7 @@ function claimController(creep: Creep): number {
 
     const code = creep.claimController(controller);
     if (code === ERR_NOT_IN_RANGE) {
-        creep.moveTo(controller, { visualizePathStyle: { stroke: '#ffffff' } });
+        moveToJobTarget(creep, controller, '#ffffff');
     }
     return code;
 }
@@ -267,16 +270,49 @@ function claimController(creep: Creep): number {
 function travelRoom(creep: Creep): number {
     const roomName = creep.memory.jobRoomName;
     if (!roomName) { return ERR_INVALID_TARGET; }
-    if (creep.room.name === roomName) { return OK; }
+    if (creep.room.name === roomName) {
+        clearTravelStuckMemory(creep);
+        return OK;
+    }
 
-    creep.moveTo(new RoomPosition(25, 25, roomName), { visualizePathStyle: { stroke: '#ffffff' } });
+    updateTravelStuckMemory(creep);
+    if (creep.memory.travelStuckTicks && creep.memory.travelStuckTicks >= 2) {
+        const nudged = nudgeFromRoomEdge(creep);
+        if (nudged) { return ERR_NOT_IN_RANGE; }
+    }
+
+    const centerCode = creep.moveTo(new RoomPosition(25, 25, roomName), {
+        visualizePathStyle: { stroke: '#ffffff' },
+        reusePath: 15,
+        ignoreCreeps: true
+    });
+    if (centerCode !== ERR_NO_PATH) {
+        return ERR_NOT_IN_RANGE;
+    }
+
+    const exitDir = Game.map.findExit(creep.room, roomName);
+    if (typeof exitDir === 'number' && exitDir >= TOP && exitDir <= LEFT) {
+        const closestExit = creep.pos.findClosestByRange(exitDir as ExitConstant);
+        if (closestExit) {
+            creep.moveTo(closestExit, {
+                visualizePathStyle: { stroke: '#ffffff' },
+                reusePath: 5,
+                ignoreCreeps: true
+            });
+        }
+    }
+
+    if (creep.memory.travelStuckTicks && creep.memory.travelStuckTicks >= 4) {
+        nudgeFromRoomEdge(creep);
+    }
     return ERR_NOT_IN_RANGE;
 }
 
 function idle(creep: Creep): number {
-    const target = creep.room.storage ?? creep.room.find(FIND_MY_SPAWNS)[0];
+    const assigned = getTarget<RoomObject>(creep);
+    const target = assigned ?? creep.room.storage ?? creep.room.find(FIND_MY_SPAWNS)[0];
     if (target && creep.pos.getRangeTo(target) > 3) {
-        creep.moveTo(target, { visualizePathStyle: { stroke: '#777777' } });
+        moveToJobTarget(creep, target, '#777777');
     }
     return OK;
 }
@@ -427,4 +463,97 @@ function mineralDepleted(creep: Creep): boolean {
     if (!id) { return true; }
     const mineral = Game.getObjectById(id as Id<Mineral>);
     return !mineral || mineral.mineralAmount === 0;
+}
+
+function clearTravelStuckMemory(creep: Creep): void {
+    creep.memory.travelLastX = undefined;
+    creep.memory.travelLastY = undefined;
+    creep.memory.travelLastRoom = undefined;
+    creep.memory.travelStuckTicks = undefined;
+}
+
+function updateTravelStuckMemory(creep: Creep): void {
+    const sameTile = creep.memory.travelLastX === creep.pos.x &&
+        creep.memory.travelLastY === creep.pos.y &&
+        creep.memory.travelLastRoom === creep.room.name;
+    if (sameTile && creep.fatigue === 0) {
+        creep.memory.travelStuckTicks = (creep.memory.travelStuckTicks ?? 0) + 1;
+    } else {
+        creep.memory.travelStuckTicks = 0;
+    }
+    creep.memory.travelLastX = creep.pos.x;
+    creep.memory.travelLastY = creep.pos.y;
+    creep.memory.travelLastRoom = creep.room.name;
+}
+
+function nudgeFromRoomEdge(creep: Creep): boolean {
+    if (creep.pos.x === 0 && creep.pos.y === 0) {
+        creep.move(BOTTOM_RIGHT);
+        return true;
+    }
+    if (creep.pos.x === 0 && creep.pos.y === 49) {
+        creep.move(TOP_RIGHT);
+        return true;
+    }
+    if (creep.pos.x === 49 && creep.pos.y === 0) {
+        creep.move(BOTTOM_LEFT);
+        return true;
+    }
+    if (creep.pos.x === 49 && creep.pos.y === 49) {
+        creep.move(TOP_LEFT);
+        return true;
+    }
+
+    if (creep.pos.x === 0) {
+        creep.move(RIGHT);
+        return true;
+    }
+    if (creep.pos.x === 49) {
+        creep.move(LEFT);
+        return true;
+    }
+    if (creep.pos.y === 0) {
+        creep.move(BOTTOM);
+        return true;
+    }
+    if (creep.pos.y === 49) {
+        creep.move(TOP);
+        return true;
+    }
+
+    return false;
+}
+
+function moveToJobTarget(
+    creep: Creep,
+    target: RoomPosition | { pos: RoomPosition },
+    stroke: string,
+    extra: MoveToOpts = {}
+): number {
+    updateTravelStuckMemory(creep);
+    const stuckTicks = creep.memory.travelStuckTicks ?? 0;
+    const needsDynamicTraffic = stuckTicks >= MOVE_STUCK_REPATH_TICKS;
+    const needsPathReset = stuckTicks >= MOVE_STUCK_RESET_PATH_TICKS;
+
+    const moveOpts: MoveToOpts = {
+        ...extra,
+        reusePath: needsPathReset ? 0 : (extra.reusePath ?? 10),
+        ignoreCreeps: needsDynamicTraffic ? false : (extra.ignoreCreeps ?? true),
+        visualizePathStyle: {
+            ...(extra.visualizePathStyle ?? {}),
+            stroke
+        }
+    };
+
+    if (needsPathReset) {
+        (creep.memory as CreepMemory & { _move?: unknown })._move = undefined;
+    }
+
+    const code = creep.moveTo(target, {
+        ...moveOpts
+    });
+    if (code === ERR_NO_PATH || (needsPathReset && creep.fatigue === 0)) {
+        nudgeFromRoomEdge(creep);
+    }
+    return code;
 }

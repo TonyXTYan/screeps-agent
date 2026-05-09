@@ -49,7 +49,8 @@ function restoreRemoteAssignmentIfSafe(creep: Creep, archetype: CreepArchetype):
     if (!soleEnabledRemote) { return; }
 
     creep.memory.remoteRoom = soleEnabledRemote;
-    creep.memory.remoteMode = remotes[soleEnabledRemote].mode;
+    const remoteMode = remotes[soleEnabledRemote].mode;
+    creep.memory.remoteMode = archetype === 'claimer' && remoteMode === 'harvest' ? 'reserve' : remoteMode;
     console.log('creep.MemoryManagement: restored remote assignment for ' + creep.name + ' -> ' + soleEnabledRemote);
 }
 
@@ -57,7 +58,8 @@ function isRemoteArchetype(archetype: CreepArchetype): boolean {
     return archetype === 'remoteMiner' ||
         archetype === 'remoteHauler' ||
         archetype === 'remoteMaintainer' ||
-        archetype === 'remoteScout';
+        archetype === 'remoteScout' ||
+        archetype === 'claimer';
 }
 
 function fallbackRoleForArchetype(archetype: CreepArchetype): string {

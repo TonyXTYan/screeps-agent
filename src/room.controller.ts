@@ -78,7 +78,7 @@ const MINERAL_WORK_DEMAND = 5;
 const LINK_TRANSFER_THRESHOLD = 400;
 const BUILD_RESERVATION_TICKS = 10;
 const REPAIR_RESERVATION_TICKS = 5;
-const REMOTE_DANGER_TICKS = 1500;
+const REMOTE_DANGER_TICKS = 50;
 const REMOTE_PATH_REFRESH_INTERVAL = 5000;
 const REMOTE_PATH_INCOMPLETE_RETRY_TICKS = 100;
 const REMOTE_ROAD_SITES_PER_TICK = 4;
@@ -86,6 +86,7 @@ const REMOTE_MAX_UNFINISHED_ROAD_SITES = 3;
 const REMOTE_CONTAINER_BUILD_DISTANCE = 1;
 const REMOTE_SCOUT_KEEP_COUNT = 2;
 const REMOTE_SCOUT_WANDER_TICKS = 120;
+const REMOTE_SCOUT_CROWD_THRESHOLD = 4;
 const REMOTE_PLANNING_LOG_INTERVAL = 100;
 const DOCTOR_EMERGENCY_HITS_RATIO = 0.35;
 const DOCTOR_THREAT_RADIUS = 4;
@@ -136,13 +137,22 @@ export function assignRemoteCreep(creep: Creep): boolean {
         setJob(creep, 'idle', creep.room.storage ?? creep.room.find(FIND_MY_SPAWNS)[0]);
         return true;
     }
+    if (!configuredRemotePlan && !(Memory.rooms[homeRoom]?.plan?.claimTargets ?? []).includes(remoteRoom)) {
+        clearJob(creep);
+        if (creep.room.name !== homeRoom) {
+            setTravelJob(creep, homeRoom);
+            return true;
+        }
+        setJob(creep, 'idle', creep.room.storage ?? creep.room.find(FIND_MY_SPAWNS)[0]);
+        return true;
+    }
     const remotePlan: RemoteRoomPlan = configuredRemotePlan ?? {
         enabled: true,
         roomName: remoteRoom,
-        mode: creep.memory.remoteMode ?? 'harvest',
-        reserve: true,
-        buildRoads: true,
-        maintainRoads: true
+        mode: creep.memory.remoteMode ?? 'claim',
+        reserve: false,
+        buildRoads: false,
+        maintainRoads: false
     };
 
     const energyUsed = creep.store.getUsedCapacity(RESOURCE_ENERGY);
@@ -179,8 +189,11 @@ export function assignRemoteCreep(creep: Creep): boolean {
         if (scoutPack.length > REMOTE_SCOUT_KEEP_COUNT && scoutRank >= REMOTE_SCOUT_KEEP_COUNT) {
             return assignOverflowRemoteScout(creep, homeRoom);
         }
+        if (remoteRoomCrowdedForScout(creep, homeRoom, remoteRoom)) {
+            return assignOverflowRemoteScout(creep, homeRoom, remoteRoom);
+        }
 
-        if (creep.room.find(FIND_HOSTILE_CREEPS).length > 0 && creep.room.name !== homeRoom) {
+        if (armedHostilesInRoom(creep.room).length > 0 && creep.room.name !== homeRoom) {
             setTravelJob(creep, homeRoom);
             return true;
         }
@@ -380,13 +393,14 @@ function updateRemoteRoomPlans(homeRoom: Room): void {
         if (remote.reserve === undefined) { remote.reserve = true; }
         if (remote.buildRoads === undefined) { remote.buildRoads = true; }
         if (remote.maintainRoads === undefined) { remote.maintainRoads = true; }
+        if (remote.debugPaths === undefined) { remote.debugPaths = false; }
         if (remote.mode !== 'harvest') { continue; }
 
         const visible = Game.rooms[remoteName];
         if (!visible) { continue; }
 
         remote.lastScouted = Game.time;
-        const hostiles = visible.find(FIND_HOSTILE_CREEPS);
+        const hostiles = armedHostilesInRoom(visible);
         const hostileCore = visible.find(FIND_STRUCTURES, {
             filter: s => s.structureType === STRUCTURE_INVADER_CORE
         });
@@ -580,8 +594,8 @@ function manageRemoteRenewal(
         filter: (s) => !s.spawning
     }));
     if (!spawn) {
-        setJob(creep, 'idle', homeRoom.storage ?? homeRoom.controller);
-        return true;
+        creep.memory.remoteRenewing = false;
+        return false;
     }
 
     if (!creep.pos.isNearTo(spawn)) {
@@ -923,7 +937,7 @@ function assignJob(context: RoomControllerContext, creep: Creep, reservations: J
         creep.memory.sourceId = undefined;
         creep.memory.assignedSourceId = undefined;
         clearStaticMiningMemory(creep);
-        setJob(creep, 'idle', context.structures.spawns[0] ?? context.structures.storage ?? context.room.controller);
+        setJob(creep, 'idle', context.structures.storage ?? context.room.controller ?? context.structures.spawns[0]);
         return;
     }
 
@@ -1346,8 +1360,27 @@ function remoteScoutPack(homeRoomName: string, remoteRoom: string): string[] {
     return names;
 }
 
-function assignOverflowRemoteScout(creep: Creep, homeRoomName: string): boolean {
-    const hostiles = creep.room.find(FIND_HOSTILE_CREEPS);
+function remoteRoomCrowdedForScout(creep: Creep, homeRoomName: string, remoteRoom: string): boolean {
+    const visibleRemote = Game.rooms[remoteRoom];
+    if (!visibleRemote) { return false; }
+
+    let others = 0;
+    const roomCreeps = visibleRemote.find(FIND_MY_CREEPS);
+    for (const other of roomCreeps) {
+        if (other.id === creep.id) { continue; }
+        if (other.memory.homeRoom && other.memory.homeRoom !== homeRoomName) { continue; }
+        others++;
+        if (others >= REMOTE_SCOUT_CROWD_THRESHOLD) { return true; }
+    }
+    return false;
+}
+
+function assignOverflowRemoteScout(
+    creep: Creep,
+    homeRoomName: string,
+    wanderFallbackRoom: string = homeRoomName
+): boolean {
+    const hostiles = armedHostilesInRoom(creep.room);
     if (hostiles.length > 0) {
         setTravelJob(creep, homeRoomName);
         return true;
@@ -1356,11 +1389,11 @@ function assignOverflowRemoteScout(creep: Creep, homeRoomName: string): boolean 
     const wanderExpired = !creep.memory.scoutWanderUntil || creep.memory.scoutWanderUntil <= Game.time;
     const reachedWanderRoom = creep.memory.scoutWanderRoom === creep.room.name;
     if (!creep.memory.scoutWanderRoom || wanderExpired || reachedWanderRoom) {
-        creep.memory.scoutWanderRoom = chooseWanderRoom(creep, homeRoomName);
+        creep.memory.scoutWanderRoom = chooseWanderRoom(creep, wanderFallbackRoom);
         creep.memory.scoutWanderUntil = Game.time + REMOTE_SCOUT_WANDER_TICKS;
     }
 
-    const targetRoom = creep.memory.scoutWanderRoom ?? homeRoomName;
+    const targetRoom = creep.memory.scoutWanderRoom ?? wanderFallbackRoom;
     if (creep.room.name !== targetRoom) {
         setTravelJob(creep, targetRoom);
         return true;
@@ -1389,8 +1422,25 @@ function chooseWanderRoom(creep: Creep, fallbackRoom: string): string {
 }
 
 function wanderPointInRoom(creep: Creep, roomName: string): RoomPosition {
-    const seedA = hashString(creep.name + ':x') + Game.time;
-    const seedB = hashString(creep.name + ':y') + Game.time;
+    const visibleRoom = Game.rooms[roomName];
+    if (visibleRoom) {
+        const terrain = visibleRoom.getTerrain();
+        for (let i = 0; i < 12; i++) {
+            const seedA = hashString(creep.name + ':x:' + i);
+            const seedB = hashString(creep.name + ':y:' + i);
+            const x = 3 + (Math.abs(seedA) % 44);
+            const y = 3 + (Math.abs(seedB) % 44);
+            if (terrain.get(x, y) === TERRAIN_MASK_WALL) { continue; }
+            const pos = new RoomPosition(x, y, roomName);
+            const blocked = pos.lookFor(LOOK_STRUCTURES).some((s) =>
+                s.structureType !== STRUCTURE_ROAD && s.structureType !== STRUCTURE_RAMPART);
+            if (blocked) { continue; }
+            return pos;
+        }
+    }
+
+    const seedA = hashString(creep.name + ':x:fallback');
+    const seedB = hashString(creep.name + ':y:fallback');
     const x = 10 + (Math.abs(seedA) % 31);
     const y = 10 + (Math.abs(seedB) % 31);
     return new RoomPosition(x, y, roomName);
@@ -2556,7 +2606,19 @@ function isEmergencyHealTarget(target: Creep): boolean {
     if (target.hits / Math.max(1, target.hitsMax) <= DOCTOR_EMERGENCY_HITS_RATIO) {
         return true;
     }
-    return target.pos.findInRange(FIND_HOSTILE_CREEPS, DOCTOR_THREAT_RADIUS).length > 0;
+    return target.pos.findInRange(FIND_HOSTILE_CREEPS, DOCTOR_THREAT_RADIUS, {
+        filter: isArmedHostile
+    }).length > 0;
+}
+
+function armedHostilesInRoom(room: Room): Creep[] {
+    return room.find(FIND_HOSTILE_CREEPS, {
+        filter: isArmedHostile
+    });
+}
+
+function isArmedHostile(creep: Creep): boolean {
+    return creep.getActiveBodyparts(ATTACK) > 0 || creep.getActiveBodyparts(RANGED_ATTACK) > 0;
 }
 
 function closestByRange<T extends RoomObject>(origin: RoomObject, targets: T[]): T | null {

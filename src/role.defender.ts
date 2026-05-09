@@ -1,7 +1,9 @@
 import * as creepHarvest from './creep.harvest';
 
 export function run(creep: Creep): void {
-    const hostiles = creep.room.find(FIND_HOSTILE_CREEPS);
+    const hostiles = creep.room.find(FIND_HOSTILE_CREEPS, {
+        filter: isArmedHostile
+    });
 
     if (creep.memory.attacking && hostiles.length === 0) {
         creep.memory.attacking = false;
@@ -12,7 +14,7 @@ export function run(creep: Creep): void {
     }
 
     if (creep.memory.attacking) {
-        const target = creep.pos.findClosestByRange(FIND_HOSTILE_CREEPS);
+        const target = creep.pos.findClosestByRange(hostiles);
         if (!target) { return; }
         creep.rangedAttack(target);
         if (creep.attack(target) === ERR_NOT_IN_RANGE) {
@@ -36,4 +38,8 @@ export function run(creep: Creep): void {
             creep.moveTo(rally, { reusePath: 20, visualizePathStyle: { stroke: '#ffaa00' } });
         }
     }
+}
+
+function isArmedHostile(creep: Creep): boolean {
+    return creep.getActiveBodyparts(ATTACK) > 0 || creep.getActiveBodyparts(RANGED_ATTACK) > 0;
 }

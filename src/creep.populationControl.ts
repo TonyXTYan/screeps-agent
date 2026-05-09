@@ -7,7 +7,9 @@ export function checkDefenders(room: Room): void {
     const spawn = room.find(FIND_MY_SPAWNS).find(s => !s.spawning);
     if (!spawn) { return; }
 
-    const hostiles = room.find(FIND_HOSTILE_CREEPS);
+    const hostiles = room.find(FIND_HOSTILE_CREEPS, {
+        filter: isArmedHostile
+    });
     if (hostiles.length === 0) { return; }
 
     const targetDefenders = Math.ceil(hostiles.length * 1.5);
@@ -36,4 +38,8 @@ export function checkDefenders(room: Room): void {
     const newName = 'Defender-' + spawn.name + '-' + Game.time;
     const o = spawn.spawnCreep(defenderBody, newName, { memory: { role: 'defender', attacking: true, homeRoom: room.name } });
     console.log('creep.populationControl: Spawning new defender: ' + newName + ', returned: ' + o);
+}
+
+function isArmedHostile(creep: Creep): boolean {
+    return creep.getActiveBodyparts(ATTACK) > 0 || creep.getActiveBodyparts(RANGED_ATTACK) > 0;
 }

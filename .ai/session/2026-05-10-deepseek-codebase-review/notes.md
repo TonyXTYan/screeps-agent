@@ -173,10 +173,22 @@ The harvest-mode claimer spawn (`remoteSpawnRequest` line 1320) also didn't set 
    - With `minClaimParts: 2` and <1300 energy → `[]` (don't spawn)
 2. **`src/room.controller.ts:1320-1328`** — Harvest-mode claimer spawn now passes `minClaimParts: 2` and uses `remoteClaimerCount(..., 2)`, matching the reserve/claim-mode block at line 1393
 
+## Additional Changes: Travel Stuck Memory Fix
+
+### Root cause
+`updateTravelStuckMemory` in `creep.jobRunner.ts` was only called from two sites (`moveToJobTarget` and `travelRoom`), but `clearTravelStuckMemory` was only called from `travelRoom` on room arrival. When a creep moved to a different tile via `moveToJobTarget`, the stuck counter was reset to `0` instead of `undefined`, while stale `travelLastX/Y/Room` positional data persisted. This meant:
+
+- Home-room-only creeps (workers, haulers) that never used `travelRoom` accumulated stale positional tracking for their entire life
+- The audit's `> 20` check would fire on deploy for any creep that had ever been stuck for 20+ ticks, because the counter was `0` (a value), not `undefined` (cleared)
+
+### Fix
+**`src/creep.jobRunner.ts:567-568`** — When the creep moves to a different tile, `clearTravelStuckMemory()` is now called instead of just setting `travelStuckTicks = 0`. This fully dismantles the stuck state including positional tracking. Position is re-recorded on lines 570-572.
+
 ## Files Changed This Session
 
 - `src/room.controller.ts` — home room priority gate, remote standby miner system, hauler capacity cap, per-source hauler limit, `countRemoteHaulersForSource()`, `minClaimParts: 2` in harvest-mode claimer spawn
 - `src/creep.capabilities.ts` — remoteHauler body changed from hybrid WORK+CARRY to pure CARRY+MOVE; claimer body now uses dynamic `buildClaimerBody()` that enforces `minClaimParts` and scales CLAIM+MOVE segments
+- `src/creep.jobRunner.ts` — `updateTravelStuckMemory` now calls `clearTravelStuckMemory()` on successful movement instead of resetting counter to `0`
 - `src/main.ts` — `tryRenewStandbyMiner()` extended to handle remote standby miners; added `memoryAudit.runIfBuildChanged()` call
 - `rollup.config.mjs` — build commit hash injection via `output.banner`
 - `src/env.ts` — new file: BUILD_COMMIT export from build banner

@@ -565,7 +565,7 @@ function updateTravelStuckMemory(creep: Creep): void {
     if (sameTile) {
         creep.memory.travelStuckTicks = (creep.memory.travelStuckTicks ?? 0) + 1;
     } else {
-        creep.memory.travelStuckTicks = 0;
+        clearTravelStuckMemory(creep);
     }
     creep.memory.travelLastX = creep.pos.x;
     creep.memory.travelLastY = creep.pos.y;

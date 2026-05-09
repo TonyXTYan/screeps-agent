@@ -10,7 +10,6 @@ This file tracks known follow-up work that future agents should consider before 
 
 ## Runtime Cleanup
 
-- `src/main.ts` still logs `sync test 1`; remove it or replace it with useful telemetry.
 - `.DS_Store` files exist in the repo and `.ai`; remove them in a dedicated cleanup commit and make sure `.gitignore` covers them.
 
 ## Strategic Alignment
@@ -20,13 +19,12 @@ This file tracks known follow-up work that future agents should consider before 
 - Remote spawn capacity is measured broadly, not per configured remote room.
 - Remote danger policy exists in Memory but needs stronger detection/update logic.
 - Wall/rampart repair caps (`wallRampartRepairCap` in `role.doctor.ts`) are hardcoded; a future improvement would make them configurable via `room.memory.plan` for rooms that want custom defense budgets.
-- Hauler deposit fallback (no storage): `containers[0]` is used without checking free space or whether it is a source container. In the pre-storage phase this can cause energy to cycle back into a source container. Low priority once storage is built.
 - Hauler source-link withdrawal: **fixed** — haulers no longer include `sourceLinks` in their energy withdrawal candidates. They now draw from hub/sink demand links (when spawn pressure exists) and source containers only.
 - Multi-spawn: fixed — `runSpawnPlanner` now loops all free spawns with per-tick pending tracking to avoid double-spawning the same need.
 
 ## Architecture Cleanup
 
-- Structure discovery writes IDs to Memory every tick, but the cache is not yet read back.
+- Structure discovery cache is still write-through only (not read back); writes are now throttled and forced on structure-count changes.
 - `firstStoredResource()` exists in both `creep.jobRunner.ts` and `room.controller.ts`; consider consolidating once shared utilities exist.
 - `closest()` and `closestByRange()` in `room.controller.ts` overlap heavily.
 - `interruptReason` is written for observability but not consumed.

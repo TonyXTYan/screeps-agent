@@ -634,7 +634,7 @@ function assignEnergySpendingJob(
     if (resumed) { return; }
 
     if (archetype === 'hauler' || archetype === 'remoteHauler') {
-        const sink = context.structures.storage ?? context.structures.terminal ?? context.structures.containers[0];
+        const sink = energyDepositTarget(context, creep);
         if (sink) {
             setJob(creep, 'depositEnergy', sink);
             return;
@@ -685,7 +685,7 @@ function assignEnergySpendingJob(
         return;
     }
 
-    const sink = context.structures.storage ?? context.structures.terminal ?? context.structures.containers[0];
+    const sink = energyDepositTarget(context, creep);
     setJob(creep, 'depositEnergy', sink);
 }
 
@@ -1285,6 +1285,34 @@ function resourceDepositTarget(context: RoomControllerContext): StructureTermina
     return context.structures.containers.find((container) => container.store.getFreeCapacity() > 0) ?? null;
 }
 
+function energyDepositTarget(context: RoomControllerContext, creep: Creep): StructureStorage | StructureTerminal | StructureContainer | null {
+    if (context.structures.storage && context.structures.storage.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
+        return context.structures.storage;
+    }
+    if (context.structures.terminal && context.structures.terminal.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
+        return context.structures.terminal;
+    }
+
+    const sourceContainerIds: { [id: string]: boolean } = {};
+    for (const sourcePlan of context.sourcePlans) {
+        if (sourcePlan.container) {
+            sourceContainerIds[sourcePlan.container.id] = true;
+        }
+    }
+
+    const nonSourceContainers = context.structures.containers
+        .filter((container) =>
+            container.store.getFreeCapacity(RESOURCE_ENERGY) > 0 &&
+            !sourceContainerIds[container.id]);
+    if (nonSourceContainers.length > 0) {
+        return closest(creep, nonSourceContainers);
+    }
+
+    return closest(
+        creep,
+        context.structures.containers.filter((container) => container.store.getFreeCapacity(RESOURCE_ENERGY) > 0));
+}
+
 function energyWithdrawalTarget(
     context: RoomControllerContext,
     creep: Creep,
@@ -1500,8 +1528,10 @@ function reserveDroppedTarget(reservations: JobReservations, targetId: string, a
 }
 
 function reserveEnergySink(reservations: JobReservations, target: EnergyStructure, amount: number): void {
-    reservations.energySinks[target.id] = (reservations.energySinks[target.id] ?? 0) +
-        Math.min(Math.max(0, amount), target.store.getFreeCapacity(RESOURCE_ENERGY));
+    const alreadyReserved = reservations.energySinks[target.id] ?? 0;
+    const remainingCapacity = Math.max(0, target.store.getFreeCapacity(RESOURCE_ENERGY) - alreadyReserved);
+    const reserveAmount = Math.min(Math.max(0, amount), remainingCapacity);
+    reservations.energySinks[target.id] = alreadyReserved + reserveAmount;
 }
 
 function resumePrimaryEnergyJob(

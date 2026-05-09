@@ -10,7 +10,10 @@ export function checkDefenders(room: Room): void {
     const targetDefenders = Math.ceil(hostiles.length * 1.5);
     let defenders = 0;
     for (const name in Game.creeps) {
-        if (Game.creeps[name].memory.role === 'defender') { defenders++; }
+        const creep = Game.creeps[name];
+        if (creep.memory.role !== 'defender') { continue; }
+        if (creep.room.name !== room.name && creep.memory.homeRoom !== room.name) { continue; }
+        defenders++;
     }
 
     console.log('creep.populationControl: Hostiles: ' + hostiles.length + ', defenders: ' + defenders + '/' + targetDefenders);
@@ -22,6 +25,6 @@ export function checkDefenders(room: Room): void {
         : [TOUGH, MOVE, ATTACK];
 
     const newName = 'Defender' + Game.time;
-    const o = spawn.spawnCreep(defenderBody, newName, { memory: { role: 'defender', attacking: true } });
+    const o = spawn.spawnCreep(defenderBody, newName, { memory: { role: 'defender', attacking: true, homeRoom: room.name } });
     console.log('creep.populationControl: Spawning new defender: ' + newName + ', returned: ' + o);
 }

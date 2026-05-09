@@ -23,8 +23,6 @@ export function loop(): void {
         towerBasics.run(room);
     }
 
-    console.log('sync test 1');
-
     for (const name in Game.creeps) {
         const creep = Game.creeps[name];
         if (creep.spawning) { continue; }

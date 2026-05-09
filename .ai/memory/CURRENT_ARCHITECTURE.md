@@ -20,8 +20,9 @@ The bot is in a migration state: the strategic path is capability-based room con
    - `towerBasics.run(room)`
 4. For each non-spawning creep:
    - Assign remote jobs for configured remote creeps that lack a job.
-   - Run `creepJobRunner.run(creep)`.
+   - Run `role.defender` immediately for defender creeps.
    - Flee nearby hostiles for non-defenders.
+   - Run `creepJobRunner.run(creep)`.
    - Fall back to legacy role modules by `creep.memory.role`.
 
 Owned rooms are discovered from rooms containing owned spawns.
@@ -117,7 +118,7 @@ Body planning happens in `planBodyForArchetype()`.
 - sink
 - other
 
-It writes structure IDs to `room.memory.structures` every tick. Current code does not yet use this as a read-through cache.
+It writes structure IDs to `room.memory.structures` when the cache is stale (periodic refresh) or structure counts change. Current code does not yet use this as a read-through cache.
 
 ## Defense
 

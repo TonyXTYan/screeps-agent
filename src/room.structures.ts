@@ -22,6 +22,8 @@ export interface RoomStructureCache {
     nuker: StructureNuker | undefined;
 }
 
+const STRUCTURE_MEMORY_REFRESH_INTERVAL = 100;
+
 export function getRoomStructures(room: Room): RoomStructureCache {
     const structures = room.find(FIND_STRUCTURES);
     const sources = room.find(FIND_SOURCES);
@@ -107,6 +109,14 @@ function classifyLinks(
 }
 
 function rememberRoomStructures(room: Room, cache: RoomStructureCache): void {
+    const previous = room.memory.structures;
+    if (previous) {
+        const stale = (Game.time - previous.updatedAt) >= STRUCTURE_MEMORY_REFRESH_INTERVAL;
+        if (!stale && !structureCountsChanged(previous, cache)) {
+            return;
+        }
+    }
+
     room.memory.structures = {
         updatedAt: Game.time,
         spawns: ids(cache.spawns),
@@ -129,6 +139,29 @@ function rememberRoomStructures(room: Room, cache: RoomStructureCache): void {
         powerSpawn: cache.powerSpawn?.id,
         nuker: cache.nuker?.id
     };
+}
+
+function structureCountsChanged(memory: RoomStructureMemory, cache: RoomStructureCache): boolean {
+    if (memory.spawns.length !== cache.spawns.length) { return true; }
+    if (memory.extensions.length !== cache.extensions.length) { return true; }
+    if (memory.towers.length !== cache.towers.length) { return true; }
+    if (memory.containers.length !== cache.containers.length) { return true; }
+    if (memory.links.source.length !== cache.links.source.length) { return true; }
+    if (memory.links.hub.length !== cache.links.hub.length) { return true; }
+    if (memory.links.controller.length !== cache.links.controller.length) { return true; }
+    if (memory.links.sink.length !== cache.links.sink.length) { return true; }
+    if (memory.links.other.length !== cache.links.other.length) { return true; }
+    if (memory.labs.length !== cache.labs.length) { return true; }
+
+    if (Boolean(memory.storage) !== Boolean(cache.storage)) { return true; }
+    if (Boolean(memory.extractor) !== Boolean(cache.extractor)) { return true; }
+    if (Boolean(memory.terminal) !== Boolean(cache.terminal)) { return true; }
+    if (Boolean(memory.factory) !== Boolean(cache.factory)) { return true; }
+    if (Boolean(memory.observer) !== Boolean(cache.observer)) { return true; }
+    if (Boolean(memory.powerSpawn) !== Boolean(cache.powerSpawn)) { return true; }
+    if (Boolean(memory.nuker) !== Boolean(cache.nuker)) { return true; }
+
+    return false;
 }
 
 function ids<T extends { id: string }>(objects: T[]): string[] {

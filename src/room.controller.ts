@@ -92,6 +92,10 @@ const DOCTOR_THREAT_RADIUS = 4;
 const MINER_STANDBY_COUNT = 1;
 const MINER_SWAP_TTL_THRESHOLD = 180;
 const REMOTE_AUX_BUILD_RANGE = 8;
+const REMOTE_RENEW_MIN_TTL = 220;
+const REMOTE_RENEW_BUFFER_TICKS = 80;
+const REMOTE_RENEW_HYSTERESIS = 140;
+const REMOTE_REPLACEMENT_BUFFER_TICKS = 60;
 
 export function run(room: Room): void {
     const context = buildContext(room);
@@ -110,14 +114,12 @@ export function run(room: Room): void {
 }
 
 export function assignRemoteCreep(creep: Creep): boolean {
-    const archetype = ensureArchetype(creep);
-    if (archetype !== 'remoteMiner' && archetype !== 'remoteHauler' && archetype !== 'claimer' && archetype !== 'remoteMaintainer' && archetype !== 'remoteScout') { return false; }
-
     const homeRoom = creep.memory.homeRoom;
     const remoteRoom = creep.memory.remoteRoom;
     if (!homeRoom || !remoteRoom) { return false; }
-    const remotePlan = Memory.rooms[homeRoom]?.plan?.remoteRooms?.[remoteRoom];
-    if (!remotePlan || !remotePlan.enabled) {
+    const archetype = ensureArchetype(creep);
+    const configuredRemotePlan = Memory.rooms[homeRoom]?.plan?.remoteRooms?.[remoteRoom];
+    if (configuredRemotePlan && !configuredRemotePlan.enabled) {
         clearJob(creep);
         if (creep.room.name !== homeRoom) {
             setTravelJob(creep, homeRoom);
@@ -126,7 +128,7 @@ export function assignRemoteCreep(creep: Creep): boolean {
         setJob(creep, 'idle', creep.room.storage ?? creep.room.find(FIND_MY_SPAWNS)[0]);
         return true;
     }
-    if (remotePlan.dangerUntil && remotePlan.dangerUntil > Game.time) {
+    if (configuredRemotePlan?.dangerUntil && configuredRemotePlan.dangerUntil > Game.time) {
         if (creep.room.name !== homeRoom) {
             setTravelJob(creep, homeRoom);
             return true;
@@ -134,9 +136,20 @@ export function assignRemoteCreep(creep: Creep): boolean {
         setJob(creep, 'idle', creep.room.storage ?? creep.room.find(FIND_MY_SPAWNS)[0]);
         return true;
     }
+    const remotePlan: RemoteRoomPlan = configuredRemotePlan ?? {
+        enabled: true,
+        roomName: remoteRoom,
+        mode: creep.memory.remoteMode ?? 'harvest',
+        reserve: true,
+        buildRoads: true,
+        maintainRoads: true
+    };
 
     const energyUsed = creep.store.getUsedCapacity(RESOURCE_ENERGY);
     const capabilities = getCreepCapabilities(creep);
+    if (manageRemoteRenewal(creep, archetype, capabilities, homeRoom, remoteRoom, remotePlan)) {
+        return true;
+    }
 
     if (archetype === 'remoteHauler' && energyUsed > 0) {
         if (creep.room.name === remoteRoom && capabilities.repair > 0) {
@@ -274,6 +287,27 @@ export function assignRemoteCreep(creep: Creep): boolean {
         }
         const source = closest(creep, creep.room.find(FIND_SOURCES));
         if (source && creep.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
+            setJob(creep, 'harvestSource', source);
+            return true;
+        }
+    }
+
+    // Fallback for legacy/misclassified remote creeps that still carry remote assignment.
+    if (creep.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
+        if (creep.room.name !== homeRoom) {
+            setTravelJob(creep, homeRoom);
+            return true;
+        }
+        const structures = getRoomStructures(creep.room);
+        const sink = structures.storage ?? closest(creep, [...structures.spawns, ...structures.extensions]
+            .filter((structure) => structure.store.getFreeCapacity(RESOURCE_ENERGY) > 0));
+        setJob(creep, 'depositEnergy', sink);
+        return true;
+    }
+
+    if (creep.store.getFreeCapacity(RESOURCE_ENERGY) > 0 && capabilities.harvest > 0) {
+        const source = closest(creep, creep.room.find(FIND_SOURCES));
+        if (source) {
             setJob(creep, 'harvestSource', source);
             return true;
         }
@@ -503,6 +537,102 @@ function shouldBuildRemoteInfrastructure(
     return false;
 }
 
+function manageRemoteRenewal(
+    creep: Creep,
+    archetype: CreepArchetype,
+    capabilities: ReturnType<typeof getCreepCapabilities>,
+    homeRoomName: string,
+    remoteRoomName: string,
+    remotePlan: RemoteRoomPlan
+): boolean {
+    const ttl = creep.ticksToLive;
+    if (!ttl) { return false; }
+    if (archetype === 'remoteMiner' || archetype === 'remoteHauler') {
+        creep.memory.remoteRenewing = false;
+        return false;
+    }
+    if (capabilities.claim > 0) { return false; } // CLAIM creeps are short-lived and not renewable.
+
+    const oneWayDistance = estimateRemoteDistance(creep, homeRoomName, remoteRoomName, remotePlan);
+    const renewStartTtl = Math.max(REMOTE_RENEW_MIN_TTL, oneWayDistance + REMOTE_RENEW_BUFFER_TICKS);
+    const renewStopTtl = Math.min(1500, renewStartTtl + REMOTE_RENEW_HYSTERESIS);
+
+    if (!creep.memory.remoteRenewing && ttl <= renewStartTtl) {
+        creep.memory.remoteRenewing = true;
+    }
+    if (creep.memory.remoteRenewing && ttl >= renewStopTtl) {
+        creep.memory.remoteRenewing = false;
+    }
+    if (!creep.memory.remoteRenewing) { return false; }
+
+    if (creep.room.name !== homeRoomName) {
+        setTravelJob(creep, homeRoomName);
+        return true;
+    }
+
+    const homeRoom = Game.rooms[homeRoomName];
+    if (!homeRoom) {
+        setTravelJob(creep, homeRoomName);
+        return true;
+    }
+
+    const spawn = closest(creep, homeRoom.find(FIND_MY_SPAWNS, {
+        filter: (s) => !s.spawning
+    }));
+    if (!spawn) {
+        setJob(creep, 'idle', homeRoom.storage ?? homeRoom.controller);
+        return true;
+    }
+
+    if (!creep.pos.isNearTo(spawn)) {
+        creep.moveTo(spawn, { visualizePathStyle: { stroke: '#f5f57a' } });
+        setJob(creep, 'idle', spawn);
+        return true;
+    }
+
+    const code = spawn.renewCreep(creep);
+    if (code === OK || code === ERR_BUSY || code === ERR_NOT_ENOUGH_ENERGY) {
+        setJob(creep, 'idle', spawn);
+        return true;
+    }
+
+    // If renew is impossible (e.g. boosting restrictions or edge-case code),
+    // release the renew lock so the creep can keep working instead of stalling.
+    creep.memory.remoteRenewing = false;
+    return false;
+}
+
+function estimateRemoteDistance(
+    creep: Creep,
+    homeRoomName: string,
+    remoteRoomName: string,
+    remotePlan: RemoteRoomPlan
+): number {
+    const assignedSourceId = creep.memory.assignedSourceId ?? creep.memory.sourceId;
+    if (assignedSourceId) {
+        const sourcePlan = remotePlan.sources?.[assignedSourceId];
+        if (sourcePlan?.pathDistance && sourcePlan.pathDistance > 0) {
+            return sourcePlan.pathDistance;
+        }
+    }
+
+    if (remotePlan.sources) {
+        let best = Infinity;
+        for (const sourceId in remotePlan.sources) {
+            const pathDistance = remotePlan.sources[sourceId]?.pathDistance;
+            if (!pathDistance || pathDistance <= 0) { continue; }
+            best = Math.min(best, pathDistance);
+        }
+        if (best < Infinity) { return best; }
+    }
+
+    try {
+        return Math.max(25, Game.map.getRoomLinearDistance(homeRoomName, remoteRoomName) * 50);
+    } catch {
+        return 25;
+    }
+}
+
 function closestRemoteInfrastructureSite(creep: Creep, allowLongRange: boolean): ConstructionSite | null {
     const candidates = creep.room.find(FIND_MY_CONSTRUCTION_SITES, {
         filter: (site) => site.structureType === STRUCTURE_ROAD || site.structureType === STRUCTURE_CONTAINER
@@ -681,14 +811,6 @@ function assignJobs(context: RoomControllerContext): void {
 }
 
 function isDedicatedRemoteCreep(creep: Creep, homeRoomName: string): boolean {
-    const archetype = ensureArchetype(creep);
-    if (archetype !== 'remoteMiner' &&
-        archetype !== 'remoteHauler' &&
-        archetype !== 'remoteMaintainer' &&
-        archetype !== 'remoteScout' &&
-        archetype !== 'claimer') {
-        return false;
-    }
     return creep.memory.homeRoom === homeRoomName && Boolean(creep.memory.remoteRoom);
 }
 
@@ -1110,13 +1232,15 @@ function remoteSpawnRequest(
         if (remote.mode === 'harvest' && remote.sources) {
             for (const sourceId in remote.sources) {
                 const sourcePlan = remote.sources[sourceId];
-                const minerWork = assignedRemoteMinerWork(homeFleet, roomName, sourceId);
                 const targetMinerWork = sourcePlan.workDemand ?? 3;
-                if (minerWork < targetMinerWork &&
+                const minerCoverageHorizon = remoteSourceReplacementHorizon(context, sourcePlan, 'remoteMiner');
+                const minerProjectedWork = projectedRemoteMinerWork(homeFleet, roomName, sourceId, minerCoverageHorizon);
+                if (minerProjectedWork < targetMinerWork &&
                     !pending.some(r => r.archetype === 'remoteMiner' && r.remoteRoom === roomName && r.sourceId === sourceId)) {
                     return {
                         archetype: 'remoteMiner',
-                        reason: 'remote source work deficit ' + roomName + ':' + sourceId,
+                        reason: 'remote source handoff deficit ' + roomName + ':' + sourceId +
+                            ' projected=' + minerProjectedWork + '/' + targetMinerWork,
                         remoteRoom: roomName,
                         remoteMode: remote.mode,
                         sourceId,
@@ -1125,13 +1249,15 @@ function remoteSpawnRequest(
                     };
                 }
 
-                const haulerCapacity = assignedRemoteHaulerCapacity(homeFleet, roomName, sourceId);
                 const targetHaulerCapacity = sourcePlan.haulerCapacityDemand ?? 150;
-                if (haulerCapacity < targetHaulerCapacity &&
+                const haulerCoverageHorizon = remoteSourceReplacementHorizon(context, sourcePlan, 'remoteHauler');
+                const haulerProjectedCapacity = projectedRemoteHaulerCapacity(homeFleet, roomName, sourceId, haulerCoverageHorizon);
+                if (haulerProjectedCapacity < targetHaulerCapacity &&
                     !pending.some(r => r.archetype === 'remoteHauler' && r.remoteRoom === roomName && r.sourceId === sourceId)) {
                     return {
                         archetype: 'remoteHauler',
-                        reason: 'remote haul deficit ' + roomName + ':' + sourceId,
+                        reason: 'remote haul handoff deficit ' + roomName + ':' + sourceId +
+                            ' projected=' + haulerProjectedCapacity + '/' + targetHaulerCapacity,
                         remoteRoom: roomName,
                         remoteMode: remote.mode,
                         sourceId
@@ -1313,6 +1439,58 @@ function assignedRemoteHaulerCapacity(creeps: Creep[], remoteRoom: string, sourc
         total += getCreepCapabilities(creep).haul;
     }
     return total;
+}
+
+function projectedRemoteMinerWork(
+    creeps: Creep[],
+    remoteRoom: string,
+    sourceId: string,
+    horizonTicks: number
+): number {
+    let total = 0;
+    for (const creep of creeps) {
+        if (ensureArchetype(creep) !== 'remoteMiner') { continue; }
+        if (creep.memory.remoteRoom !== remoteRoom) { continue; }
+        if ((creep.memory.assignedSourceId ?? creep.memory.sourceId) !== sourceId) { continue; }
+        if (creep.memory.remoteRenewing) { continue; }
+        if (!creep.spawning && (creep.ticksToLive ?? 0) <= horizonTicks) { continue; }
+        total += getCreepCapabilities(creep).harvest;
+    }
+    return total;
+}
+
+function projectedRemoteHaulerCapacity(
+    creeps: Creep[],
+    remoteRoom: string,
+    sourceId: string,
+    horizonTicks: number
+): number {
+    let total = 0;
+    for (const creep of creeps) {
+        if (ensureArchetype(creep) !== 'remoteHauler') { continue; }
+        if (creep.memory.remoteRoom !== remoteRoom) { continue; }
+        if ((creep.memory.assignedSourceId ?? creep.memory.sourceId) !== sourceId) { continue; }
+        if (creep.memory.remoteRenewing) { continue; }
+        if (!creep.spawning && (creep.ticksToLive ?? 0) <= horizonTicks) { continue; }
+        total += getCreepCapabilities(creep).haul;
+    }
+    return total;
+}
+
+function remoteSourceReplacementHorizon(
+    context: RoomControllerContext,
+    sourcePlan: RemoteSourcePlan,
+    archetype: 'remoteMiner' | 'remoteHauler'
+): number {
+    const oneWayDistance = Math.max(1, sourcePlan.pathDistance ?? 25);
+    const spawnBody = archetype === 'remoteMiner'
+        ? planBodyForArchetype('remoteMiner', context.room.energyCapacityAvailable, {
+            staticMining: true,
+            hasContainer: !!sourcePlan.containerId
+        })
+        : planBodyForArchetype('remoteHauler', context.room.energyCapacityAvailable);
+    const spawnTime = Math.max(1, spawnBody.length * CREEP_SPAWN_TIME);
+    return oneWayDistance + spawnTime + REMOTE_REPLACEMENT_BUFFER_TICKS;
 }
 
 function hasRemoteMaintainer(creeps: Creep[], remoteRoom: string): boolean {

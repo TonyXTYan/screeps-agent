@@ -1,8 +1,9 @@
 import { ensureArchetype } from './creep.capabilities';
 
 export function run(): void {
+    const spawningNames = creepsCurrentlySpawning();
     for (const name in Memory.creeps) {
-        if (!Game.creeps[name]) {
+        if (!Game.creeps[name] && !spawningNames[name]) {
             delete Memory.creeps[name];
             console.log('creep.MemoryManagement: Clearing non-existing creep memory:', name);
         }
@@ -13,11 +14,50 @@ export function run(): void {
         if (creep.spawning) { continue; }
 
         const archetype = ensureArchetype(creep);
+        restoreRemoteAssignmentIfSafe(creep, archetype);
         if (creep.memory.role === undefined) {
             creep.memory.role = fallbackRoleForArchetype(archetype);
             console.log('creep.MemoryManagement: ' + name + ' assigned fallback role ' + creep.memory.role);
         }
     }
+}
+
+function creepsCurrentlySpawning(): { [name: string]: boolean } {
+    const names: { [name: string]: boolean } = {};
+    for (const spawnName in Game.spawns) {
+        const spawning = Game.spawns[spawnName].spawning;
+        if (!spawning) { continue; }
+        names[spawning.name] = true;
+    }
+    return names;
+}
+
+function restoreRemoteAssignmentIfSafe(creep: Creep, archetype: CreepArchetype): void {
+    if (!isRemoteArchetype(archetype)) { return; }
+    if (creep.memory.remoteRoom) { return; }
+
+    const homeRoom = creep.memory.homeRoom;
+    if (!homeRoom) { return; }
+    const remotes = Memory.rooms[homeRoom]?.plan?.remoteRooms ?? {};
+
+    let soleEnabledRemote: string | null = null;
+    for (const roomName in remotes) {
+        if (!remotes[roomName].enabled) { continue; }
+        if (soleEnabledRemote) { return; } // ambiguous; do nothing.
+        soleEnabledRemote = roomName;
+    }
+    if (!soleEnabledRemote) { return; }
+
+    creep.memory.remoteRoom = soleEnabledRemote;
+    creep.memory.remoteMode = remotes[soleEnabledRemote].mode;
+    console.log('creep.MemoryManagement: restored remote assignment for ' + creep.name + ' -> ' + soleEnabledRemote);
+}
+
+function isRemoteArchetype(archetype: CreepArchetype): boolean {
+    return archetype === 'remoteMiner' ||
+        archetype === 'remoteHauler' ||
+        archetype === 'remoteMaintainer' ||
+        archetype === 'remoteScout';
 }
 
 function fallbackRoleForArchetype(archetype: CreepArchetype): string {

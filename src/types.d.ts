@@ -191,6 +191,7 @@ interface CreepMemory {
     rallySpawnId?: string;
     scoutWanderRoom?: string;
     scoutWanderUntil?: number;
+    remoteRenewing?: boolean;
 }
 
 interface RoomMemory {

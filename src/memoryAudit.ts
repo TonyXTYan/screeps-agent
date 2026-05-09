@@ -291,7 +291,8 @@ function cleanupInvalidCreepMemory(activeRooms: Set<string>): number {
             mem.archetype === 'remoteHauler' ||
             mem.archetype === 'remoteMaintainer' ||
             mem.archetype === 'remoteScout' ||
-            mem.archetype === 'claimer';
+            mem.archetype === 'claimer' ||
+            mem.archetype === 'miner';
 
         if (!hasRemoteArchetype) {
             if (mem.remoteMode) {

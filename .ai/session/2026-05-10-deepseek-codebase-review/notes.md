@@ -142,11 +142,13 @@ Written by `keepCurrentJob` for observability but never read. Already flagged in
   - `runIfBuildChanged()` — compares `Memory.lastBuildCommit` against `BUILD_COMMIT`; runs full audit on first tick after deploy (skipped if CPU bucket < 500)
   - `runFullAudit()` — callable from console for manual inspection
 
-  Audit checks:
-  1. **Orphaned room memory** — removes `Memory.rooms` entries for rooms with no owned spawns and no references from other rooms (remote plans, claim targets)
-  2. **Stale remote plans** — clears expired `dangerUntil`, stale `skipReason` when no hostiles visible, stale `lastSeenHostiles`, and removes source plans for sources that no longer exist
-  3. **Invalid creep memory** — clears `remoteRoom`/`sourceId`/`remoteStandby` if the remote room is no longer in any plan; clears `homeRoom` if the room is not an active owned room
-  4. **Duplicate source assignments** — reports (not fixes) cases where two creeps share the same `assignedSourceId`
+  Audit checks (all auto-fix where possible):
+  1. **Orphaned room memory** — removes `Memory.rooms` entries for rooms with no owned spawns and no references from other rooms
+  2. **Stale remote plans** — clears expired `dangerUntil`, stale `skipReason`, stale `lastSeenHostiles`, removes source plans for sources that no longer exist
+  3. **Duplicate source assignments** — when multiple creeps share the same `assignedSourceId`, keeps the strongest (most WORK parts, then best TTL) and unassigns the rest
+  4. **Orphaned source references** — clears `assignedSourceId`/`sourceId` in creep memory that don't match any source in any home or remote room plan
+  5. **Stale travel memory** — resets `travelStuckTicks`/`travelLastX`/`travelLastY`/`travelLastRoom` when a creep has been stuck > 20 ticks
+  6. **Invalid creep memory** — clears `remoteRoom`/`remoteMode`/`sourceId`/`remoteStandby` when the remote is not in any plan; clears orphaned `remoteStandby` without `remoteRoom`; clears orphaned `scoutWanderRoom`; clears `remoteMode`/`sourceId` on non-remote creeps
 
 - `src/types.d.ts` — added `Memory.lastBuildCommit?: string` declaration
 - `src/main.ts` — calls `memoryAudit.runIfBuildChanged()` after `creepMemoryManagement.run()` each tick

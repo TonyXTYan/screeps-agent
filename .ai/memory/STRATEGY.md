@@ -279,8 +279,10 @@ The audit performs cleanup that shouldn't run every tick:
 - Clears expired `dangerUntil` timestamps from remote plans.
 - Clears stale `skipReason` when the remote room is visible and has no hostiles.
 - Removes stale source plans for sources that no longer exist in the room.
-- Clears invalid creep remote assignments where the remote room is no longer in any plan.
-- Reports (but does not fix) duplicate source assignments.
+- Fixes duplicate source assignments: keeps the strongest miner (most WORK, then best TTL) on each source and unassigns the rest.
+- Clears orphaned source references in creep memory that don't match any source in home or remote room plans.
+- Resets stale travel stuck memory (stuck > 20 ticks).
+- Clears invalid remote room assignments, orphaned `remoteStandby` flags, stale `scoutWanderRoom` references, and remote fields on non-remote creeps.
 
 The audit skips when CPU bucket is below 500. It can also be invoked manually from the console via `require('memoryAudit').runFullAudit()`.
 

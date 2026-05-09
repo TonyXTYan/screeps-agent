@@ -223,3 +223,20 @@ Legacy roles still exist and can run when no job is assigned. They use state fla
 **Warning**: legacy roles (`role.harvester.ts`, `role.builder.ts`) still delete creep memory (`delete Memory.creeps[creep.name]`) when idle. If a remote creep falls through to legacy fallback and hits this path, all strategic memory is lost. See `KNOWN_ISSUES.md`.
 
 New strategy should prefer the room controller and job runner. Legacy fallback should shrink over time.
+
+## Memory Audit
+
+`src/memoryAudit.ts` runs a one-time consistency audit when the build commit hash changes (i.e., right after deploy). It is skipped if CPU bucket is below 500.
+
+All checks auto-fix issues:
+
+| Check | Fix |
+|-------|-----|
+| Orphaned room memory | Deletes `Memory.rooms` entries unreferenced by any active room |
+| Stale remote plans | Clears expired danger, stale skip reasons, stale hostiles, non-existent source plans |
+| Duplicate source assignments | Keeps strongest miner (most WORK, best TTL), unassigns others from `assignedSourceId` |
+| Orphaned source references | Clears `sourceId`/`assignedSourceId` not matching any source in any plan |
+| Stale travel memory | Resets stuck-tracker fields if stuck > 20 ticks |
+| Invalid creep memory | Clears invalid `remoteRoom`, orphaned `remoteStandby`, stale `scoutWanderRoom`, remote fields on non-remote creeps |
+
+The build commit hash lives in `src/env.ts` (injected by rollup `output.banner`). `Memory.lastBuildCommit` stores the last-seen hash.

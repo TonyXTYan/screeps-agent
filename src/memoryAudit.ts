@@ -13,7 +13,6 @@ export function runIfBuildChanged(): void {
 
 export function runFullAudit(): void {
     let fixed = 0;
-    let reported = 0;
 
     const activeRooms = new Set<string>();
     for (const spawnName in Game.spawns) {
@@ -25,11 +24,13 @@ export function runFullAudit(): void {
 
     fixed += cleanupOrphanedRoomMemory(activeRooms);
     fixed += cleanupStaleRemotePlans(activeRooms);
+    fixed += fixDuplicateSourceAssignments(activeRooms);
+    fixed += fixOrphanedSourceReferences(activeRooms);
+    fixed += fixStaleTravelMemory();
     fixed += cleanupInvalidCreepMemory(activeRooms);
-    reported += reportDuplicateSourceAssignments(activeRooms);
 
-    if (fixed > 0 || reported > 0) {
-        console.log(`[memoryAudit] Done: ${fixed} fixed, ${reported} reported`);
+    if (fixed > 0) {
+        console.log(`[memoryAudit] Done: ${fixed} issue(s) fixed`);
     }
 }
 
@@ -106,31 +107,70 @@ function cleanupStaleRemotePlans(activeRooms: Set<string>): number {
     return count;
 }
 
-function cleanupInvalidCreepMemory(activeRooms: Set<string>): number {
+function fixDuplicateSourceAssignments(activeRooms: Set<string>): number {
     let count = 0;
+
+    for (const roomName of activeRooms) {
+        const sourceAssignments = new Map<string, { name: string; workParts: number; ttl: number }[]>();
+        for (const name in Game.creeps) {
+            const creep = Game.creeps[name];
+            if (creep.spawning) { continue; }
+            if (creep.memory.remoteStandby) { continue; }
+            const sid = creep.memory.assignedSourceId ?? creep.memory.sourceId;
+            if (!sid || creep.memory.homeRoom !== roomName) { continue; }
+
+            const workParts = creep.getActiveBodyparts(WORK);
+            const ttl = creep.ticksToLive ?? 0;
+
+            if (!sourceAssignments.has(sid)) {
+                sourceAssignments.set(sid, []);
+            }
+            sourceAssignments.get(sid)!.push({ name, workParts, ttl });
+        }
+
+        for (const [sid, entries] of sourceAssignments) {
+            if (entries.length <= 1) { continue; }
+
+            entries.sort((a, b) => b.workParts - a.workParts || b.ttl - a.ttl);
+            const keeper = entries[0];
+            const removed: string[] = [];
+
+            for (let i = 1; i < entries.length; i++) {
+                const creep = Game.creeps[entries[i].name];
+                if (!creep) { continue; }
+                delete creep.memory.assignedSourceId;
+                delete creep.memory.sourceId;
+                removed.push(entries[i].name);
+            }
+
+            if (removed.length > 0) {
+                console.log(`[memoryAudit] Duplicate source ${sid}: kept ${keeper.name} (${keeper.workParts}W), unassigned ${removed.join(', ')}`);
+                count += removed.length;
+            }
+        }
+    }
+
+    return count;
+}
+
+function fixOrphanedSourceReferences(activeRooms: Set<string>): number {
+    let count = 0;
+
+    const validSourceIds = gatherValidSourceIds(activeRooms);
 
     for (const name in Memory.creeps) {
         const mem = Memory.creeps[name];
         if (!mem) { continue; }
 
-        if (mem.remoteRoom && mem.homeRoom) {
-            const plan = Memory.rooms[mem.homeRoom]?.plan;
-            const exists = plan?.remoteRooms?.[mem.remoteRoom] !== undefined ||
-                (plan?.claimTargets ?? []).includes(mem.remoteRoom);
-            if (!exists) {
-                delete mem.remoteRoom;
-                delete mem.remoteMode;
-                delete mem.sourceId;
-                delete mem.assignedSourceId;
-                delete mem.remoteStandby;
-                console.log(`[memoryAudit] Cleared invalid remote: ${name} ${mem.remoteRoom}`);
-                count++;
-            }
+        if (mem.assignedSourceId && !validSourceIds.has(mem.assignedSourceId)) {
+            delete mem.assignedSourceId;
+            console.log(`[memoryAudit] Cleared orphaned assignedSourceId for ${name}: ${mem.assignedSourceId}`);
+            count++;
         }
 
-        if (mem.homeRoom && !activeRooms.has(mem.homeRoom)) {
-            delete mem.homeRoom;
-            console.log(`[memoryAudit] Cleared invalid homeRoom for ${name}`);
+        if (mem.sourceId && !validSourceIds.has(mem.sourceId)) {
+            delete mem.sourceId;
+            console.log(`[memoryAudit] Cleared orphaned sourceId for ${name}: ${mem.sourceId}`);
             count++;
         }
     }
@@ -138,28 +178,160 @@ function cleanupInvalidCreepMemory(activeRooms: Set<string>): number {
     return count;
 }
 
-function reportDuplicateSourceAssignments(activeRooms: Set<string>): number {
-    let count = 0;
+function gatherValidSourceIds(activeRooms: Set<string>): Set<string> {
+    const ids = new Set<string>();
 
     for (const roomName of activeRooms) {
-        const sourceAssignments = new Map<string, string[]>();
-        for (const name in Game.creeps) {
-            const creep = Game.creeps[name];
-            if (creep.spawning) { continue; }
-            const sid = creep.memory.assignedSourceId ?? creep.memory.sourceId;
-            if (!sid || creep.memory.homeRoom !== roomName) { continue; }
-            if (!sourceAssignments.has(sid)) {
-                sourceAssignments.set(sid, []);
+        if (Game.rooms[roomName]) {
+            for (const source of Game.rooms[roomName].find(FIND_SOURCES)) {
+                ids.add(source.id);
             }
-            sourceAssignments.get(sid)!.push(name);
         }
-        for (const [sid, names] of sourceAssignments) {
-            if (names.length > 1) {
-                console.log(`[memoryAudit] Duplicate source ${sid} in ${roomName}: ${names.join(', ')}`);
+
+        const plan = Memory.rooms[roomName]?.plan;
+        if (plan?.sources) {
+            for (const sourceId in plan.sources) {
+                ids.add(sourceId);
+            }
+        }
+
+        if (plan?.remoteRooms) {
+            for (const remoteName in plan.remoteRooms) {
+                const sources = plan.remoteRooms[remoteName].sources;
+                if (sources) {
+                    for (const sourceId in sources) {
+                        ids.add(sourceId);
+                    }
+                }
+            }
+        }
+    }
+
+    return ids;
+}
+
+function fixStaleTravelMemory(): number {
+    let count = 0;
+
+    for (const name in Game.creeps) {
+        const creep = Game.creeps[name];
+        if (creep.spawning) { continue; }
+
+        const mem = creep.memory;
+
+        if ((mem.travelStuckTicks ?? 0) > 20) {
+            delete mem.travelStuckTicks;
+            delete mem.travelLastX;
+            delete mem.travelLastY;
+            delete mem.travelLastRoom;
+            console.log(`[memoryAudit] Cleared stale travel stuck for ${name}`);
+            count++;
+        }
+    }
+
+    return count;
+}
+
+function cleanupInvalidCreepMemory(activeRooms: Set<string>): number {
+    let count = 0;
+    const validRemoteRooms = gatherValidRemoteRooms(activeRooms);
+
+    for (const name in Memory.creeps) {
+        const mem = Memory.creeps[name];
+        if (!mem) { continue; }
+
+        if (mem.remoteRoom && mem.homeRoom) {
+            const key = `${mem.homeRoom}:${mem.remoteRoom}`;
+            if (!validRemoteRooms.has(key)) {
+                const plan = Memory.rooms[mem.homeRoom]?.plan;
+                const isClaimTarget = (plan?.claimTargets ?? []).includes(mem.remoteRoom);
+                if (!isClaimTarget) {
+                    delete mem.remoteRoom;
+                    delete mem.remoteMode;
+                    delete mem.sourceId;
+                    delete mem.assignedSourceId;
+                    delete mem.remoteStandby;
+                    console.log(`[memoryAudit] Cleared invalid remote: ${name} -> ${mem.remoteRoom}`);
+                    count++;
+                }
+            }
+        }
+
+        if (mem.remoteRoom && !mem.homeRoom) {
+            delete mem.remoteRoom;
+            delete mem.remoteMode;
+            delete mem.sourceId;
+            delete mem.assignedSourceId;
+            delete mem.remoteStandby;
+            console.log(`[memoryAudit] Cleared remote without homeRoom for ${name}`);
+            count++;
+        }
+
+        if (mem.remoteStandby && !mem.remoteRoom) {
+            delete mem.remoteStandby;
+            console.log(`[memoryAudit] Cleared orphaned remoteStandby for ${name}`);
+            count++;
+        }
+
+        if (mem.scoutWanderRoom && !mem.remoteRoom) {
+            delete mem.scoutWanderRoom;
+            delete mem.scoutWanderUntil;
+            console.log(`[memoryAudit] Cleared orphaned scout wander for ${name}`);
+            count++;
+        }
+
+        if (mem.homeRoom && !activeRooms.has(mem.homeRoom)) {
+            delete mem.homeRoom;
+            console.log(`[memoryAudit] Cleared invalid homeRoom for ${name}`);
+            count++;
+        }
+
+        const hasRemoteArchetype = mem.remoteRoom !== undefined ||
+            mem.archetype === 'remoteMiner' ||
+            mem.archetype === 'remoteHauler' ||
+            mem.archetype === 'remoteMaintainer' ||
+            mem.archetype === 'remoteScout' ||
+            mem.archetype === 'claimer';
+
+        if (!hasRemoteArchetype) {
+            if (mem.remoteMode) {
+                delete mem.remoteMode;
+                count++;
+            }
+            if (mem.sourceId) {
+                delete mem.sourceId;
+                count++;
+            }
+            if (mem.assignedSourceId) {
+                delete mem.assignedSourceId;
+                count++;
+            }
+            if (mem.remoteStandby) {
+                delete mem.remoteStandby;
                 count++;
             }
         }
     }
 
     return count;
+}
+
+function gatherValidRemoteRooms(activeRooms: Set<string>): Set<string> {
+    const keys = new Set<string>();
+
+    for (const roomName of activeRooms) {
+        const plan = Memory.rooms[roomName]?.plan;
+        if (plan?.remoteRooms) {
+            for (const remoteName in plan.remoteRooms) {
+                keys.add(`${roomName}:${remoteName}`);
+            }
+        }
+        if (plan?.claimTargets) {
+            for (const target of plan.claimTargets) {
+                keys.add(`${roomName}:${target}`);
+            }
+        }
+    }
+
+    return keys;
 }

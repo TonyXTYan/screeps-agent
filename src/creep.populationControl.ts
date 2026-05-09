@@ -19,7 +19,8 @@ export function checkDefenders(room: Room): void {
         defenders++;
     }
 
-    if (Game.time % DEFENDER_SPAWN_ATTEMPT_INTERVAL === 0) {
+    const defenderSpawnTick = Game.time % DEFENDER_SPAWN_ATTEMPT_INTERVAL === 0;
+    if (defenderSpawnTick) {
         console.log('creep.populationControl: Hostiles: ' + hostiles.length + ', defenders: ' + defenders + '/' + targetDefenders);
     }
     if (defenders >= targetDefenders) { return; }
@@ -29,7 +30,7 @@ export function checkDefenders(room: Room): void {
         ? creepRoleBalance.balanceSpec(creepRoleBalance.specification.defender, energy)
         : [TOUGH, MOVE, ATTACK];
     const defenderBodyCost = bodyCost(defenderBody);
-    if (energy < defenderBodyCost || Game.time % DEFENDER_SPAWN_ATTEMPT_INTERVAL !== 0) { return; }
+    if (energy < defenderBodyCost || !defenderSpawnTick) { return; }
 
     const newName = 'Defender-' + spawn.name + '-' + Game.time;
     const o = spawn.spawnCreep(defenderBody, newName, { memory: { role: 'defender', attacking: true, homeRoom: room.name } });

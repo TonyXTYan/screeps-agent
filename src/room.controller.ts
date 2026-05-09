@@ -338,14 +338,16 @@ function updateRemoteRoomPlans(homeRoom: Room): void {
             existing.containerId = container?.id;
             existing.workDemand = sourceWorkDemand(source);
             const anchor = homeRoom.storage ?? homeRoom.find(FIND_MY_SPAWNS)[0];
-            let latestPath: RoomPosition[] = deserializeRemotePath(existing.pathSerialized);
+            let latestPath: RoomPosition[] = [];
             const pathStale = !existing.pathUpdatedAt || Game.time - existing.pathUpdatedAt > REMOTE_PATH_REFRESH_INTERVAL;
-            if (anchor && station && (!existing.pathDistance || latestPath.length === 0 || pathStale)) {
+            if (anchor && station && (!existing.pathDistance || !existing.pathSerialized || pathStale)) {
                 const route = PathFinder.search(anchor.pos, { pos: station, range: 1 }, { maxRooms: 8 });
                 latestPath = route.path;
                 existing.pathDistance = route.path.length;
                 existing.pathSerialized = serializeRemotePath(route.path);
                 existing.pathUpdatedAt = Game.time;
+            } else if (remote.buildRoads) {
+                latestPath = deserializeRemotePath(existing.pathSerialized);
             }
             const distance = Math.max(1, existing.pathDistance ?? 25);
             const income = source.energyCapacity / ENERGY_REGEN_TIME;

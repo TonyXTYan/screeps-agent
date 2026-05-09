@@ -31,7 +31,7 @@ export function loop(): void {
         const creep = Game.creeps[name];
         if (creep.spawning) { continue; }
 
-        roomController.assignRemoteCreep(creep);
+        if (creep.memory.remoteRoom) { roomController.assignRemoteCreep(creep); }
         tryRenewStandbyMiner(creep);
 
         // Defenders must run before the job runner — they get misclassified as 'worker'

@@ -28,6 +28,7 @@ interface SpawnRequest {
     mineralId?: string;
     stationaryTargetId?: string;
     staticMining?: boolean;
+    hasContainer?: boolean;
     remoteRoom?: string;
     remoteMode?: RemoteRoomMode;
     workRatio?: number;
@@ -966,6 +967,7 @@ function runSpawnPlanner(context: RoomControllerContext): void {
             : Math.min(context.room.energyCapacityAvailable, remainingEnergy);
         const body = planBodyForArchetype(request.archetype, bodyBudget, {
             staticMining: request.staticMining,
+            hasContainer: request.hasContainer,
             workRatio: request.workRatio,
             minClaimParts: request.minClaimParts
         });
@@ -1118,7 +1120,8 @@ function remoteSpawnRequest(
                         remoteRoom: roomName,
                         remoteMode: remote.mode,
                         sourceId,
-                        staticMining: true
+                        staticMining: true,
+                        hasContainer: !!sourcePlan.containerId
                     };
                 }
 

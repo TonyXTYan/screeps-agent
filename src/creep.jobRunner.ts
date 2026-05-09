@@ -56,7 +56,11 @@ function harvestSource(creep: Creep): number {
     const station = stationaryTarget(creep);
     if (station && !atStation(creep, station)) {
         const isPositionTarget = station instanceof RoomPosition;
-        moveToJobTarget(creep, station, '#3d2a22', { range: isPositionTarget ? 0 : 1 });
+        const stuckTicks = creep.memory.travelStuckTicks ?? 0;
+        const stuckFallback = isPositionTarget && stuckTicks >= MOVE_STUCK_REPATH_TICKS;
+        const effectiveTarget = stuckFallback ? source : station;
+        const range = stuckFallback || !isPositionTarget ? 1 : 0;
+        moveToJobTarget(creep, effectiveTarget, '#3d2a22', { range });
         return ERR_NOT_IN_RANGE;
     }
 
@@ -278,15 +282,23 @@ function travelRoom(creep: Creep): number {
     }
 
     updateTravelStuckMemory(creep);
-    if (creep.memory.travelStuckTicks && creep.memory.travelStuckTicks >= 2) {
+    const stuckTicks = creep.memory.travelStuckTicks ?? 0;
+    const needsDynamicTraffic = stuckTicks >= MOVE_STUCK_REPATH_TICKS;
+    const needsPathReset = stuckTicks >= MOVE_STUCK_RESET_PATH_TICKS;
+
+    if (stuckTicks >= 2) {
         const nudged = nudgeFromRoomEdge(creep);
         if (nudged) { return ERR_NOT_IN_RANGE; }
     }
 
+    if (needsPathReset) {
+        (creep.memory as CreepMemory & { _move?: unknown })._move = undefined;
+    }
+
     const centerCode = creep.moveTo(new RoomPosition(25, 25, roomName), {
         visualizePathStyle: { stroke: '#ffffff' },
-        reusePath: 5,
-        ignoreCreeps: true
+        reusePath: needsPathReset ? 0 : 5,
+        ignoreCreeps: needsPathReset ? true : false
     });
     if (centerCode !== ERR_NO_PATH) {
         return ERR_NOT_IN_RANGE;
@@ -296,17 +308,63 @@ function travelRoom(creep: Creep): number {
     if (typeof exitDir === 'number' && exitDir >= TOP && exitDir <= LEFT) {
         const closestExit = creep.pos.findClosestByRange(exitDir as ExitConstant);
         if (closestExit) {
-            creep.moveTo(closestExit, {
+            const exitCode = creep.moveTo(closestExit, {
                 visualizePathStyle: { stroke: '#ffffff' },
-                reusePath: 5,
-                ignoreCreeps: true
+                reusePath: needsPathReset ? 0 : 5,
+                ignoreCreeps: needsPathReset ? true : false
             });
+            if (exitCode !== ERR_NO_PATH) {
+                return ERR_NOT_IN_RANGE;
+            }
         }
     }
 
-    if (creep.memory.travelStuckTicks && creep.memory.travelStuckTicks >= 4) {
-        nudgeFromRoomEdge(creep);
+    if (stuckTicks >= MOVE_STUCK_RESET_PATH_TICKS) {
+        if (nudgeFromRoomEdge(creep)) { return ERR_NOT_IN_RANGE; }
+
+        if (typeof exitDir === 'number' && exitDir >= TOP && exitDir <= LEFT) {
+            const exitTiles = creep.room.find(exitDir as ExitConstant);
+            if (exitTiles.length > 0) {
+                const pfResult = PathFinder.search(
+                    creep.pos,
+                    exitTiles.map(p => ({ pos: p, range: 0 })),
+                    { maxRooms: 1 }
+                );
+                if (pfResult.path.length > 0 && pfResult.path[0].getRangeTo(creep.pos) <= 1) {
+                    creep.move(creep.pos.getDirectionTo(pfResult.path[0]));
+                    return ERR_NOT_IN_RANGE;
+                }
+            }
+        }
+
+        if (typeof exitDir === 'number') {
+            const allExits = Game.map.describeExits(creep.room.name);
+            if (allExits) {
+                for (const dirKey in allExits) {
+                    const altDir = Number(dirKey) as ExitConstant;
+                    if (altDir === exitDir) { continue; }
+                    const altTiles = creep.room.find(altDir);
+                    if (altTiles.length === 0) { continue; }
+                    const pfResult = PathFinder.search(
+                        creep.pos,
+                        altTiles.map(p => ({ pos: p, range: 0 })),
+                        { maxRooms: 1 }
+                    );
+                    if (pfResult.path.length > 0 && pfResult.path[0].getRangeTo(creep.pos) <= 1) {
+                        creep.move(creep.pos.getDirectionTo(pfResult.path[0]));
+                        return ERR_NOT_IN_RANGE;
+                    }
+                }
+            }
+        }
+
+        if (Game.time % 25 === 0) {
+            console.log('travelRoom: ' + creep.name + ' stuck ' + stuckTicks + 't at ' + creep.pos + ' room=' + creep.room.name + ' job=' + roomName);
+        }
+
+        wanderRandomAdjacent(creep);
     }
+
     return ERR_NOT_IN_RANGE;
 }
 
@@ -458,6 +516,24 @@ function atStation(creep: Creep, station: RoomPosition | RoomObject): boolean {
     return creep.pos.isNearTo(station);
 }
 
+function wanderRandomAdjacent(creep: Creep): boolean {
+    const dirs: DirectionConstant[] = [TOP, TOP_RIGHT, RIGHT, BOTTOM_RIGHT, BOTTOM, BOTTOM_LEFT, LEFT, TOP_LEFT];
+    const dxs: number[] = [0, 1, 1, 1, 0, -1, -1, -1];
+    const dys: number[] = [-1, -1, 0, 1, 1, 1, 0, -1];
+    const seed = (creep.name.charCodeAt(creep.name.length - 1) || 0) + Game.time;
+    for (let i = 0; i < 8; i++) {
+        const dir = dirs[(seed + i) % 8];
+        const nx = creep.pos.x + dxs[(seed + i) % 8];
+        const ny = creep.pos.y + dys[(seed + i) % 8];
+        if (nx < 1 || nx > 48 || ny < 1 || ny > 48) { continue; }
+        const room = Game.rooms[creep.room.name];
+        if (room && room.getTerrain().get(nx, ny) === TERRAIN_MASK_WALL) { continue; }
+        creep.move(dir);
+        return true;
+    }
+    return false;
+}
+
 function firstStoredResource(store: StoreDefinition): ResourceConstant | null {
     for (const resourceName in store) {
         const resource = resourceName as ResourceConstant;
@@ -486,7 +562,7 @@ function updateTravelStuckMemory(creep: Creep): void {
     const sameTile = creep.memory.travelLastX === creep.pos.x &&
         creep.memory.travelLastY === creep.pos.y &&
         creep.memory.travelLastRoom === creep.room.name;
-    if (sameTile && creep.fatigue === 0) {
+    if (sameTile) {
         creep.memory.travelStuckTicks = (creep.memory.travelStuckTicks ?? 0) + 1;
     } else {
         creep.memory.travelStuckTicks = 0;
@@ -548,7 +624,7 @@ function moveToJobTarget(
     const moveOpts: MoveToOpts = {
         ...extra,
         reusePath: needsPathReset ? 0 : (extra.reusePath ?? 10),
-        ignoreCreeps: needsDynamicTraffic ? false : (extra.ignoreCreeps ?? true),
+        ignoreCreeps: needsPathReset ? true : (extra.ignoreCreeps ?? false),
         visualizePathStyle: {
             ...(extra.visualizePathStyle ?? {}),
             stroke
@@ -563,7 +639,22 @@ function moveToJobTarget(
         ...moveOpts
     });
     if (code === ERR_NO_PATH || (needsPathReset && creep.fatigue === 0)) {
-        nudgeFromRoomEdge(creep);
+        if (!nudgeFromRoomEdge(creep) && needsPathReset) {
+            const targetPos = target instanceof RoomPosition
+                ? target
+                : ('pos' in target ? target.pos : null);
+            if (targetPos && creep.room.name === targetPos.roomName) {
+                const pfResult = PathFinder.search(creep.pos, { pos: targetPos, range: 1 }, { maxRooms: 1 });
+                if (pfResult.path.length > 0 && pfResult.path[0].getRangeTo(creep.pos) <= 1) {
+                    creep.move(creep.pos.getDirectionTo(pfResult.path[0]));
+                    return OK;
+                }
+            }
+            if (Game.time % 25 === 0) {
+                console.log('moveToJobTarget: ' + creep.name + ' stuck ' + stuckTicks + 't at ' + creep.pos + ' room=' + creep.room.name);
+            }
+            wanderRandomAdjacent(creep);
+        }
     }
     return code;
 }

@@ -1103,53 +1103,64 @@ function runSpawnPlanner(context: RoomControllerContext): void {
     let remainingEnergy = context.room.energyAvailable;
 
     for (const spawn of freeSpawns) {
-        const request = chooseSpawnRequest(context, pending);
-        if (!request) { break; }
+        let spawned = false;
+        while (!spawned) {
+            const request = chooseSpawnRequest(context, pending);
+            if (!request) { break; }
 
-        const bodyBudget = context.creeps.length === 0
-            ? remainingEnergy
-            : Math.min(context.room.energyCapacityAvailable, remainingEnergy);
-        const body = planBodyForArchetype(request.archetype, bodyBudget, {
-            staticMining: request.staticMining,
-            hasContainer: request.hasContainer,
-            workRatio: request.workRatio,
-            minClaimParts: request.minClaimParts
-        });
-        if (body.length === 0) {
-            if (Game.time % 25 === 0) {
-                console.log('room.controller: waiting for energy to spawn ' + request.archetype + ' for ' + request.reason);
-            }
-            break;
-        }
-
-        const cost = bodyCost(body);
-        if (cost > remainingEnergy) { break; }
-
-        const name = request.archetype + '-' + spawn.name + '-' + Game.time + (pending.length > 0 ? '-' + pending.length : '');
-        const role = legacyRoleForArchetype(request.archetype);
-        const code = spawn.spawnCreep(body, name, {
-            memory: {
-                archetype: request.archetype,
-                role,
-                sourceId: request.sourceId,
-                assignedSourceId: request.sourceId,
-                minerDuty: request.minerDuty,
-                assignedMineralId: request.mineralId,
-                stationaryTargetId: request.stationaryTargetId,
+            const bodyBudget = context.creeps.length === 0
+                ? remainingEnergy
+                : Math.min(context.room.energyCapacityAvailable, remainingEnergy);
+            const body = planBodyForArchetype(request.archetype, bodyBudget, {
                 staticMining: request.staticMining,
-                homeRoom: context.room.name,
-                remoteRoom: request.remoteRoom,
-                remoteMode: request.remoteMode
+                hasContainer: request.hasContainer,
+                workRatio: request.workRatio,
+                minClaimParts: request.minClaimParts
+            });
+            if (body.length === 0) {
+                if (Game.time % 25 === 0) {
+                    console.log('room.controller: waiting for energy to spawn ' + request.archetype + ' for ' + request.reason);
+                }
+                pending.push(request);
+                continue;
             }
-        });
 
-        if (code === OK) {
-            console.log('room.controller: spawning ' + name + ' for ' + request.reason + ' cost=' + cost);
-            pending.push(request);
-            remainingEnergy -= cost;
-        } else if (code !== ERR_BUSY && Game.time % 25 === 0) {
-            console.log('room.controller: spawn request for ' + request.archetype + ' failed with code ' + code);
-            break;
+            const cost = bodyCost(body);
+            if (cost > remainingEnergy) {
+                if (Game.time % 25 === 0) {
+                    console.log('room.controller: insufficient energy for ' + request.archetype + ' for ' + request.reason);
+                }
+                pending.push(request);
+                continue;
+            }
+
+            const name = request.archetype + '-' + spawn.name + '-' + Game.time + (pending.length > 0 ? '-' + pending.length : '');
+            const role = legacyRoleForArchetype(request.archetype);
+            const code = spawn.spawnCreep(body, name, {
+                memory: {
+                    archetype: request.archetype,
+                    role,
+                    sourceId: request.sourceId,
+                    assignedSourceId: request.sourceId,
+                    minerDuty: request.minerDuty,
+                    assignedMineralId: request.mineralId,
+                    stationaryTargetId: request.stationaryTargetId,
+                    staticMining: request.staticMining,
+                    homeRoom: context.room.name,
+                    remoteRoom: request.remoteRoom,
+                    remoteMode: request.remoteMode
+                }
+            });
+
+            if (code === OK) {
+                console.log('room.controller: spawning ' + name + ' for ' + request.reason + ' cost=' + cost);
+                pending.push(request);
+                remainingEnergy -= cost;
+                spawned = true;
+            } else if (code !== ERR_BUSY && Game.time % 25 === 0) {
+                console.log('room.controller: spawn request for ' + request.archetype + ' failed with code ' + code);
+                break;
+            }
         }
     }
 }
@@ -1251,6 +1262,16 @@ function remoteSpawnRequest(
             }
             continue;
         }
+        if (remote.mode === 'harvest' && remote.reserve !== false && remoteClaimerCount(homeFleet, roomName, 'reserve', 2) === 0 &&
+            !pending.some(r => r.archetype === 'claimer' && r.remoteRoom === roomName)) {
+            return {
+                archetype: 'claimer',
+                reason: 'remote reserve ' + roomName,
+                remoteRoom: roomName,
+                remoteMode: 'reserve',
+                minClaimParts: 2
+            };
+        }
         if (remote.mode === 'harvest' && remote.sources) {
             for (const sourceId in remote.sources) {
                 const sourcePlan = remote.sources[sourceId];
@@ -1292,16 +1313,6 @@ function remoteSpawnRequest(
                 !pending.some(r => r.archetype === 'remoteMaintainer' && r.remoteRoom === roomName)) {
                 return { archetype: 'remoteMaintainer', reason: 'remote maintenance ' + roomName, remoteRoom: roomName, remoteMode: remote.mode };
             }
-        }
-        if (remote.mode === 'harvest' && remote.reserve !== false && remoteClaimerCount(homeFleet, roomName, 'reserve', 2) === 0 &&
-            !pending.some(r => r.archetype === 'claimer' && r.remoteRoom === roomName)) {
-            return {
-                archetype: 'claimer',
-                reason: 'remote reserve ' + roomName,
-                remoteRoom: roomName,
-                remoteMode: 'reserve',
-                minClaimParts: 2
-            };
         }
         if ((remote.mode === 'reserve' || remote.mode === 'claim') &&
             remoteClaimerCount(homeFleet, roomName, remote.mode, remote.mode === 'reserve' ? 2 : 1) === 0 &&

@@ -56,10 +56,11 @@ export function run(creep: Creep): void {
         });
 
         if (healTargets.length > 0) {
-            const transferCode = creep.heal(healTargets[0]);
+            const healTarget = creep.pos.findClosestByRange(healTargets) ?? healTargets[0];
+            const transferCode = creep.heal(healTarget);
             if (transferCode === ERR_NOT_IN_RANGE) {
-                creep.rangedHeal(healTargets[0]);
-                creep.moveTo(healTargets[0], { visualizePathStyle: { stroke: '#65fd62' } });
+                creep.rangedHeal(healTarget);
+                creep.moveTo(healTarget, { visualizePathStyle: { stroke: '#65fd62' } });
             } else if (transferCode !== OK) {
                 console.log('role.doctor: heal return code: ' + transferCode);
             }

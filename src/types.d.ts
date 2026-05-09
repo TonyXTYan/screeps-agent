@@ -175,6 +175,7 @@ interface CreepMemory {
     remoteMode?: RemoteRoomMode;
     sourceId?: string;
     assignedSourceId?: string;
+    minerDuty?: 'active' | 'standby';
     assignedMineralId?: string;
     stationaryTargetId?: string;
     staticMining?: boolean;

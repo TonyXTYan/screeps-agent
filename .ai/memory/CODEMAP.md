@@ -89,8 +89,9 @@ Changing remote behavior:
 
 1. Update `.ai/memory/STRATEGY.md`.
 2. Update `RemoteRoomPlan` in `src/types.d.ts` if the config changes.
-3. Update `remoteSpawnRequest()` and `assignRemoteCreep()` in `src/room.controller.ts`.
-4. Keep expansion opt-in through Memory.
+3. Update `updateRemoteRoomPlans()`, `remoteSpawnRequest()`, and `assignRemoteCreep()` in `src/room.controller.ts`.
+4. Update console-facing docs in `console/REMOTE_MINING_CONSOLE.md` if API behavior or defaults change.
+5. Keep expansion opt-in through Memory.
 
 Changing wall/rampart repair caps or tower repair policy:
 

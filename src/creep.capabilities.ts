@@ -107,7 +107,26 @@ export function ensureArchetype(creep: Creep): CreepArchetype {
     return archetype;
 }
 
-export function planBodyForArchetype(archetype: CreepArchetype, energyBudget: number, opts?: { staticMining?: boolean; workRatio?: number }): BodyPartConstant[] {
+export function planBodyForArchetype(
+    archetype: CreepArchetype,
+    energyBudget: number,
+    opts?: { staticMining?: boolean; workRatio?: number; minClaimParts?: number }
+): BodyPartConstant[] {
+    if (archetype === 'remoteMiner' && opts?.staticMining) {
+        return selectLargestWithinBudget([
+            [WORK, WORK, WORK, WORK, WORK, MOVE, MOVE, MOVE],
+            [WORK, WORK, WORK, WORK, MOVE, MOVE],
+            [WORK, WORK, WORK, MOVE, MOVE],
+            [WORK, WORK, MOVE],
+            [WORK, MOVE],
+            [WORK, WORK, WORK, WORK, WORK, CARRY, MOVE],
+            [WORK, WORK, WORK, WORK, CARRY, MOVE],
+            [WORK, WORK, WORK, CARRY, MOVE],
+            [WORK, WORK, CARRY, MOVE],
+            [WORK, CARRY, MOVE]
+        ], energyBudget);
+    }
+
     if (archetype === 'miner' || archetype === 'remoteMiner' || archetype === 'mineralMiner') {
         if (opts?.staticMining) {
             return selectLargestWithinBudget([
@@ -170,6 +189,11 @@ export function planBodyForArchetype(archetype: CreepArchetype, energyBudget: nu
     }
 
     if (archetype === 'claimer') {
+        if ((opts?.minClaimParts ?? 1) >= 2) {
+            return selectLargestWithinBudget([
+                [CLAIM, CLAIM, MOVE, MOVE]
+            ], energyBudget);
+        }
         return selectLargestWithinBudget([
             [CLAIM, CLAIM, MOVE, MOVE],
             [CLAIM, MOVE]

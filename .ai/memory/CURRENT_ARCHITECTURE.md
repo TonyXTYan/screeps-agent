@@ -21,7 +21,7 @@ The bot is in a migration state: the strategic path is capability-based room con
 4. For each non-spawning creep:
    - Assign remote jobs for configured remote creeps that lack a job.
    - Run `role.defender` immediately for defender creeps.
-   - Flee nearby hostiles for non-defenders.
+   - Flee nearby hostiles for non-defenders; heal-capable creeps instead chase emergency patients (critical HP or hostile pressure) and heal them.
    - Run `creepJobRunner.run(creep)`.
    - Fall back to legacy role modules by `creep.memory.role`.
 
@@ -98,7 +98,7 @@ Archetypes are spawn intent and debugging metadata. Job assignment should still 
 Current high-level order:
 
 1. Emergency worker if no creeps exist.
-2. Missing source miner.
+2. Missing source miner coverage, then one standby local miner.
 3. Doctor if no heal capability and energy capacity is sufficient.
 4. Hauler capacity deficit.
 5. Worker work deficit.
@@ -107,6 +107,12 @@ Current high-level order:
 8. Configured remote room creep.
 
 Body planning happens in `planBodyForArchetype()`.
+
+Local miner lifecycle uses a standby duty flag:
+
+- Rooms target `sources + 1` local miners.
+- One miner is `standby` near spawn and gets renewed.
+- When an active miner drops below swap TTL, standby is promoted to that source and the low-TTL miner rotates to standby.
 
 ## Structure Discovery
 
@@ -144,9 +150,30 @@ There is no strategic combat squad logic yet.
 
 Remote behavior is opt-in through `room.memory.plan.remoteRooms` or `room.memory.plan.claimTargets`.
 
-`remoteSpawnRequest()` requests remote creeps. `assignRemoteCreep()` handles travel and simple remote harvesting, hauling, reserving, and claiming.
+`updateRemoteRoomPlans()` handles remote-room runtime planning when visibility exists:
 
-Remote danger policy is present as `dangerUntil`, but threat detection and automatic danger updates are limited.
+- applies remote defaults (`reserve`, `buildRoads`, `maintainRoads`)
+- detects hostile danger and sets `dangerUntil`
+- learns per-source station/container/path metadata
+- computes per-source `workDemand` and `haulerCapacityDemand`
+- retries incomplete `PathFinder` results quickly using a fallback path-distance estimate
+- places container and road construction sites with per-tick caps
+- skips road placement in owned rooms so manual base layouts are preserved
+
+`remoteSpawnRequest()` is per-remote and per-source:
+
+- unknown-source remotes request `remoteScout` first
+- known-source remotes request `remoteMiner` and `remoteHauler` from source-level deficits
+- reserve/claim requests use `claimer` and enforce 2 `CLAIM` parts for reserve mode
+- maintenance requests spawn `remoteMaintainer` when roads/containers need work
+
+`assignRemoteCreep()` handles remote execution:
+
+- danger-aware retreat to home room
+- `remoteScout` hold behavior, with overflow scouts wandering to avoid home-exit blocking
+- source-assigned remote mining/hauling
+- opportunistic 1-range road/container repair by hybrid `remoteHauler` when carrying energy
+- reserve/claim controller actions for configured modes
 
 ## Legacy Fallback
 

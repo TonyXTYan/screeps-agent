@@ -56,19 +56,22 @@ remoteMining.status('W7N9')          // all remotes for home room
 remoteMining.status('W7N9', 'W8N9')  // one remote room
 ```
 
+`status(...)` returns a JSON string (pretty-printed), so the console displays readable text rather than `[object Object]`.
+
 ## What Becomes Automatic After Activation
 
-1. Remote room scouting when visible.
+1. Scout bootstrap when source metadata is unknown.
 2. Per-source demand calculation:
    - miner work demand from source capacity/regen
    - hauler capacity demand from path distance
 3. Container site placement near remote sources.
-4. Gradual road construction along discovered paths.
+4. Gradual road construction along discovered paths in non-owned rooms only.
 5. Spawning and assignment for:
    - `remoteMiner`
    - `remoteHauler` (hybrid variant includes small `WORK` when budget allows)
+   - `remoteScout` (overflow scouts wander to avoid blocking spawn exits)
    - `remoteMaintainer`
-   - `claimer` for reserve mode
+   - `claimer` for reserve mode (targeting at least 2 `CLAIM` parts)
 6. Danger pause/retreat behavior when `dangerUntil` is active.
 
 ## Memory Shape (Reference)
@@ -121,3 +124,5 @@ remoteMining.disable('W7N9', 'W8N9')
   - remote not configured yet; run `activate(...)`.
 - Remote has config but no source details yet:
   - bot needs visibility in that remote room before it can discover sources/paths.
+- Remote roads are not being placed:
+  - roads are intentionally skipped in owned rooms; automatic remote road placement is for non-owned rooms.

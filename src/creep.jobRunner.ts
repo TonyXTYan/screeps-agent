@@ -29,6 +29,9 @@ export function run(creep: Creep): boolean {
         if (shouldClearJob(creep, jobType, result)) {
             clearJob(creep);
         }
+        if (jobType !== 'heal') {
+            opportunisticHealNearby(creep);
+        }
         return true;
     }
 
@@ -276,6 +279,50 @@ function idle(creep: Creep): number {
         creep.moveTo(target, { visualizePathStyle: { stroke: '#777777' } });
     }
     return OK;
+}
+
+function opportunisticHealNearby(creep: Creep): void {
+    if (creep.getActiveBodyparts(HEAL) <= 0) { return; }
+
+    const adjacent = creep.pos.findInRange(FIND_MY_CREEPS, 1, {
+        filter: c => c.hits < c.hitsMax
+    });
+    const adjacentTarget = mostCriticalByRatio(creep, adjacent);
+    if (adjacentTarget) {
+        creep.heal(adjacentTarget);
+        return;
+    }
+
+    const ranged = creep.pos.findInRange(FIND_MY_CREEPS, 3, {
+        filter: c => c.hits < c.hitsMax
+    });
+    const rangedTarget = mostCriticalByRatio(creep, ranged);
+    if (rangedTarget) {
+        creep.rangedHeal(rangedTarget);
+    }
+}
+
+function mostCriticalByRatio(creep: Creep, targets: Creep[]): Creep | null {
+    if (targets.length === 0) { return null; }
+
+    let best = targets[0];
+    let bestRatio = best.hits / Math.max(1, best.hitsMax);
+    let bestMissing = best.hitsMax - best.hits;
+    let bestRange = creep.pos.getRangeTo(best);
+    for (const target of targets) {
+        const ratio = target.hits / Math.max(1, target.hitsMax);
+        const missing = target.hitsMax - target.hits;
+        const range = creep.pos.getRangeTo(target);
+        if (ratio < bestRatio ||
+            (ratio === bestRatio && missing > bestMissing) ||
+            (ratio === bestRatio && missing === bestMissing && range < bestRange)) {
+            best = target;
+            bestRatio = ratio;
+            bestMissing = missing;
+            bestRange = range;
+        }
+    }
+    return best;
 }
 
 function offloadEnergyNearby(creep: Creep): boolean {

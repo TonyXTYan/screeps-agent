@@ -41,6 +41,8 @@ Local energy economy is the foundation.
 
 - Source miners harvest assigned sources.
 - Static miners stand on source containers when possible.
+- One local miner per room is kept as a standby substitute near spawn and renewed toward max TTL.
+- When an active local miner is near death, the standby miner swaps in on that source and the low-TTL miner rotates to standby/renew duty.
 - Link-backed miners may keep carry capacity so they can fill nearby links.
 - Haulers move energy from containers, links, dropped resources, ruins, and tombstones into storage, spawn/extensions, towers, and other sinks.
 - Workers build, repair, and upgrade from stored energy before falling back to direct harvesting.
@@ -49,7 +51,7 @@ Local energy economy is the foundation.
 Spawn planning should prioritize:
 
 1. Emergency recovery worker when no creeps exist.
-2. At least one miner per source.
+2. Local miner source coverage plus one standby substitute miner per room.
 3. Doctor/heal capability once energy capacity supports it.
 4. Hauler capacity.
 5. Worker work capacity.
@@ -147,14 +149,23 @@ Remote harvesting, reserving, and claiming are opt-in through room Memory.
 
 Remote rooms must be configured under `room.memory.plan.remoteRooms`. Claim targets must be configured under `room.memory.plan.claimTargets`.
 
-The bot may spawn remote miners, remote haulers, or claimers only for configured targets. It must not choose expansion rooms on its own.
+The bot may spawn remote creeps only for configured targets. It must not choose expansion rooms on its own.
 
-Remote v1 policy:
+Remote harvest policy:
 
-- Remote harvest rooms need a miner and hauler.
-- Reserve or claim rooms need a claimer.
-- Hostile danger pauses remote spawning until the danger window expires.
-- Remote defense beyond retreat/pause is deferred.
+- Bootstrap with `remoteScout` when source metadata is unknown.
+- While scouting overflow exists, extra scouts should wander instead of idling at home exits.
+- Discover and cache per-source remote plan fields (station tile, container id, path, path distance, miner/hauler demand).
+- Spawn dedicated per-source `remoteMiner` and `remoteHauler`.
+- Spawn `remoteMaintainer` when enabled remote roads/containers need build or repair.
+- Use `claimer` for reserve/claim modes; reserve mode should require at least 2 `CLAIM` parts.
+- Apply danger pause (`dangerUntil`) on visible hostile signals and retreat remote creeps home during danger windows.
+- Build remote roads/containers only in non-owned rooms so owned-room layouts remain manual.
+
+Remote throughput model:
+
+- `workDemand = ceil(source.energyCapacity / ENERGY_REGEN_TIME / HARVEST_POWER)`
+- `haulerCapacityDemand = ceil((source.energyCapacity / ENERGY_REGEN_TIME) * pathDistance * 2 * 1.2)`
 
 Example remote Memory config:
 
@@ -162,7 +173,10 @@ Example remote Memory config:
 Memory.rooms.W7N9.plan.remoteRooms.W7N8 = {
     enabled: true,
     roomName: 'W7N8',
-    mode: 'harvest'
+    mode: 'harvest',
+    reserve: true,
+    buildRoads: true,
+    maintainRoads: true
 };
 ```
 

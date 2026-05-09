@@ -44,7 +44,7 @@ This is a Screeps bot written in TypeScript, bundled by Rollup into a single `di
   - `manual` — stub for manually controlled creeps
 
 - `src/room.*.ts` — room-level control:
-  - `room.controller.ts` — measures room load, manages source/mineral plans, assigns jobs with reservations, runs spawn planning, handles passive remotes/claim scaffolding
+  - `room.controller.ts` — measures room load, manages source/mineral plans, assigns jobs with reservations, runs spawn planning, and drives remote planning/spawning (scouting, per-source demand, road/container planning, reserve/claim support)
   - `room.structures.ts` — discovers room structures and classifies links
 
 - `src/tower.basics.ts` — runs all towers in the room each tick: attack hostiles → heal creeps → repair urgent structures (cascading priority); walls/ramparts only repaired at ≥ 90 % charge via RCL-staged caps

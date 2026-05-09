@@ -14,13 +14,11 @@ This file tracks known follow-up work that future agents should consider before 
 
 ## Strategic Alignment
 
-- `sourceSpawnDeficit()` guarantees one miner per source, but does not clearly spawn extra miner work for underpowered assigned miners.
+- Local miners now include one standby substitute, but active source miner scaling is still mostly count-based and does not explicitly add extra active miners when per-source WORK is under target.
 - Legacy role scripts can still delete creep memory when idle; this should not be part of the long-term strategic path.
-- Remote spawn capacity is measured broadly, not per configured remote room.
-- Remote danger policy exists in Memory but needs stronger detection/update logic.
+- Remote danger detection is visibility-driven only; unseen hostiles between scout passes can still cause delayed pauses.
+- Remote path demand can be noisy when long paths are temporarily incomplete (fallback distance is conservative by design).
 - Wall/rampart repair caps (`wallRampartRepairCap` in `role.doctor.ts`) are hardcoded; a future improvement would make them configurable via `room.memory.plan` for rooms that want custom defense budgets.
-- Hauler source-link withdrawal: **fixed** — haulers no longer include `sourceLinks` in their energy withdrawal candidates. They now draw from hub/sink demand links (when spawn pressure exists) and source containers only.
-- Multi-spawn: fixed — `runSpawnPlanner` now loops all free spawns with per-tick pending tracking to avoid double-spawning the same need.
 
 ## Architecture Cleanup
 

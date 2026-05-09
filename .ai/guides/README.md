@@ -1,5 +1,7 @@
 # Screeps Guides
 
+This folder is a local snapshot for convenience. If guidance here conflicts with current game behavior, use the official docs at `https://docs.screeps.com/`.
+
 Complete guides covering gameplay, scripting, and other topics.
 
 ## Gameplay

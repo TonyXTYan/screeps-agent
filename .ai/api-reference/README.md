@@ -1,5 +1,7 @@
 # Screeps API Reference
 
+This folder is a local snapshot for convenience. If anything here disagrees with runtime behavior, use the official docs at `https://docs.screeps.com/api/` as source of truth.
+
 Quick index of all 53 documented classes and objects:
 
 ## Global Objects

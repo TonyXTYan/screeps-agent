@@ -16,6 +16,7 @@ const DOCTOR_THREAT_RADIUS = 4;
 const STANDBY_MINER_RENEW_THRESHOLD = 1450;
 const STANDBY_MINER_PARK_MIN_RANGE = 2;
 const STANDBY_MINER_PARK_MAX_RANGE = 4;
+const DEBUG_PATH_SCAN_INTERVAL = 25;
 const DEFAULT_ROLE_PATH_STYLE = {
     fill: 'transparent',
     lineStyle: 'dashed' as const,
@@ -53,9 +54,10 @@ type RemoteMiningOptions = {
 };
 
 let debugPathsEnabled = false;
+let debugPathsLastScannedAt: number | undefined;
 
 export function loop(): void {
-    debugPathsEnabled = anyRemoteDebugPathsEnabled();
+    refreshDebugPathEnabled();
     installConsoleHelpers();
     installMoveDebugHook();
     console.log('main: ✅ Current game time is: ' + Game.time + ', cpu.bucket=' + Game.cpu.bucket);
@@ -183,6 +185,14 @@ function anyRemoteDebugPathsEnabled(): boolean {
         }
     }
     return false;
+}
+
+function refreshDebugPathEnabled(): void {
+    if (debugPathsLastScannedAt !== undefined && Game.time - debugPathsLastScannedAt < DEBUG_PATH_SCAN_INTERVAL) {
+        return;
+    }
+    debugPathsEnabled = anyRemoteDebugPathsEnabled();
+    debugPathsLastScannedAt = Game.time;
 }
 
 function debugPathColorForCreep(creep: Creep): string | null {

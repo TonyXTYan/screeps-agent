@@ -3,6 +3,43 @@ import { ensureArchetype } from './creep.capabilities';
 const DEBUG_CREEP_INTERVAL = 10;
 let debugCreepsLastPrintedAt: number | undefined;
 
+const STRUCT_LABEL: Record<string, string> = {
+    [STRUCTURE_SPAWN]: 'spawn',
+    [STRUCTURE_EXTENSION]: 'ext',
+    [STRUCTURE_ROAD]: 'road',
+    [STRUCTURE_WALL]: 'wall',
+    [STRUCTURE_RAMPART]: 'ramp',
+    [STRUCTURE_STORAGE]: 'store',
+    [STRUCTURE_TOWER]: 'tower',
+    [STRUCTURE_LINK]: 'link',
+    [STRUCTURE_CONTAINER]: 'cont',
+    [STRUCTURE_LAB]: 'lab',
+    [STRUCTURE_TERMINAL]: 'term',
+    [STRUCTURE_NUKER]: 'nuker',
+    [STRUCTURE_POWER_SPAWN]: 'pSpawn',
+    [STRUCTURE_OBSERVER]: 'obsv',
+    [STRUCTURE_EXTRACTOR]: 'extr',
+    [STRUCTURE_FACTORY]: 'fact',
+};
+
+function targetLabel(creep: Creep): string {
+    const targetId = creep.memory.jobTargetId;
+    if (!targetId) { return ''; }
+    const target = Game.getObjectById(targetId as Id<any>);
+    if (!target) { return ''; }
+    if ('structureType' in (target as any)) {
+        return STRUCT_LABEL[(target as any).structureType] ?? (target as any).structureType;
+    }
+    if ('mineralType' in (target as any)) {
+        return (target as any).mineralType;
+    }
+    if ('resourceType' in (target as any)) {
+        const rt = (target as any).resourceType;
+        return rt === RESOURCE_ENERGY ? 'energy' : rt;
+    }
+    return '';
+}
+
 export function ownedRooms(): Room[] {
     const rooms: { [roomName: string]: Room } = {};
     for (const spawnName in Game.spawns) {
@@ -174,10 +211,28 @@ function printHomeCreepStatus(homeRoom: string): void {
             : `${creep.store.getUsedCapacity(RESOURCE_ENERGY)}/${storeCap}`;
         const jobLabel = statusLabels[creep.memory.jobType ?? ''] ?? creep.memory.jobType ?? '-';
         const src = (creep.memory.assignedSourceId ?? creep.memory.sourceId ?? '').slice(-8);
+        const w = creep.getActiveBodyparts(WORK);
+        const c = creep.getActiveBodyparts(CARRY);
+        const m = creep.getActiveBodyparts(MOVE);
+        const bodyStr = `W${w}C${c}M${m}`;
+        const tgt = targetLabel(creep);
+        const intReason = creep.memory.interruptReason;
+        const intStr = intReason ? ` i=${intReason}` : '';
+        const primaryJob = creep.memory.primaryJobType;
+        const primaryStr = (primaryJob && primaryJob !== creep.memory.jobType)
+            ? ` pri=${statusLabels[primaryJob] ?? primaryJob}`
+            : '';
+
+        let extra = '';
+        if (tgt) extra += ` ${tgt}`;
+        extra += ` ${bodyStr}`;
+        if (intStr) extra += intStr;
+        if (primaryStr) extra += primaryStr;
 
         lines.push(
             `${archetype.padEnd(16)} ${name.padEnd(14)} ttl=${String(ttl).padStart(4)}  ` +
             `${jobLabel.padEnd(11)} en=${storeInfo.padEnd(7)}` +
+            extra +
             (src ? ` src=${src}` : '')
         );
     }

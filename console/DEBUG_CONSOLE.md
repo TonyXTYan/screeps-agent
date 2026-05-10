@@ -64,14 +64,22 @@ Output:
 
 ```
 [HOME] W7N9:  builder=1  hauler=2  miner=2  upgrader=1  worker=1  total=7
-  miner            miner-Spawn1-1     ttl=450  harvestSrc   en=0/50     src=4adbfc69
-  miner            miner-Spawn1-2     ttl=400  harvestSrc   en=50/50    src=4adbfc6b
-  hauler           hauler-Spawn1-1    ttl=378  deposit      en=50/600
-  hauler           hauler-Spawn1-2    ttl=350  withdraw     en=400/600  src=4adbfc69
-  worker           worker-Spawn1-1    ttl=120  build        en=100/250
-  upgrader         upgrader-Spawn1-1  ttl=200  upgrade      en=30/150
-  builder          builder-Spawn1-1   ttl=180  build        en=80/200
+  miner            miner-Spawn1-1     ttl= 450  harvestSrc  en=0/50      cont W5C1M2 src=4adbfc69
+  miner            miner-Spawn1-2     ttl= 400  harvestSrc  en=50/50     cont W5C1M2 src=4adbfc6b
+  hauler           hauler-Spawn1-1    ttl= 378  deposit     en=50/600    term W0C8M4
+  hauler           hauler-Spawn1-2    ttl= 350  withdraw    en=400/600   term W0C8M4 src=4adbfc69
+  worker           worker-Spawn1-1    ttl= 120  build       en=100/250   spawn W3C2M2
+  upgrader         upgrader-Spawn1-1  ttl= 200  upgrade     en=30/150    cont W2C1M2 i=refill pri=build
+  builder          builder-Spawn1-1   ttl= 180  build       en=80/200    spawn W2C2M2
 ```
+
+Each line shows: `archetype  name  ttl  jobLabel  en=used/capacity  target  body  [i=interruptReason]  [pri=primaryJob]  src=sourceId`
+
+Additional columns beyond the remote dump:
+- **target** — abbreviated structure type of the current job target (`spawn`, `cont`, `term`, `ext`, `tower`, `link`, `lab`, `nuker`, `pSpawn`, `obsv`, `extr`, `fact`, or the mineral/resource type)
+- **body** — live body parts (`W{work}C{carry}M{move}`)
+- **i=** — interrupt reason if the creep was pulled off a primary job (e.g., `i=refill`, `i=heal`, `i=build`)
+- **pri=** — remembered primary job when the creep expects to resume it (e.g., `pri=repair`, `pri=upgrade`)
 
 Status labels are mapped from each creep's `jobType`:
 
@@ -79,8 +87,12 @@ Status labels are mapped from each creep's `jobType`:
 |---|---|
 | `harvestSource` | `harvestSrc` |
 | `withdrawEnergy` | `withdraw` |
-| `depositEnergy` | `deposit` |
+| `withdrawResource` | `wdRsrc` |
 | `pickupEnergy` | `pickup` |
+| `pickupResource` | `puRsrc` |
+| `depositEnergy` | `deposit` |
+| `depositResource` | `depRsrc` |
+| `depositMineral` | `depositMin` |
 | `refillSpawn` | `refill` |
 | `refillTower` | `refillTow` |
 | `build` | `build` |
@@ -88,8 +100,10 @@ Status labels are mapped from each creep's `jobType`:
 | `upgrade` | `upgrade` |
 | `heal` | `heal` |
 | `mineMineral` | `mineMin` |
-| `idle` | `IDLE` |
+| `reserveController` | `reserve` |
+| `claimController` | `claim` |
 | `travelRoom` | `traveling` |
+| `idle` | `IDLE` |
 | *(undefined)* | `-` |
 
 A creep showing `IDLE` for many ticks is likely starved of work. A miner with no `src=` means it hasn't been assigned a source yet.

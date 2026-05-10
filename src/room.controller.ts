@@ -1122,7 +1122,10 @@ function assignEnergySpendingJob(
         }
     }
 
-    if (capabilities.upgrade > 0 && context.room.controller && shouldReserveUpgrade(context, reservations)) {
+    if (reservations.upgraderWork === 0 &&
+        capabilities.upgrade > 0 &&
+        context.room.controller &&
+        shouldReserveUpgrade(context, reservations)) {
         reservations.upgraderWork += capabilities.upgrade;
         rememberPrimaryJob(creep, 'upgrade', context.room.controller);
         setJob(creep, 'upgrade', context.room.controller);
@@ -1137,6 +1140,13 @@ function assignEnergySpendingJob(
             setJob(creep, 'build', guaranteedSite);
             return;
         }
+    }
+
+    if (capabilities.upgrade > 0 && context.room.controller && shouldReserveUpgrade(context, reservations)) {
+        reservations.upgraderWork += capabilities.upgrade;
+        rememberPrimaryJob(creep, 'upgrade', context.room.controller);
+        setJob(creep, 'upgrade', context.room.controller);
+        return;
     }
 
     if (capabilities.build > 0 && context.constructionSites.length > 0) {
@@ -2176,24 +2186,6 @@ function keepCurrentJob(
             rememberActiveAsPrimary(creep);
             clearJob(creep);
             creep.memory.interruptReason = 'refill';
-            return false;
-        }
-
-        if ((jobType === 'build' || jobType === 'repair') &&
-            capabilities.upgrade > 0 &&
-            context.room.controller &&
-            shouldReserveUpgrade(context, reservations)) {
-            clearJob(creep);
-            creep.memory.interruptReason = 'controller';
-            return false;
-        }
-
-        if (jobType === 'upgrade' &&
-            context.constructionSites.length > 0 &&
-            capabilities.build > 0 &&
-            !shouldReserveUpgrade(context, reservations)) {
-            clearJob(creep);
-            creep.memory.interruptReason = 'build';
             return false;
         }
     }

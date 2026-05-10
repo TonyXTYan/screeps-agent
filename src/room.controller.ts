@@ -1436,19 +1436,24 @@ function remoteSpawnRequest(
                 const minerCoverageHorizon = remoteSourceReplacementHorizon(context, sourcePlan, 'remoteMiner');
                 const minerProjectedWork = projectedRemoteMinerWork(homeFleet, roomName, sourceId, minerCoverageHorizon);
                 const minerCount = countRemoteMinersForSource(homeFleet, roomName, sourceId);
-                if (minerProjectedWork < targetMinerWork &&
-                    minerCount < 2 &&
-                    !pending.some(r => r.archetype === 'remoteMiner' && r.remoteRoom === roomName && r.sourceId === sourceId)) {
-                    return {
-                        archetype: 'remoteMiner',
-                        reason: 'remote source handoff deficit ' + roomName + ':' + sourceId +
-                            ' projected=' + minerProjectedWork + '/' + targetMinerWork,
-                        remoteRoom: roomName,
-                        remoteMode: remote.mode,
-                        sourceId,
-                        staticMining: true,
-                        hasContainer: !!sourcePlan.containerId
-                    };
+                if (minerProjectedWork < targetMinerWork && minerCount < 2) {
+                    const hasStandby = minerCount >= 1 && (
+                        countRemoteStandbyMiners(homeFleet, roomName) > 0 ||
+                        pending.some(r => r.archetype === 'remoteMiner' && r.remoteRoom === roomName && r.remoteStandby)
+                    );
+                    if (!hasStandby &&
+                        !pending.some(r => r.archetype === 'remoteMiner' && r.remoteRoom === roomName && r.sourceId === sourceId)) {
+                        return {
+                            archetype: 'remoteMiner',
+                            reason: 'remote source handoff deficit ' + roomName + ':' + sourceId +
+                                ' projected=' + minerProjectedWork + '/' + targetMinerWork,
+                            remoteRoom: roomName,
+                            remoteMode: remote.mode,
+                            sourceId,
+                            staticMining: true,
+                            hasContainer: !!sourcePlan.containerId
+                        };
+                    }
                 }
 
                 const targetHaulerCapacity = sourcePlan.haulerCapacityDemand ?? 150;

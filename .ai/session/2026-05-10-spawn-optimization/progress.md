@@ -45,6 +45,24 @@ Status: Done
 File: `src/room.controller.ts:1897`
 `droppedResources.length > 10` (was `> 3`). Reduces false triggers from normal dropped energy.
 
+### Fix 6: Remote miner standby-aware replacement
+Status: Done
+File: `src/room.controller.ts:1439-1455` — `remoteSpawnRequest()`
+
+**Root cause**: Execution order bug. `runSpawnPlanner` (step 5b in main.ts) runs BEFORE
+`assignRemoteCreep` (step 6). When a remote miner is dying:
+1. `projectedRemoteMinerWork` excludes the dying miner (TTL ≤ horizon)
+2. Standby exists in home room but has no sourceId → projection can't find it → deficit
+3. Spawning system spawns a DUPLICATE active miner
+4. Later in same tick: standby is dispatched → arrives at source
+5. Now 3 active miners for 1 source + standby check spawns new standby = 4+ total
+
+**Fix**: Before spawning a replacement active miner, check if a standby exists that will
+be dispatched later in the tick:
+- `countRemoteStandbyMiners(homeFleet, roomName) > 0` — alive standby
+- `pending.some(remoteStandby)` — cross-tick standby being spawned
+- Only skips spawn when `minerCount >= 1` — uncovered sources (count=0) always spawn
+
 ### Verification
 - Build passes with zero errors
 - All existing archetypes and body planners preserved

@@ -12,7 +12,7 @@ export function repairStructureFilter(structure: AnyStructure, rcl: number): boo
     if (structure.structureType === STRUCTURE_WALL || structure.structureType === STRUCTURE_RAMPART) {
         return structure.hits < Math.min(wallRampartRepairCap(rcl), structure.hitsMax);
     }
-    return structure.hits < structure.hitsMax;
+    return structure.hits < structure.hitsMax * 0.9;
 }
 
 export function repairTargetToRepair(creep: Creep): AnyStructure | null {

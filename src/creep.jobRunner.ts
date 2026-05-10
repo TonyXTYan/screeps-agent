@@ -59,7 +59,7 @@ function harvestSource(creep: Creep): number {
         const stuckTicks = creep.memory.travelStuckTicks ?? 0;
         const stuckFallback = isPositionTarget && stuckTicks >= MOVE_STUCK_REPATH_TICKS;
         const effectiveTarget = stuckFallback ? source : station;
-        const range = stuckFallback || !isPositionTarget ? 1 : 0;
+        const range = station instanceof StructureContainer ? 0 : (stuckFallback || !isPositionTarget ? 1 : 0);
         moveToJobTarget(creep, effectiveTarget, '#3d2a22', { range });
         return ERR_NOT_IN_RANGE;
     }

@@ -167,25 +167,14 @@ export function assignRemoteCreep(creep: Creep): boolean {
     }
 
     if (archetype === 'remoteHauler' && energyUsed > 0) {
-        if (capabilities.repair > 0) {
-            const opportunisticRepair = closest(creep, creep.pos.findInRange(FIND_STRUCTURES, 1, {
-                filter: (s) => (s.structureType === STRUCTURE_ROAD || s.structureType === STRUCTURE_CONTAINER) && s.hits < s.hitsMax
-            }) as AnyStructure[]);
-            if (opportunisticRepair) {
-                setJob(creep, 'repair', opportunisticRepair);
-                return true;
-            }
-        }
-        if (capabilities.work > 0) {
-            const nearbyBuildSite = closest(creep, creep.pos.findInRange(FIND_MY_CONSTRUCTION_SITES, 3, {
-                filter: (site) => site.structureType === STRUCTURE_ROAD || site.structureType === STRUCTURE_CONTAINER
-            }));
-            if (nearbyBuildSite) {
-                setJob(creep, 'build', nearbyBuildSite);
-                return true;
-            }
-        }
         if (creep.room.name !== homeRoom) {
+            if (creep.room.name === remoteRoom && creep.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
+                const source = findRemoteEnergySource(creep, remotePlan);
+                if (source) {
+                    setJob(creep, source.jobType, source.target);
+                    return true;
+                }
+            }
             setTravelJob(creep, homeRoom);
             return true;
         }
@@ -286,18 +275,29 @@ export function assignRemoteCreep(creep: Creep): boolean {
         let assignedSourceId = creep.memory.assignedSourceId ?? creep.memory.sourceId;
 
         const sources = creep.room.find(FIND_SOURCES);
-        const otherMinerSourceIds = new Set<string>();
+        const minerCountBySource = new Map<string, number>();
         for (const other of creep.room.find(FIND_MY_CREEPS)) {
             if (other.id === creep.id) { continue; }
             if (ensureArchetype(other) !== 'remoteMiner') { continue; }
             const sid = other.memory.assignedSourceId ?? other.memory.sourceId;
-            if (sid) { otherMinerSourceIds.add(sid); }
+            if (sid) {
+                minerCountBySource.set(sid, (minerCountBySource.get(sid) ?? 0) + 1);
+            }
         }
 
-        if (assignedSourceId && otherMinerSourceIds.has(assignedSourceId)) {
-            const uncovered = sources.find(s => !otherMinerSourceIds.has(s.id));
-            if (uncovered) {
-                assignedSourceId = uncovered.id;
+        if (assignedSourceId) {
+            const currentCount = minerCountBySource.get(assignedSourceId) ?? 0;
+            let bestSource: Source | null = null;
+            let bestCount = Infinity;
+            for (const source of sources) {
+                const count = minerCountBySource.get(source.id) ?? 0;
+                if (count < bestCount) {
+                    bestCount = count;
+                    bestSource = source;
+                }
+            }
+            if (bestSource && currentCount > bestCount) {
+                assignedSourceId = bestSource.id;
             }
         }
 
@@ -331,28 +331,9 @@ export function assignRemoteCreep(creep: Creep): boolean {
     }
 
     if (archetype === 'remoteHauler') {
-        const bestContainer = bestRemoteSourceContainer(creep, remotePlan);
-        if (bestContainer) {
-            setJob(creep, 'withdrawEnergy', bestContainer);
-            return true;
-        }
-
-        const droppedEnergy = closest(creep, creep.room.find(FIND_DROPPED_RESOURCES, {
-            filter: (resource) => resource.resourceType === RESOURCE_ENERGY && resource.amount >= 50
-        }) as Resource<RESOURCE_ENERGY>[]);
-        if (droppedEnergy) {
-            setJob(creep, 'pickupEnergy', droppedEnergy);
-            return true;
-        }
-
-        const containers = creep.room.find(FIND_STRUCTURES, {
-            filter: (structure) =>
-                structure.structureType === STRUCTURE_CONTAINER &&
-                (structure as StructureContainer).store.getUsedCapacity(RESOURCE_ENERGY) > 0
-        }) as StructureContainer[];
-        const container = closest(creep, containers);
-        if (container) {
-            setJob(creep, 'withdrawEnergy', container);
+        const source = findRemoteEnergySource(creep, remotePlan);
+        if (source) {
+            setJob(creep, source.jobType, source.target);
             return true;
         }
     }
@@ -364,7 +345,7 @@ export function assignRemoteCreep(creep: Creep): boolean {
             return true;
         }
         const repair = closest(creep, creep.room.find(FIND_STRUCTURES, {
-            filter: s => (s.structureType === STRUCTURE_ROAD || s.structureType === STRUCTURE_CONTAINER) && s.hits < s.hitsMax
+            filter: s => (s.structureType === STRUCTURE_ROAD || s.structureType === STRUCTURE_CONTAINER) && s.hits < s.hitsMax * 0.9
         }) as AnyStructure[]);
         if (repair && creep.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
             setJob(creep, 'repair', repair);
@@ -1049,8 +1030,14 @@ function assignJob(context: RoomControllerContext, creep: Creep, reservations: J
     }
 
     if (energyUsed > 0) {
-        assignEnergySpendingJob(context, creep, archetype, capabilities, reservations);
-        return;
+        if (archetype === 'worker' &&
+            creep.store.getFreeCapacity(RESOURCE_ENERGY) > 0 &&
+            hasEnergyToGather(context)) {
+            // Not full and there's ambient energy — fall through to gather more
+        } else {
+            assignEnergySpendingJob(context, creep, archetype, capabilities, reservations);
+            return;
+        }
     }
 
     if (capabilities.haul > 0) {
@@ -1075,7 +1062,7 @@ function assignJob(context: RoomControllerContext, creep: Creep, reservations: J
         }
     }
 
-    if (capabilities.harvest > 0) {
+    if (capabilities.harvest > 0 && archetype !== 'hauler' && archetype !== 'remoteHauler') {
         const fallbackSourcePlan = closestSourcePlan(creep, context.sourcePlans);
         if (fallbackSourcePlan) {
             clearStaticMiningMemory(creep);
@@ -1092,6 +1079,15 @@ function assignJob(context: RoomControllerContext, creep: Creep, reservations: J
     setJob(creep, 'idle', context.structures.storage ?? context.structures.spawns[0]);
 }
 
+function hasEnergyToGather(context: RoomControllerContext): boolean {
+    if (context.droppedEnergy.length > 0) return true;
+    if (context.tombstones.length > 0) return true;
+    if (context.structures.containers.some(c => c.store.getUsedCapacity(RESOURCE_ENERGY) > 0)) return true;
+    if (context.structures.storage && context.structures.storage.store.getUsedCapacity(RESOURCE_ENERGY) > 0) return true;
+    if (context.structures.links.source.some(l => l.store.getUsedCapacity(RESOURCE_ENERGY) > 0)) return true;
+    return false;
+}
+
 function assignEnergySpendingJob(
     context: RoomControllerContext,
     creep: Creep,
@@ -1099,18 +1095,20 @@ function assignEnergySpendingJob(
     capabilities: ReturnType<typeof getCreepCapabilities>,
     reservations: JobReservations
 ): void {
-    const spawnTarget = refillSpawnTarget(context, creep, reservations);
-    if (spawnTarget) {
-        reserveEnergySink(reservations, spawnTarget, Math.min(creep.store.getUsedCapacity(RESOURCE_ENERGY), spawnTarget.store.getFreeCapacity(RESOURCE_ENERGY)));
-        setJob(creep, 'refillSpawn', spawnTarget);
-        return;
-    }
+    if (!(archetype === 'worker' && context.structures.storage)) {
+        const spawnTarget = refillSpawnTarget(context, creep, reservations);
+        if (spawnTarget) {
+            reserveEnergySink(reservations, spawnTarget, Math.min(creep.store.getUsedCapacity(RESOURCE_ENERGY), spawnTarget.store.getFreeCapacity(RESOURCE_ENERGY)));
+            setJob(creep, 'refillSpawn', spawnTarget);
+            return;
+        }
 
-    const towerTarget = refillTowerTarget(context, creep, reservations);
-    if (towerTarget) {
-        reserveEnergySink(reservations, towerTarget, Math.min(creep.store.getUsedCapacity(RESOURCE_ENERGY), towerTarget.store.getFreeCapacity(RESOURCE_ENERGY)));
-        setJob(creep, 'refillTower', towerTarget);
-        return;
+        const towerTarget = refillTowerTarget(context, creep, reservations);
+        if (towerTarget) {
+            reserveEnergySink(reservations, towerTarget, Math.min(creep.store.getUsedCapacity(RESOURCE_ENERGY), towerTarget.store.getFreeCapacity(RESOURCE_ENERGY)));
+            setJob(creep, 'refillTower', towerTarget);
+            return;
+        }
     }
 
     const resumed = resumePrimaryEnergyJob(context, creep, capabilities, reservations);
@@ -1124,6 +1122,13 @@ function assignEnergySpendingJob(
         }
     }
 
+    if (capabilities.upgrade > 0 && context.room.controller && shouldReserveUpgrade(context, reservations)) {
+        reservations.upgraderWork += capabilities.upgrade;
+        rememberPrimaryJob(creep, 'upgrade', context.room.controller);
+        setJob(creep, 'upgrade', context.room.controller);
+        return;
+    }
+
     if (Object.keys(reservations.constructionProgress).length === 0 && capabilities.build > 0 && context.constructionSites.length > 0) {
         const guaranteedSite = bestConstructionSite(creep, context.constructionSites, reservations, capabilities.build);
         if (guaranteedSite) {
@@ -1132,13 +1137,6 @@ function assignEnergySpendingJob(
             setJob(creep, 'build', guaranteedSite);
             return;
         }
-    }
-
-    if (capabilities.upgrade > 0 && context.room.controller && shouldReserveUpgrade(context, reservations)) {
-        reservations.upgraderWork += capabilities.upgrade;
-        rememberPrimaryJob(creep, 'upgrade', context.room.controller);
-        setJob(creep, 'upgrade', context.room.controller);
-        return;
     }
 
     if (capabilities.build > 0 && context.constructionSites.length > 0) {
@@ -1392,6 +1390,12 @@ function chooseSpawnRequest(context: RoomControllerContext, pending: SpawnReques
         return { archetype: 'doctor', reason: 'no heal-capable creep' };
     }
 
+    const haulerCount = context.creeps.filter(c => ensureArchetype(c) === 'hauler' && !c.spawning).length;
+    if (context.structures.storage && (context.room.controller?.level ?? 0) >= 4 &&
+        haulerCount + pending.filter(r => r.archetype === 'hauler').length < 2) {
+        return { archetype: 'hauler', reason: 'min hauler count 2' };
+    }
+
     if (capacities.haulerCapacity < haulerCapacityDemand && !pending.some(r => r.archetype === 'hauler')) {
         return { archetype: 'hauler', reason: 'haul deficit ' + capacities.haulerCapacity + '/' + haulerCapacityDemand };
     }
@@ -1513,6 +1517,7 @@ function remoteSpawnRequest(
             const activeRemoteMiners = countActiveRemoteMinersForRoom(homeFleet, roomName);
             const standbyRemoteMiners = countRemoteStandbyMiners(homeFleet, roomName);
             if (activeRemoteMiners >= sourceCount && standbyRemoteMiners < REMOTE_STANDBY_COUNT &&
+                activeRemoteMiners + standbyRemoteMiners < sourceCount + REMOTE_STANDBY_COUNT &&
                 !pending.some(r => r.archetype === 'remoteMiner' && r.remoteRoom === roomName && r.remoteStandby)) {
                 return {
                     archetype: 'remoteMiner',
@@ -1917,6 +1922,40 @@ function bestRemoteSourceContainer(creep: Creep, remotePlan: RemoteRoomPlan): St
     return best;
 }
 
+function findRemoteEnergySource(creep: Creep, remotePlan: RemoteRoomPlan): { jobType: 'withdrawEnergy' | 'pickupEnergy'; target: RoomObject & { id: string } } | null {
+    const bestContainer = bestRemoteSourceContainer(creep, remotePlan);
+    if (bestContainer) {
+        return { jobType: 'withdrawEnergy', target: bestContainer };
+    }
+
+    const droppedEnergy = closest(creep, creep.room.find(FIND_DROPPED_RESOURCES, {
+        filter: (resource) => resource.resourceType === RESOURCE_ENERGY && resource.amount >= 50
+    }) as Resource<RESOURCE_ENERGY>[]);
+    if (droppedEnergy) {
+        return { jobType: 'pickupEnergy', target: droppedEnergy };
+    }
+
+    const containers = creep.room.find(FIND_STRUCTURES, {
+        filter: (structure) =>
+            structure.structureType === STRUCTURE_CONTAINER &&
+            (structure as StructureContainer).store.getUsedCapacity(RESOURCE_ENERGY) > 0
+    }) as StructureContainer[];
+    const container = closest(creep, containers);
+    if (container) {
+        return { jobType: 'withdrawEnergy', target: container };
+    }
+
+    const link = closest(creep, creep.room.find(FIND_STRUCTURES, {
+        filter: s => s.structureType === STRUCTURE_LINK &&
+            (s as StructureLink).store.getUsedCapacity(RESOURCE_ENERGY) > 0
+    }) as StructureLink[]);
+    if (link) {
+        return { jobType: 'withdrawEnergy', target: link };
+    }
+
+    return null;
+}
+
 function measureCapabilities(creeps: Creep[]): {
     minerWork: number;
     haulerCapacity: number;
@@ -1984,7 +2023,24 @@ function desiredHaulerCapacity(context: RoomControllerContext): number {
 function desiredWorkerWork(context: RoomControllerContext): number {
     const rcl = context.room.controller?.level ?? 0;
     if (context.constructionSites.length > 0) {
-        return Math.min(12, 4 + context.constructionSites.length);
+        const base = Math.min(12, 4 + context.constructionSites.length);
+
+        if (rcl >= 4) {
+            const ratio = workerWorkRatio(context);
+            const unitCost = ratio * 100 + 100;
+            const unitParts = ratio + 2;
+            const energyAvail = context.room.energyCapacityAvailable;
+            const segments = Math.min(
+                Math.floor(50 / unitParts),
+                Math.floor(energyAvail / unitCost)
+            );
+            const workPerWorker = segments * ratio;
+            const upgradeDemand = desiredUpgraderWork(rcl);
+            const minWorkers = Math.max(2, 1 + Math.ceil(upgradeDemand / Math.max(1, workPerWorker)));
+            return Math.max(base, minWorkers * workPerWorker);
+        }
+
+        return base;
     }
     if (rcl >= 8) { return 8; }
     if (rcl >= 7) { return 6; }
@@ -2284,7 +2340,8 @@ function shouldInterruptForEnergyRefill(
     archetype: CreepArchetype,
     reservations: JobReservations
 ): boolean {
-    if (archetype === 'miner' || archetype === 'mineralMiner') { return false; }
+    if (archetype === 'miner' || archetype === 'mineralMiner' ||
+        (archetype === 'worker' && context.structures.storage)) { return false; }
     if (refillSpawnTarget(context, creep, reservations)) { return true; }
     return refillTowerTarget(context, creep, reservations) !== null;
 }
@@ -2381,16 +2438,14 @@ function energyWithdrawalTarget(
         .filter((link) => link.store.getUsedCapacity(RESOURCE_ENERGY) > 0);
 
     if (archetype === 'hauler' || archetype === 'remoteHauler') {
-        const localDemandLinks = spawnEnergyPressure(context) > 0
-            ? [...context.structures.links.sink, ...context.structures.links.hub]
-                .filter((link) => link.store.getUsedCapacity(RESOURCE_ENERGY) > 0)
-            : [];
-        return closest(creep, [...localDemandLinks, ...sourceContainers]);
+        const demandLinks = [...context.structures.links.sink, ...context.structures.links.hub]
+            .filter((link) => link.store.getUsedCapacity(RESOURCE_ENERGY) > 0);
+        return closest(creep, [...demandLinks, ...sourceLinks, ...sourceContainers]);
     }
 
-    const controllerOrHubLink = closest(creep, [...context.structures.links.controller, ...context.structures.links.hub]
+    const linkWithEnergy = closest(creep, [...context.structures.links.controller, ...context.structures.links.hub, ...sourceLinks]
         .filter((link) => link.store.getUsedCapacity(RESOURCE_ENERGY) > 0));
-    if (controllerOrHubLink) { return controllerOrHubLink; }
+    if (linkWithEnergy) { return linkWithEnergy; }
 
     if (context.structures.storage && context.structures.storage.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
         return context.structures.storage;
@@ -2667,7 +2722,7 @@ function resumePrimaryEnergyJob(
         const structure = target as AnyStructure;
         const isDefense = structure.structureType === STRUCTURE_WALL || structure.structureType === STRUCTURE_RAMPART;
         const repairRcl = creep.room.controller?.level ?? 0;
-        const maxHits = isDefense ? Math.min(wallRampartRepairCap(repairRcl), structure.hitsMax) : structure.hitsMax;
+        const maxHits = isDefense ? Math.min(wallRampartRepairCap(repairRcl), structure.hitsMax) : structure.hitsMax * 0.9;
         if (capabilities.repair <= 0 || structure.hits >= maxHits || remainingRepairProgress(structure, reservations) <= 0) {
             clearPrimaryJob(creep);
             return false;
@@ -2794,7 +2849,7 @@ function remainingConstructionProgress(site: ConstructionSite, reservations: Job
 function remainingRepairProgress(structure: AnyStructure, reservations: JobReservations): number {
     const isDefense = structure.structureType === STRUCTURE_WALL || structure.structureType === STRUCTURE_RAMPART;
     const repairRcl = structure.room.controller?.level ?? 0;
-    const maxHits = isDefense ? Math.min(wallRampartRepairCap(repairRcl), structure.hitsMax) : structure.hitsMax;
+    const maxHits = isDefense ? Math.min(wallRampartRepairCap(repairRcl), structure.hitsMax) : structure.hitsMax * 0.9;
     const cappedRemaining = Math.max(0, maxHits - structure.hits);
     return cappedRemaining - (reservations.repairProgress[structure.id] ?? 0);
 }

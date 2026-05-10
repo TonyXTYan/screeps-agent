@@ -10,6 +10,7 @@ import * as populationControl from './creep.populationControl';
 import * as roomController from './room.controller';
 import * as towerBasics from './tower.basics';
 import * as memoryAudit from './memoryAudit';
+import * as debug from './debug';
 
 const DOCTOR_EMERGENCY_HITS_RATIO = 0.35;
 const DOCTOR_THREAT_RADIUS = 4;
@@ -51,6 +52,7 @@ type RemoteMiningOptions = {
     buildRoads?: boolean;
     maintainRoads?: boolean;
     debugPaths?: boolean;
+    debugCreeps?: boolean;
 };
 
 let debugPathsEnabled = false;
@@ -66,6 +68,7 @@ export function loop(): void {
         refreshDebugPathEnabled();
     }
     installConsoleHelpers();
+    debug.installDebugHelpers();
     installMoveDebugHook();
     console.log('main: ✅ Current game time is: ' + Game.time + ', cpu.bucket=' + Game.cpu.bucket);
     if (Game.cpu.bucket >= 10000) {
@@ -75,7 +78,7 @@ export function loop(): void {
     creepMemoryManagement.run();
     memoryAudit.runIfBuildChanged();
 
-    const controlledRooms = ownedRooms();
+    const controlledRooms = debug.ownedRooms();
     for (const room of controlledRooms) {
         populationControl.checkDefenders(room); // runs before roomController to win the spawn slot
         roomController.run(room);
@@ -102,14 +105,23 @@ export function loop(): void {
         if (creep.memory.role === 'doctor') { roleDoctor.run(creep); }
         if (creep.memory.role === 'manual') { roleManual.run(creep); }
     }
+
+    debug.tickRemoteCreepLog();
 }
 
 declare global {
     var remoteMining: RemoteMiningConsoleApi | undefined;
+    var debug: {
+        trackRemote: (homeRoom: string, remoteRoom: string, on?: boolean) => string;
+        dumpRemote: (homeRoom: string, remoteRoom: string) => string;
+        dumpHome: (homeRoom: string) => string;
+    } | undefined;
+    var runMemoryAudit: () => void;
 }
 
 function installConsoleHelpers(): void {
     if (globalThis.remoteMining) { return; }
+    globalThis.runMemoryAudit = memoryAudit.runFullAudit;
     globalThis.remoteMining = {
         activate(homeRoom: string, remoteRoom: string, options?: RemoteMiningOptions): string {
             const room = Memory.rooms[homeRoom] ?? (Memory.rooms[homeRoom] = {});
@@ -122,7 +134,8 @@ function installConsoleHelpers(): void {
                 reserve: options?.reserve ?? true,
                 buildRoads: options?.buildRoads ?? true,
                 maintainRoads: options?.maintainRoads ?? true,
-                debugPaths: options?.debugPaths ?? false
+                debugPaths: options?.debugPaths ?? false,
+                debugCreeps: options?.debugCreeps ?? false
             };
             return `remoteMining: activated ${homeRoom} -> ${remoteRoom}`;
         },
@@ -133,6 +146,7 @@ function installConsoleHelpers(): void {
             if (options?.buildRoads !== undefined) { plan.buildRoads = options.buildRoads; }
             if (options?.maintainRoads !== undefined) { plan.maintainRoads = options.maintainRoads; }
             if (options?.debugPaths !== undefined) { plan.debugPaths = options.debugPaths; }
+            if (options?.debugCreeps !== undefined) { plan.debugCreeps = options.debugCreeps; }
             return `remoteMining: configured ${homeRoom} -> ${remoteRoom}`;
         },
         pause(homeRoom: string, remoteRoom: string, ticks: number = 1500): string {
@@ -382,15 +396,6 @@ function nudgeFromEdge(creep: Creep): void {
     }
 }
 
-function ownedRooms(): Room[] {
-    const rooms: { [roomName: string]: Room } = {};
-    for (const spawnName in Game.spawns) {
-        const room = Game.spawns[spawnName].room;
-        rooms[room.name] = room;
-    }
-    return Object.keys(rooms).map((roomName) => rooms[roomName]);
-}
-
 function tryRenewStandbyMiner(creep: Creep): void {
     if (creep.memory.minerDuty !== 'standby' && !creep.memory.remoteStandby) { return; }
     const ttl = creep.ticksToLive ?? 0;
@@ -408,7 +413,11 @@ function tryRenewStandbyMiner(creep: Creep): void {
 
     if (creep.pos.isNearTo(spawn)) {
         const code = spawn.renewCreep(creep);
-        if (code === OK || code === ERR_BUSY || code === ERR_NOT_ENOUGH_ENERGY) {
+        if (code === OK) {
+            if ((creep.ticksToLive ?? 0) >= STANDBY_MINER_RENEW_THRESHOLD) {
+                parkStandbyMinerAwayFromSpawn(creep, spawn);
+            }
+        } else if (code === ERR_BUSY || code === ERR_NOT_ENOUGH_ENERGY) {
             parkStandbyMinerAwayFromSpawn(creep, spawn);
         }
         return;

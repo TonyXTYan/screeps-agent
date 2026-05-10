@@ -12,29 +12,31 @@ export function run(room: Room): void {
         filter: isArmedHostile
     });
 
-    // Pre-compute repair targets once per tick so all towers focus on the same most-critical structure.
-    // Lowest hits wins within each priority band.
-    const veryUrgentRepairTarget = lowestHits(room.find(FIND_STRUCTURES, {
+    // Pre-compute repair candidates sorted by hits ascending, then distribute across towers
+    // so each tower repairs a different structure instead of all piling on the same target.
+    const veryUrgent = room.find(FIND_STRUCTURES, {
         filter: (s) => s.hits < 500 &&
             s.hitsMax > 500 &&
             s.structureType !== STRUCTURE_WALL &&
             s.structureType !== STRUCTURE_RAMPART
-    }) as AnyStructure[]);
-    const urgentRepairTarget = lowestHits(room.find(FIND_STRUCTURES, {
+    }).sort((a, b) => a.hits - b.hits);
+    const urgent = room.find(FIND_STRUCTURES, {
         filter: (s) => s.hits < 10_000 &&
             s.hitsMax > 10_000 &&
             s.structureType !== STRUCTURE_WALL &&
             s.structureType !== STRUCTURE_RAMPART
-    }) as AnyStructure[]);
+    }).sort((a, b) => a.hits - b.hits);
     // Non-defense structures only: walls/ramparts handled at the ≥90% gate below
-    const normalRepairTarget = lowestHits(room.find(FIND_STRUCTURES, {
-        filter: (s) => repairStructureFilter(s as AnyStructure, rcl) &&
+    const normal = room.find(FIND_STRUCTURES, {
+        filter: (s) => repairStructureFilter(s, rcl) &&
             s.structureType !== STRUCTURE_WALL && s.structureType !== STRUCTURE_RAMPART
-    }) as AnyStructure[]);
-    const defenseRepairTarget = lowestHits(room.find(FIND_STRUCTURES, {
-        filter: (s) => repairStructureFilter(s as AnyStructure, rcl) &&
+    }).sort((a, b) => a.hits - b.hits);
+    const defense = room.find(FIND_STRUCTURES, {
+        filter: (s) => repairStructureFilter(s, rcl) &&
             (s.structureType === STRUCTURE_WALL || s.structureType === STRUCTURE_RAMPART)
-    }) as AnyStructure[]);
+    }).sort((a, b) => a.hits - b.hits);
+
+    const claimedIds = new Set<string>();
 
     for (const tower of towers) {
         const closestHostile = tower.pos.findClosestByRange(armedHostiles);
@@ -42,7 +44,7 @@ export function run(room: Room): void {
 
         if (closestHostile) {
             tower.attack(closestHostile);
-        } else if (energyRatio > 0.1) {
+        } else if (energyRatio > 0.5) {
             // Heal uses closest-by-range because tower heal power decreases with distance
             const closestDamagedCreep = tower.pos.findClosestByRange(FIND_MY_CREEPS, {
                 filter: (c) => c.hits < c.hitsMax
@@ -50,33 +52,21 @@ export function run(room: Room): void {
 
             if (closestDamagedCreep) {
                 tower.heal(closestDamagedCreep);
-            } else if (veryUrgentRepairTarget) {
-                tower.repair(veryUrgentRepairTarget);
-            } else if (urgentRepairTarget) {
-                tower.repair(urgentRepairTarget);
-            } else if (normalRepairTarget) {
-                tower.repair(normalRepairTarget);
-            } else if (energyRatio >= 0.9) {
-                // Only invest in walls/ramparts when well-charged and nothing else needs attention
-                if (defenseRepairTarget) {
-                    tower.repair(defenseRepairTarget);
+            } else {
+                const target = veryUrgent.find(s => !claimedIds.has(s.id))
+                    ?? urgent.find(s => !claimedIds.has(s.id))
+                    ?? normal.find(s => !claimedIds.has(s.id))
+                    ?? (energyRatio >= 0.9 ? defense.find(s => !claimedIds.has(s.id)) : null);
+
+                if (target) {
+                    tower.repair(target);
+                    claimedIds.add(target.id);
                 } else {
                     console.log('tower.basics: ' + tower + ' is idle');
                 }
-            } else {
-                console.log('tower.basics: ' + tower + ' is idle');
             }
         }
     }
-}
-
-function lowestHits(structures: AnyStructure[]): AnyStructure | null {
-    if (structures.length === 0) { return null; }
-    let best = structures[0];
-    for (const s of structures) {
-        if (s.hits < best.hits) { best = s; }
-    }
-    return best;
 }
 
 export function tryFillTowerUnderSiege(creep: Creep): boolean {

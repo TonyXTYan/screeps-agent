@@ -138,6 +138,7 @@ interface RemoteRoomPlan {
     buildRoads?: boolean;
     maintainRoads?: boolean;
     debugPaths?: boolean;
+    debugCreeps?: boolean;
     dangerUntil?: number;
     lastScouted?: number;
     lastSeenHostiles?: number;

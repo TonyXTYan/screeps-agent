@@ -115,11 +115,11 @@ export function planBodyForArchetype(
     if (archetype === 'remoteMiner' && opts?.staticMining) {
         if (opts?.hasContainer) {
             return selectLargestWithinBudget([
-                [WORK, WORK, WORK, WORK, WORK, MOVE, MOVE, MOVE],
-                [WORK, WORK, WORK, WORK, MOVE, MOVE],
-                [WORK, WORK, WORK, MOVE, MOVE],
-                [WORK, WORK, MOVE],
-                [WORK, MOVE]
+                [WORK, WORK, WORK, WORK, WORK, CARRY, MOVE, MOVE, MOVE],
+                [WORK, WORK, WORK, WORK, CARRY, MOVE, MOVE, MOVE],
+                [WORK, WORK, WORK, CARRY, MOVE, MOVE],
+                [WORK, WORK, CARRY, MOVE, MOVE],
+                [WORK, CARRY, MOVE]
             ], energyBudget);
         }
         return selectLargestWithinBudget([

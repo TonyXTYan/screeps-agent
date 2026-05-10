@@ -39,21 +39,17 @@ const ROLE_PATH_COLORS: { [role: string]: string } = {
     defender: '#ef4444'
 };
 type RemoteMiningConsoleApi = {
-    activate: (homeRoom: string, remoteRoom: string, options?: {
-        reserve?: boolean;
-        buildRoads?: boolean;
-        maintainRoads?: boolean;
-        debugPaths?: boolean;
-    }) => string;
-    configure: (homeRoom: string, remoteRoom: string, options?: {
-        reserve?: boolean;
-        buildRoads?: boolean;
-        maintainRoads?: boolean;
-        debugPaths?: boolean;
-    }) => string;
+    activate: (homeRoom: string, remoteRoom: string, options?: RemoteMiningOptions) => string;
+    configure: (homeRoom: string, remoteRoom: string, options?: RemoteMiningOptions) => string;
     pause: (homeRoom: string, remoteRoom: string, ticks?: number) => string;
     disable: (homeRoom: string, remoteRoom: string) => string;
     status: (homeRoom: string, remoteRoom?: string) => string;
+};
+type RemoteMiningOptions = {
+    reserve?: boolean;
+    buildRoads?: boolean;
+    maintainRoads?: boolean;
+    debugPaths?: boolean;
 };
 
 let debugPathsEnabled = false;
@@ -106,7 +102,7 @@ declare global {
 function installConsoleHelpers(): void {
     if (globalThis.remoteMining) { return; }
     globalThis.remoteMining = {
-        activate(homeRoom: string, remoteRoom: string, options?: { reserve?: boolean; buildRoads?: boolean; maintainRoads?: boolean; debugPaths?: boolean }): string {
+        activate(homeRoom: string, remoteRoom: string, options?: RemoteMiningOptions): string {
             const room = Memory.rooms[homeRoom] ?? (Memory.rooms[homeRoom] = {});
             room.plan = room.plan ?? {};
             room.plan.remoteRooms = room.plan.remoteRooms ?? {};
@@ -121,7 +117,7 @@ function installConsoleHelpers(): void {
             };
             return `remoteMining: activated ${homeRoom} -> ${remoteRoom}`;
         },
-        configure(homeRoom: string, remoteRoom: string, options?: { reserve?: boolean; buildRoads?: boolean; maintainRoads?: boolean; debugPaths?: boolean }): string {
+        configure(homeRoom: string, remoteRoom: string, options?: RemoteMiningOptions): string {
             const plan = Memory.rooms[homeRoom]?.plan?.remoteRooms?.[remoteRoom];
             if (!plan) { return `remoteMining: missing ${homeRoom} -> ${remoteRoom}`; }
             if (options?.reserve !== undefined) { plan.reserve = options.reserve; }
@@ -151,17 +147,20 @@ function installConsoleHelpers(): void {
 }
 
 function installMoveDebugHook(): void {
-    if (!debugPathsEnabled) { return; }
     const proto = Creep.prototype as Creep & {
         _baseMoveTo?: (...args: any[]) => number;
     };
+    if (!debugPathsEnabled) {
+        if (proto._baseMoveTo) {
+            proto.moveTo = proto._baseMoveTo as Creep['moveTo'];
+            delete proto._baseMoveTo;
+        }
+        return;
+    }
     if (proto._baseMoveTo) { return; }
     proto._baseMoveTo = proto.moveTo;
 
     proto.moveTo = function (this: Creep, ...args: any[]): CreepMoveReturnCode {
-        if (!debugPathsEnabled) {
-            return proto._baseMoveTo!.apply(this, args as [any, any, any]) as CreepMoveReturnCode;
-        }
         const color = debugPathColorForCreep(this);
         if (!color) {
             return proto._baseMoveTo!.apply(this, args as [any, any, any]) as CreepMoveReturnCode;

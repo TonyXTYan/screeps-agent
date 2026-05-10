@@ -16,6 +16,7 @@ const DOCTOR_THREAT_RADIUS = 4;
 const STANDBY_MINER_RENEW_THRESHOLD = 1450;
 const STANDBY_MINER_PARK_MIN_RANGE = 2;
 const STANDBY_MINER_PARK_MAX_RANGE = 4;
+const DEBUG_PATH_SCAN_INTERVAL = 25;
 const DEFAULT_ROLE_PATH_STYLE = {
     fill: 'transparent',
     lineStyle: 'dashed' as const,
@@ -38,8 +39,32 @@ const ROLE_PATH_COLORS: { [role: string]: string } = {
     manual: '#f97316',
     defender: '#ef4444'
 };
+type RemoteMiningConsoleApi = {
+    activate: (homeRoom: string, remoteRoom: string, options?: RemoteMiningOptions) => string;
+    configure: (homeRoom: string, remoteRoom: string, options?: RemoteMiningOptions) => string;
+    pause: (homeRoom: string, remoteRoom: string, ticks?: number) => string;
+    disable: (homeRoom: string, remoteRoom: string) => string;
+    status: (homeRoom: string, remoteRoom?: string) => string;
+};
+type RemoteMiningOptions = {
+    reserve?: boolean;
+    buildRoads?: boolean;
+    maintainRoads?: boolean;
+    debugPaths?: boolean;
+};
+
+let debugPathsEnabled = false;
+let debugPathsLastScannedAt: number | undefined;
+let moveDebugHookInstalled = false;
 
 export function loop(): void {
+    if (debugPathsLastScannedAt !== undefined && Game.time < debugPathsLastScannedAt) {
+        debugPathsLastScannedAt = undefined;
+    }
+    if (debugPathsLastScannedAt === undefined ||
+        Game.time - debugPathsLastScannedAt >= DEBUG_PATH_SCAN_INTERVAL) {
+        refreshDebugPathEnabled();
+    }
     installConsoleHelpers();
     installMoveDebugHook();
     console.log('main: ✅ Current game time is: ' + Game.time + ', cpu.bucket=' + Game.cpu.bucket);
@@ -79,30 +104,14 @@ export function loop(): void {
     }
 }
 
-declare const globalThis: {
-    remoteMining?: {
-        activate: (homeRoom: string, remoteRoom: string, options?: {
-            reserve?: boolean;
-            buildRoads?: boolean;
-            maintainRoads?: boolean;
-            debugPaths?: boolean;
-        }) => string;
-        configure: (homeRoom: string, remoteRoom: string, options?: {
-            reserve?: boolean;
-            buildRoads?: boolean;
-            maintainRoads?: boolean;
-            debugPaths?: boolean;
-        }) => string;
-        pause: (homeRoom: string, remoteRoom: string, ticks?: number) => string;
-        disable: (homeRoom: string, remoteRoom: string) => string;
-        status: (homeRoom: string, remoteRoom?: string) => string;
-    };
-};
+declare global {
+    var remoteMining: RemoteMiningConsoleApi | undefined;
+}
 
 function installConsoleHelpers(): void {
     if (globalThis.remoteMining) { return; }
     globalThis.remoteMining = {
-        activate(homeRoom: string, remoteRoom: string, options?: { reserve?: boolean; buildRoads?: boolean; maintainRoads?: boolean; debugPaths?: boolean }): string {
+        activate(homeRoom: string, remoteRoom: string, options?: RemoteMiningOptions): string {
             const room = Memory.rooms[homeRoom] ?? (Memory.rooms[homeRoom] = {});
             room.plan = room.plan ?? {};
             room.plan.remoteRooms = room.plan.remoteRooms ?? {};
@@ -117,7 +126,7 @@ function installConsoleHelpers(): void {
             };
             return `remoteMining: activated ${homeRoom} -> ${remoteRoom}`;
         },
-        configure(homeRoom: string, remoteRoom: string, options?: { reserve?: boolean; buildRoads?: boolean; maintainRoads?: boolean; debugPaths?: boolean }): string {
+        configure(homeRoom: string, remoteRoom: string, options?: RemoteMiningOptions): string {
             const plan = Memory.rooms[homeRoom]?.plan?.remoteRooms?.[remoteRoom];
             if (!plan) { return `remoteMining: missing ${homeRoom} -> ${remoteRoom}`; }
             if (options?.reserve !== undefined) { plan.reserve = options.reserve; }
@@ -147,10 +156,22 @@ function installConsoleHelpers(): void {
 }
 
 function installMoveDebugHook(): void {
+    if (!debugPathsEnabled) {
+        if (!moveDebugHookInstalled) { return; }
+        const proto = Creep.prototype as Creep & {
+            _baseMoveTo?: (...args: any[]) => number;
+        };
+        if (proto._baseMoveTo) {
+            proto.moveTo = proto._baseMoveTo as Creep['moveTo'];
+            delete proto._baseMoveTo;
+        }
+        moveDebugHookInstalled = false;
+        return;
+    }
+    if (moveDebugHookInstalled) { return; }
     const proto = Creep.prototype as Creep & {
         _baseMoveTo?: (...args: any[]) => number;
     };
-    if (proto._baseMoveTo) { return; }
     proto._baseMoveTo = proto.moveTo;
 
     proto.moveTo = function (this: Creep, ...args: any[]): CreepMoveReturnCode {
@@ -164,6 +185,24 @@ function installMoveDebugHook(): void {
         patchedArgs[optsIndex] = mergeRolePathStyle(patchedArgs[optsIndex] as MoveToOpts | undefined, color);
         return proto._baseMoveTo!.apply(this, patchedArgs as [any, any, any]) as CreepMoveReturnCode;
     } as Creep['moveTo'];
+    moveDebugHookInstalled = true;
+}
+
+function anyRemoteDebugPathsEnabled(): boolean {
+    for (const roomName in Memory.rooms) {
+        const remotes = Memory.rooms[roomName]?.plan?.remoteRooms;
+        if (!remotes) { continue; }
+        for (const remoteName in remotes) {
+            const remote = remotes[remoteName];
+            if (remote.enabled && remote.debugPaths) { return true; }
+        }
+    }
+    return false;
+}
+
+function refreshDebugPathEnabled(): void {
+    debugPathsEnabled = anyRemoteDebugPathsEnabled();
+    debugPathsLastScannedAt = Game.time;
 }
 
 function debugPathColorForCreep(creep: Creep): string | null {

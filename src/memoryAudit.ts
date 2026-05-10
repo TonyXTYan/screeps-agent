@@ -36,6 +36,7 @@ export function runFullAudit(): void {
 
 function cleanupOrphanedRoomMemory(activeRooms: Set<string>): number {
     let count = 0;
+    const orphanedRooms: string[] = [];
 
     for (const roomName in Memory.rooms) {
         if (activeRooms.has(roomName)) { continue; }
@@ -49,10 +50,14 @@ function cleanupOrphanedRoomMemory(activeRooms: Set<string>): number {
         }
 
         if (!isReferenced) {
-            delete Memory.rooms[roomName];
-            console.log(`[memoryAudit] Removed orphaned room: ${roomName}`);
-            count++;
+            orphanedRooms.push(roomName);
         }
+    }
+
+    for (const roomName of orphanedRooms) {
+        delete Memory.rooms[roomName];
+        console.log(`[memoryAudit] Removed orphaned room: ${roomName}`);
+        count++;
     }
 
     return count;
@@ -163,14 +168,16 @@ function fixOrphanedSourceReferences(activeRooms: Set<string>): number {
         if (!mem) { continue; }
 
         if (mem.assignedSourceId && !validSourceIds.has(mem.assignedSourceId)) {
+            const oldAssignedSourceId = mem.assignedSourceId;
             delete mem.assignedSourceId;
-            console.log(`[memoryAudit] Cleared orphaned assignedSourceId for ${name}: ${mem.assignedSourceId}`);
+            console.log(`[memoryAudit] Cleared orphaned assignedSourceId for ${name}: ${oldAssignedSourceId}`);
             count++;
         }
 
         if (mem.sourceId && !validSourceIds.has(mem.sourceId)) {
+            const oldSourceId = mem.sourceId;
             delete mem.sourceId;
-            console.log(`[memoryAudit] Cleared orphaned sourceId for ${name}: ${mem.sourceId}`);
+            console.log(`[memoryAudit] Cleared orphaned sourceId for ${name}: ${oldSourceId}`);
             count++;
         }
     }
@@ -246,12 +253,13 @@ function cleanupInvalidCreepMemory(activeRooms: Set<string>): number {
                 const plan = Memory.rooms[mem.homeRoom]?.plan;
                 const isClaimTarget = (plan?.claimTargets ?? []).includes(mem.remoteRoom);
                 if (!isClaimTarget) {
+                    const oldRemoteRoom = mem.remoteRoom;
                     delete mem.remoteRoom;
                     delete mem.remoteMode;
                     delete mem.sourceId;
                     delete mem.assignedSourceId;
                     delete mem.remoteStandby;
-                    console.log(`[memoryAudit] Cleared invalid remote: ${name} -> ${mem.remoteRoom}`);
+                    console.log(`[memoryAudit] Cleared invalid remote: ${name} -> ${oldRemoteRoom}`);
                     count++;
                 }
             }

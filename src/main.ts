@@ -57,7 +57,11 @@ let debugPathsEnabled = false;
 let debugPathsLastScannedAt: number | undefined;
 
 export function loop(): void {
-    refreshDebugPathEnabled();
+    if (debugPathsLastScannedAt === undefined ||
+        Game.time < debugPathsLastScannedAt ||
+        Game.time - debugPathsLastScannedAt >= DEBUG_PATH_SCAN_INTERVAL) {
+        refreshDebugPathEnabled();
+    }
     installConsoleHelpers();
     installMoveDebugHook();
     console.log('main: ✅ Current game time is: ' + Game.time + ', cpu.bucket=' + Game.cpu.bucket);
@@ -188,9 +192,6 @@ function anyRemoteDebugPathsEnabled(): boolean {
 }
 
 function refreshDebugPathEnabled(): void {
-    if (debugPathsLastScannedAt !== undefined && Game.time - debugPathsLastScannedAt < DEBUG_PATH_SCAN_INTERVAL) {
-        return;
-    }
     debugPathsEnabled = anyRemoteDebugPathsEnabled();
     debugPathsLastScannedAt = Game.time;
 }

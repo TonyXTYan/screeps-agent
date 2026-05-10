@@ -56,10 +56,10 @@ type RemoteMiningConsoleApi = {
     status: (homeRoom: string, remoteRoom?: string) => string;
 };
 
-let moveDebugPathsEnabledThisTick = false;
+let debugPathsEnabled = false;
 
 export function loop(): void {
-    moveDebugPathsEnabledThisTick = anyRemoteDebugPathsEnabled();
+    debugPathsEnabled = anyRemoteDebugPathsEnabled();
     installConsoleHelpers();
     installMoveDebugHook();
     console.log('main: ✅ Current game time is: ' + Game.time + ', cpu.bucket=' + Game.cpu.bucket);
@@ -151,6 +151,7 @@ function installConsoleHelpers(): void {
 }
 
 function installMoveDebugHook(): void {
+    if (!debugPathsEnabled) { return; }
     const proto = Creep.prototype as Creep & {
         _baseMoveTo?: (...args: any[]) => number;
     };
@@ -158,7 +159,7 @@ function installMoveDebugHook(): void {
     proto._baseMoveTo = proto.moveTo;
 
     proto.moveTo = function (this: Creep, ...args: any[]): CreepMoveReturnCode {
-        if (!moveDebugPathsEnabledThisTick) {
+        if (!debugPathsEnabled) {
             return proto._baseMoveTo!.apply(this, args as [any, any, any]) as CreepMoveReturnCode;
         }
         const color = debugPathColorForCreep(this);

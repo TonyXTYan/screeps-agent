@@ -19,6 +19,13 @@ This file tracks known follow-up work that future agents should consider before 
 - Local miners now include one standby substitute, but active source miner scaling is still mostly count-based and does not explicitly add extra active miners when per-source WORK is under target.
 - Legacy role scripts (`role.harvester.ts`, `role.builder.ts`) still `delete Memory.creeps[creep.name]` when idle. This can destroy remote-creep memory (archetype, remoteRoom, sourceId, homeRoom) if a remote creep falls through to legacy fallback and happens to be idle. Remove or add a guard.
 - Remote danger detection is visibility-driven only; unseen hostiles between scout passes can still cause delayed pauses. Additionally, only scouts write `dangerUntil` — miners and haulers that detect hostiles flee locally but never communicate back, so the home room keeps spawning replacements into danger.
+- (Fixed) Remote miner over-spawning: `projectedRemoteMinerWork` now uses full body capabilities for spawning creeps and the spawn loop caps room miners at `sourceCount` active to prevent accumulation.
+- (Fixed) Remote hauler now picks from the source container with the most energy (not just the assigned source's container), preventing haulers from ignoring productive sources.
+- (Fixed) Remote hauler now opportunistically builds road/container construction sites within range 3 while transiting (not only in the remote room with a near-full container).
+- (Fixed) Local standby miner race: `sourceSpawnDeficit` now accepts `pendingStandbyMiners` count and suppresses redundant active-miner spawns when a standby is in-flight and total coverage remains adequate. Previously, if an active miner died while the standby was spawning, an extra active miner was spawned, yielding N+2 for N sources.
+- (Fixed) Doctor WORK parts no longer inflate `workerWork` in `measureCapabilities`. Doctors have 2 WORK parts in their body plan but prioritize healing; their work capacity was counted as available for building/repairing/upgrading, reducing the worker deficit signal and causing under-supply of workers.
+- (Fixed) Remote hauler idle detection now works when the remote room is invisible. `hasIdleRemoteHauler` no longer immediately returns `false` for unviewed rooms; instead it checks for an empty-store hauler waiting at home, treating it as idle to prevent spawning duplicates before the first one departs.
+- (Fixed) Worker `workRatio` now activates at RCL 3+ (was RCL 4+), and ratio 3 at RCL 4+ with >30k construction (was RCL 6+). This gives workers more WORK parts per body at lower RCL, reducing the number of workers needed to meet demand.
 - Remote path demand can be noisy when long paths are temporarily incomplete (fallback distance is conservative by design).
 - Wall/rampart repair caps (`wallRampartRepairCap` in `role.doctor.ts`) are hardcoded; a future improvement would make them configurable via `room.memory.plan` for rooms that want custom defense budgets.
 
@@ -29,7 +36,7 @@ This file tracks known follow-up work that future agents should consider before 
 - `firstStoredResource()` exists in both `creep.jobRunner.ts` and `room.controller.ts`; consider consolidating once shared utilities exist.
 - `closest()` and `closestByRange()` in `room.controller.ts` overlap heavily.
 - `interruptReason` is written for observability but not consumed.
-- Opportunistic `remoteHauler` repair branch in `assignRemoteCreep()` (`room.controller.ts:169-176`) is dead code since remote haulers no longer have WORK parts. The fallthrough at line 178 handles routing correctly, but the dead branch should be removed.
+- Remote hauler repair/build branches in `assignRemoteCreep()` rely on the optional trailing WORK part added by `planBodyForArchetype` (only when budget allows +100 energy). These branches do nothing if the hauler spawned without the WORK part.
 - Remote room memory (plans, serialized paths, demand data) is never garbage-collected when a room is disabled. Over many enable/disable cycles, this accumulates stale memory.
 - `room.controller.ts` is 2,868 lines — a god module. Candidates for extraction: remote room logic (~400 lines), spawn planning (~250 lines), job assignment (~300 lines).
 

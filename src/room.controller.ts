@@ -1,4 +1,4 @@
-import { bodyCost, ensureArchetype, getCreepCapabilities, planBodyForArchetype } from './creep.capabilities';
+import { bodyCost, ensureArchetype, getBodyCapabilities, getCreepCapabilities, planBodyForArchetype } from './creep.capabilities';
 import { clearJob } from './creep.jobRunner';
 import { getRoomStructures, RoomStructureCache } from './room.structures';
 import { repairStructureFilter, wallRampartRepairCap } from './role.doctor';
@@ -101,6 +101,7 @@ const REMOTE_REPLACEMENT_BUFFER_TICKS = 60;
 const REMOTE_STANDBY_COUNT = 1;
 const REMOTE_STANDBY_DISPATCH_TTL = 300;
 const MAX_REMOTE_HAULER_CAPACITY_PER_SOURCE = 500;
+const MAX_REMOTE_HAULERS_PER_SOURCE = 2;
 
 export function run(room: Room): void {
     const context = buildContext(room);
@@ -166,7 +167,7 @@ export function assignRemoteCreep(creep: Creep): boolean {
     }
 
     if (archetype === 'remoteHauler' && energyUsed > 0) {
-        if (creep.room.name === remoteRoom && capabilities.repair > 0) {
+        if (capabilities.repair > 0) {
             const opportunisticRepair = closest(creep, creep.pos.findInRange(FIND_STRUCTURES, 1, {
                 filter: (s) => (s.structureType === STRUCTURE_ROAD || s.structureType === STRUCTURE_CONTAINER) && s.hits < s.hitsMax
             }) as AnyStructure[]);
@@ -175,19 +176,13 @@ export function assignRemoteCreep(creep: Creep): boolean {
                 return true;
             }
         }
-        if (creep.room.name === remoteRoom) {
-            const assignedSourceId = creep.memory.assignedSourceId ?? creep.memory.sourceId;
-            const sourceCfg = assignedSourceId ? remotePlan.sources?.[assignedSourceId] : null;
-            const container = sourceCfg?.containerId
-                ? Game.getObjectById(sourceCfg.containerId as Id<StructureContainer>)
-                : null;
-            const totalAvailable = (container?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0) + energyUsed;
-            if (totalAvailable >= CONTAINER_CAPACITY * 0.8 && shouldBuildRemoteInfrastructure(creep, archetype, remotePlan)) {
-                const remoteBuildSite = closestRemoteInfrastructureSite(creep, false);
-                if (remoteBuildSite) {
-                    setJob(creep, 'build', remoteBuildSite);
-                    return true;
-                }
+        if (capabilities.work > 0) {
+            const nearbyBuildSite = closest(creep, creep.pos.findInRange(FIND_MY_CONSTRUCTION_SITES, 3, {
+                filter: (site) => site.structureType === STRUCTURE_ROAD || site.structureType === STRUCTURE_CONTAINER
+            }));
+            if (nearbyBuildSite) {
+                setJob(creep, 'build', nearbyBuildSite);
+                return true;
             }
         }
         if (creep.room.name !== homeRoom) {
@@ -336,16 +331,10 @@ export function assignRemoteCreep(creep: Creep): boolean {
     }
 
     if (archetype === 'remoteHauler') {
-        const assignedSourceId = creep.memory.assignedSourceId ?? creep.memory.sourceId;
-        if (assignedSourceId) {
-            const sourceCfg = remotePlan.sources?.[assignedSourceId];
-            if (sourceCfg?.containerId) {
-                const sourceContainer = Game.getObjectById(sourceCfg.containerId as Id<StructureContainer>);
-                if (sourceContainer && sourceContainer.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
-                    setJob(creep, 'withdrawEnergy', sourceContainer);
-                    return true;
-                }
-            }
+        const bestContainer = bestRemoteSourceContainer(creep, remotePlan);
+        if (bestContainer) {
+            setJob(creep, 'withdrawEnergy', bestContainer);
+            return true;
         }
 
         const droppedEnergy = closest(creep, creep.room.find(FIND_DROPPED_RESOURCES, {
@@ -1357,10 +1346,10 @@ function runSpawnPlanner(context: RoomControllerContext): void {
 
 function workerWorkRatio(context: RoomControllerContext): number {
     const rcl = context.room.controller?.level ?? 0;
-    if (rcl < 4) { return 1; }
+    if (rcl < 3) { return 1; }
     const remainingWork = context.constructionSites.reduce(
         (sum, site) => sum + (site.progressTotal - site.progress), 0);
-    if (rcl >= 6 && remainingWork > 30000) { return 3; }
+    if (rcl >= 4 && remainingWork > 30000) { return 3; }
     if (remainingWork > 10000) { return 2; }
     return 1;
 }
@@ -1378,7 +1367,7 @@ function chooseSpawnRequest(context: RoomControllerContext, pending: SpawnReques
         pending.filter(r => r.archetype === 'miner' && r.sourceId).map(r => r.sourceId!)
     );
     const pendingStandbyMiners = pending.filter(r => r.archetype === 'miner' && r.minerDuty === 'standby').length;
-    const sourceDeficit = sourceSpawnDeficit(context, pendingSourceIds);
+    const sourceDeficit = sourceSpawnDeficit(context, pendingSourceIds, pendingStandbyMiners);
     if (sourceDeficit) {
         return {
             archetype: 'miner',
@@ -1467,13 +1456,15 @@ function remoteSpawnRequest(
         if (remote.mode === 'harvest' && remote.sources) {
             const numSources = Object.keys(remote.sources).length;
             const totalRoomHaulers = countRemoteHaulersForRoom(homeFleet, roomName);
+            const totalRoomMiners = countActiveRemoteMinersForRoom(homeFleet, roomName);
             for (const sourceId in remote.sources) {
                 const sourcePlan = remote.sources[sourceId];
                 const targetMinerWork = sourcePlan.workDemand ?? 3;
                 const minerCoverageHorizon = remoteSourceReplacementHorizon(context, sourcePlan, 'remoteMiner');
                 const minerProjectedWork = projectedRemoteMinerWork(homeFleet, roomName, sourceId, minerCoverageHorizon);
                 const minerCount = countRemoteMinersForSource(homeFleet, roomName, sourceId);
-                if (minerProjectedWork < targetMinerWork && minerCount < 2 && (minerCount === 0 || minerProjectedWork === 0)) {
+                if (minerProjectedWork < targetMinerWork && minerCount < 2 && (minerCount === 0 || minerProjectedWork === 0) &&
+                    totalRoomMiners <= numSources) {
                     const hasStandby = minerCount >= 1 && (
                         countRemoteStandbyMiners(homeFleet, roomName) > 0 ||
                         pending.some(r => r.archetype === 'remoteMiner' && r.remoteRoom === roomName && r.remoteStandby)
@@ -1498,6 +1489,7 @@ function remoteSpawnRequest(
                 const haulerProjectedCapacity = projectedRemoteHaulerCapacity(homeFleet, roomName, sourceId, haulerCoverageHorizon);
                 if (haulerProjectedCapacity < targetHaulerCapacity &&
                     totalRoomHaulers < 2 * numSources &&
+                    countRemoteHaulersForSource(homeFleet, roomName, sourceId) < MAX_REMOTE_HAULERS_PER_SOURCE &&
                     !hasIdleRemoteHauler(homeFleet, roomName) &&
                     !pending.some(r => r.archetype === 'remoteHauler' && r.remoteRoom === roomName && r.sourceId === sourceId)) {
                     return {
@@ -1825,7 +1817,10 @@ function projectedRemoteMinerWork(
         if ((creep.memory.assignedSourceId ?? creep.memory.sourceId) !== sourceId) { continue; }
         if (creep.memory.remoteRenewing) { continue; }
         if (!creep.spawning && (creep.ticksToLive ?? 0) <= horizonTicks) { continue; }
-        total += getCreepCapabilities(creep).harvest;
+        const caps = creep.spawning
+            ? getBodyCapabilities(creep.body.map(p => p.type))
+            : getCreepCapabilities(creep);
+        total += caps.harvest;
     }
     return total;
 }
@@ -1843,7 +1838,10 @@ function projectedRemoteHaulerCapacity(
         if ((creep.memory.assignedSourceId ?? creep.memory.sourceId) !== sourceId) { continue; }
         if (creep.memory.remoteRenewing) { continue; }
         if (!creep.spawning && (creep.ticksToLive ?? 0) <= horizonTicks) { continue; }
-        total += getCreepCapabilities(creep).haul;
+        const caps = creep.spawning
+            ? getBodyCapabilities(creep.body.map(p => p.type))
+            : getCreepCapabilities(creep);
+        total += caps.haul;
     }
     return total;
 }
@@ -1884,20 +1882,39 @@ function remoteNeedsMaintainer(remoteRoom: string): boolean {
 
 function hasIdleRemoteHauler(creeps: Creep[], remoteRoom: string): boolean {
     const room = Game.rooms[remoteRoom];
-    if (!room) { return false; }
-    const containersWithEnergy = room.find(FIND_STRUCTURES, {
-        filter: s => s.structureType === STRUCTURE_CONTAINER &&
-            (s as StructureContainer).store.getUsedCapacity(RESOURCE_ENERGY) > 0
-    });
-    if (containersWithEnergy.length > 0) { return false; }
+    if (room) {
+        const containersWithEnergy = room.find(FIND_STRUCTURES, {
+            filter: s => s.structureType === STRUCTURE_CONTAINER &&
+                (s as StructureContainer).store.getUsedCapacity(RESOURCE_ENERGY) > 0
+        });
+        if (containersWithEnergy.length > 0) { return false; }
+    }
     for (const creep of creeps) {
         if (ensureArchetype(creep) !== 'remoteHauler') { continue; }
         if (creep.memory.remoteRoom !== remoteRoom) { continue; }
         if (creep.store.getUsedCapacity() > 0) { continue; }
-        if (creep.room.name !== remoteRoom) { continue; }
-        return true;
+        if (room && creep.room.name === remoteRoom) { return true; }
+        if (!room && creep.room.name === creep.memory.homeRoom && !creep.spawning) { return true; }
     }
     return false;
+}
+
+function bestRemoteSourceContainer(creep: Creep, remotePlan: RemoteRoomPlan): StructureContainer | null {
+    if (!remotePlan.sources) { return null; }
+    let best: StructureContainer | null = null;
+    let bestEnergy = 0;
+    for (const sourceId in remotePlan.sources) {
+        const cfg = remotePlan.sources[sourceId];
+        if (!cfg.containerId) { continue; }
+        const container = Game.getObjectById(cfg.containerId as Id<StructureContainer>);
+        if (!container) { continue; }
+        const energy = container.store.getUsedCapacity(RESOURCE_ENERGY);
+        if (energy > bestEnergy) {
+            best = container;
+            bestEnergy = energy;
+        }
+    }
+    return best;
 }
 
 function measureCapabilities(creeps: Creep[]): {
@@ -1934,6 +1951,7 @@ function measureCapabilities(creeps: Creep[]): {
         else if (archetype === 'remoteMiner') { remoteMinerWork += capabilities.harvest; }
         else if (archetype === 'remoteHauler') { remoteHaulerCapacity += capabilities.haul; }
         else if (archetype === 'remoteMaintainer' || archetype === 'remoteScout') { /* tracked separately */ }
+        else if (archetype === 'doctor' || archetype === 'claimer') { /* tracked separately */ }
         else { workerWork += capabilities.work; }
 
         heal += capabilities.heal;
@@ -2455,11 +2473,21 @@ function sourceWorkDemand(source: Source): number {
     return Math.ceil(source.energyCapacity / ENERGY_REGEN_TIME / HARVEST_POWER);
 }
 
-function sourceSpawnDeficit(context: RoomControllerContext, pendingSourceIds: Set<string> = new Set()): SourcePlan | null {
+function sourceSpawnDeficit(context: RoomControllerContext, pendingSourceIds: Set<string> = new Set(), pendingStandbyMiners: number = 0): SourcePlan | null {
     for (const plan of context.sourcePlans) {
         if (pendingSourceIds.has(plan.source.id)) { continue; }
         const assignedMiners = assignedSourceMinerCount(context.creeps, plan.source.id);
-        if (assignedMiners === 0) { return plan; }
+        if (assignedMiners === 0) {
+            if (pendingStandbyMiners > 0) {
+                const totalCovered = context.sourcePlans.filter(p =>
+                    assignedSourceMinerCount(context.creeps, p.source.id) > 0 || pendingSourceIds.has(p.source.id)
+                ).length;
+                if (totalCovered + pendingStandbyMiners >= context.sourcePlans.length) {
+                    continue;
+                }
+            }
+            return plan;
+        }
     }
     return null;
 }

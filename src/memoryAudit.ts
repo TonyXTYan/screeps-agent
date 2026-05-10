@@ -1,4 +1,5 @@
 import { BUILD_COMMIT } from './env';
+import { ensureArchetype } from './creep.capabilities';
 
 export function runIfBuildChanged(): void {
     const lastCommit = (Memory as { lastBuildCommit?: string }).lastBuildCommit;
@@ -121,6 +122,8 @@ function fixDuplicateSourceAssignments(activeRooms: Set<string>): number {
             const creep = Game.creeps[name];
             if (creep.spawning) { continue; }
             if (creep.memory.remoteStandby) { continue; }
+            const archetype = ensureArchetype(creep);
+            if (archetype !== 'miner' && archetype !== 'remoteMiner') { continue; }
             const sid = creep.memory.assignedSourceId ?? creep.memory.sourceId;
             if (!sid || creep.memory.homeRoom !== roomName) { continue; }
 

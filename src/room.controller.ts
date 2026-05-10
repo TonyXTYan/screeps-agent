@@ -175,6 +175,15 @@ export function assignRemoteCreep(creep: Creep): boolean {
                 return true;
             }
         }
+        if (creep.room.name === remoteRoom) {
+            const remoteBuildSite = shouldBuildRemoteInfrastructure(creep, archetype, remotePlan)
+                ? closestRemoteInfrastructureSite(creep, false)
+                : null;
+            if (remoteBuildSite) {
+                setJob(creep, 'build', remoteBuildSite);
+                return true;
+            }
+        }
         if (creep.room.name !== homeRoom) {
             setTravelJob(creep, homeRoom);
             return true;

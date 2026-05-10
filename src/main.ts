@@ -55,10 +55,13 @@ type RemoteMiningOptions = {
 
 let debugPathsEnabled = false;
 let debugPathsLastScannedAt: number | undefined;
+let moveDebugHookInstalled = false;
 
 export function loop(): void {
+    if (debugPathsLastScannedAt !== undefined && Game.time < debugPathsLastScannedAt) {
+        debugPathsLastScannedAt = undefined;
+    }
     if (debugPathsLastScannedAt === undefined ||
-        Game.time < debugPathsLastScannedAt ||
         Game.time - debugPathsLastScannedAt >= DEBUG_PATH_SCAN_INTERVAL) {
         refreshDebugPathEnabled();
     }
@@ -153,17 +156,22 @@ function installConsoleHelpers(): void {
 }
 
 function installMoveDebugHook(): void {
-    const proto = Creep.prototype as Creep & {
-        _baseMoveTo?: (...args: any[]) => number;
-    };
     if (!debugPathsEnabled) {
+        if (!moveDebugHookInstalled) { return; }
+        const proto = Creep.prototype as Creep & {
+            _baseMoveTo?: (...args: any[]) => number;
+        };
         if (proto._baseMoveTo) {
             proto.moveTo = proto._baseMoveTo as Creep['moveTo'];
             delete proto._baseMoveTo;
         }
+        moveDebugHookInstalled = false;
         return;
     }
-    if (proto._baseMoveTo) { return; }
+    if (moveDebugHookInstalled) { return; }
+    const proto = Creep.prototype as Creep & {
+        _baseMoveTo?: (...args: any[]) => number;
+    };
     proto._baseMoveTo = proto.moveTo;
 
     proto.moveTo = function (this: Creep, ...args: any[]): CreepMoveReturnCode {
@@ -177,6 +185,7 @@ function installMoveDebugHook(): void {
         patchedArgs[optsIndex] = mergeRolePathStyle(patchedArgs[optsIndex] as MoveToOpts | undefined, color);
         return proto._baseMoveTo!.apply(this, patchedArgs as [any, any, any]) as CreepMoveReturnCode;
     } as Creep['moveTo'];
+    moveDebugHookInstalled = true;
 }
 
 function anyRemoteDebugPathsEnabled(): boolean {

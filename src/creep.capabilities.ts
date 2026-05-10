@@ -156,7 +156,12 @@ export function planBodyForArchetype(
         while (body.length + 3 <= 50 && bodyCost(body) + 150 <= energyBudget) {
             body.push(CARRY, CARRY, MOVE);
         }
-        if (body.length > 0) { return body; }
+        if (body.length > 0) {
+            if (bodyCost(body) + 100 <= energyBudget && body.length + 1 <= 50) {
+                body.push(WORK);
+            }
+            return body;
+        }
         return selectLargestWithinBudget([[CARRY, MOVE]], energyBudget);
     }
 

@@ -38,8 +38,28 @@ const ROLE_PATH_COLORS: { [role: string]: string } = {
     manual: '#f97316',
     defender: '#ef4444'
 };
+type RemoteMiningConsoleApi = {
+    activate: (homeRoom: string, remoteRoom: string, options?: {
+        reserve?: boolean;
+        buildRoads?: boolean;
+        maintainRoads?: boolean;
+        debugPaths?: boolean;
+    }) => string;
+    configure: (homeRoom: string, remoteRoom: string, options?: {
+        reserve?: boolean;
+        buildRoads?: boolean;
+        maintainRoads?: boolean;
+        debugPaths?: boolean;
+    }) => string;
+    pause: (homeRoom: string, remoteRoom: string, ticks?: number) => string;
+    disable: (homeRoom: string, remoteRoom: string) => string;
+    status: (homeRoom: string, remoteRoom?: string) => string;
+};
+
+let moveDebugPathsEnabledThisTick = false;
 
 export function loop(): void {
+    moveDebugPathsEnabledThisTick = anyRemoteDebugPathsEnabled();
     installConsoleHelpers();
     installMoveDebugHook();
     console.log('main: ✅ Current game time is: ' + Game.time + ', cpu.bucket=' + Game.cpu.bucket);
@@ -79,25 +99,9 @@ export function loop(): void {
     }
 }
 
-declare const globalThis: {
-    remoteMining?: {
-        activate: (homeRoom: string, remoteRoom: string, options?: {
-            reserve?: boolean;
-            buildRoads?: boolean;
-            maintainRoads?: boolean;
-            debugPaths?: boolean;
-        }) => string;
-        configure: (homeRoom: string, remoteRoom: string, options?: {
-            reserve?: boolean;
-            buildRoads?: boolean;
-            maintainRoads?: boolean;
-            debugPaths?: boolean;
-        }) => string;
-        pause: (homeRoom: string, remoteRoom: string, ticks?: number) => string;
-        disable: (homeRoom: string, remoteRoom: string) => string;
-        status: (homeRoom: string, remoteRoom?: string) => string;
-    };
-};
+declare global {
+    var remoteMining: RemoteMiningConsoleApi | undefined;
+}
 
 function installConsoleHelpers(): void {
     if (globalThis.remoteMining) { return; }
@@ -154,6 +158,9 @@ function installMoveDebugHook(): void {
     proto._baseMoveTo = proto.moveTo;
 
     proto.moveTo = function (this: Creep, ...args: any[]): CreepMoveReturnCode {
+        if (!moveDebugPathsEnabledThisTick) {
+            return proto._baseMoveTo!.apply(this, args as [any, any, any]) as CreepMoveReturnCode;
+        }
         const color = debugPathColorForCreep(this);
         if (!color) {
             return proto._baseMoveTo!.apply(this, args as [any, any, any]) as CreepMoveReturnCode;
@@ -164,6 +171,18 @@ function installMoveDebugHook(): void {
         patchedArgs[optsIndex] = mergeRolePathStyle(patchedArgs[optsIndex] as MoveToOpts | undefined, color);
         return proto._baseMoveTo!.apply(this, patchedArgs as [any, any, any]) as CreepMoveReturnCode;
     } as Creep['moveTo'];
+}
+
+function anyRemoteDebugPathsEnabled(): boolean {
+    for (const roomName in Memory.rooms) {
+        const remotes = Memory.rooms[roomName]?.plan?.remoteRooms;
+        if (!remotes) { continue; }
+        for (const remoteName in remotes) {
+            const remote = remotes[remoteName];
+            if (remote.enabled && remote.debugPaths) { return true; }
+        }
+    }
+    return false;
 }
 
 function debugPathColorForCreep(creep: Creep): string | null {

@@ -1,7 +1,7 @@
 import { isHostile } from './hostileUtils';
 
-const DEFENDER_RENEW_THRESHOLD = 800;
-const DEFENDER_PARK_RANGE = 5;
+const DEFENDER_RENEW_REQUEST = 800;
+const DEFENDER_RENEW_FULL = 1000;
 
 export function run(creep: Creep): void {
     const hostiles = creep.room.find(FIND_HOSTILE_CREEPS, {
@@ -36,14 +36,18 @@ export function run(creep: Creep): void {
         if (!rally) { return; }
 
         const ttl = creep.ticksToLive ?? 0;
-        if (ttl > 0 && ttl < DEFENDER_RENEW_THRESHOLD) {
+        const needsRenew = ttl > 0 && ttl < DEFENDER_RENEW_FULL && (ttl < DEFENDER_RENEW_REQUEST || creep.pos.isNearTo(rally));
+        if (needsRenew) {
             if (creep.pos.isNearTo(rally)) {
-                rally.renewCreep(creep);
+                const code = rally.renewCreep(creep);
+                if (code !== OK) {
+                    creep.moveTo(rally, { range: 10, visualizePathStyle: { stroke: '#ffaa00' } });
+                }
             } else {
                 creep.moveTo(rally, { range: 1, visualizePathStyle: { stroke: '#ffaa00' } });
             }
-        } else {
-            creep.moveTo(rally, { range: DEFENDER_PARK_RANGE, visualizePathStyle: { stroke: '#ffaa00' } });
+        } else if (creep.pos.getRangeTo(rally) < 10) {
+            creep.moveTo(rally, { range: 10, visualizePathStyle: { stroke: '#ffaa00' } });
         }
     }
 }

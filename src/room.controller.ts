@@ -1034,6 +1034,10 @@ function assignJob(context: RoomControllerContext, creep: Creep, reservations: J
             creep.store.getFreeCapacity(RESOURCE_ENERGY) > 0 &&
             hasEnergyToGather(context)) {
             // Not full and there's ambient energy — fall through to gather more
+        } else if ((archetype === 'hauler' || archetype === 'remoteHauler') &&
+            creep.store.getFreeCapacity() > 0 &&
+            context.droppedResources.length > 0) {
+            // Hauler has free space and there are dropped resources — pick them up first
         } else {
             assignEnergySpendingJob(context, creep, archetype, capabilities, reservations);
             return;
@@ -1041,17 +1045,17 @@ function assignJob(context: RoomControllerContext, creep: Creep, reservations: J
     }
 
     if (capabilities.haul > 0) {
-        const salvage = salvageWithdrawalTarget(context, creep, reservations);
-        if (salvage) {
-            reserveResourceTarget(reservations, salvage.target.id, Math.min(creep.store.getFreeCapacity(), salvage.amount));
-            setResourceJob(creep, 'withdrawResource', salvage.target, salvage.resource);
-            return;
-        }
-
         const dropped = droppedResourceTarget(context, creep, reservations);
         if (dropped) {
             reserveDroppedTarget(reservations, dropped.id, Math.min(creep.store.getFreeCapacity(), dropped.amount));
             setResourceJob(creep, 'pickupResource', dropped, dropped.resourceType);
+            return;
+        }
+
+        const salvage = salvageWithdrawalTarget(context, creep, reservations);
+        if (salvage) {
+            reserveResourceTarget(reservations, salvage.target.id, Math.min(creep.store.getFreeCapacity(), salvage.amount));
+            setResourceJob(creep, 'withdrawResource', salvage.target, salvage.resource);
             return;
         }
 
@@ -1916,9 +1920,23 @@ function hasIdleRemoteHauler(creeps: Creep[], remoteRoom: string): boolean {
 
 function bestRemoteSourceContainer(creep: Creep, remotePlan: RemoteRoomPlan): StructureContainer | null {
     if (!remotePlan.sources) { return null; }
+
+    const assignedSourceId = creep.memory.assignedSourceId ?? creep.memory.sourceId;
+
+    if (assignedSourceId) {
+        const cfg = remotePlan.sources[assignedSourceId];
+        if (cfg?.containerId) {
+            const container = Game.getObjectById(cfg.containerId as Id<StructureContainer>);
+            if (container && container.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
+                return container;
+            }
+        }
+    }
+
     let best: StructureContainer | null = null;
     let bestEnergy = 0;
     for (const sourceId in remotePlan.sources) {
+        if (sourceId === assignedSourceId) { continue; }
         const cfg = remotePlan.sources[sourceId];
         if (!cfg.containerId) { continue; }
         const container = Game.getObjectById(cfg.containerId as Id<StructureContainer>);

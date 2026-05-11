@@ -30,15 +30,22 @@ Output:
 
 ```
 [REMOTE] W8N9 (home: W7N9):
-  remoteMiner      John          ttl= 450  W8N9     mining      en=50/100  src=59cba123
-  remoteHauler     Alice         ttl= 380  W7N9     traveling   en=0/250   src=59cba123
+  remoteMiner      John          ttl= 450  W8N9     mining      en=50/100  src=59cba123 stn=[41,18] cont W5C1M2
+  remoteHauler     Alice         ttl= 380  W7N9     traveling   en=0/250   src=59cba123                       W0C8M4
   ...
   --- Allocation ---
   src=4adbfc69  miners=10 (36W)  haulers=1 (600C)  demand=5W/500C  dist=90
   src=4adbfc6b  miners=2 (5W)  haulers=1 (1000C)  demand=5W/500C  dist=68
+  --- Source Details ---
+  src=4adbfc69  pos=[42,18]  energy=2500/3000  regen=30
+    container=xyz789ab at [41,18]  energy=1200/2000  hp=45000/50000
+    miner=John  W=15  TTL=450  mining  pos=[41,18]
+  src=4adbfc6b  station=[35,22]  (not visible)
+    container=ghi123cd  (not visible)
+    miner=Bob  W=12  TTL=300  traveling  pos=[?,?]
 ```
 
-Columns: `archetype  name  ttl  currentRoom  status  energy  sourceId`
+Columns: `archetype  name  ttl  currentRoom  status  energy  sourceId  [stn=[x,y]]  [target]  body`
 
 Status values:
 - `mining` — at remote room with assigned source
@@ -50,7 +57,20 @@ Status values:
 - `standby` — waiting in home room as backup
 - `renewing` — being healed at home spawn
 
-Allocation block shows per-source breakdown: miner/hauler counts, WORK/CARRY parts, demand targets, and path distance.
+Additional columns beyond the basic fields:
+
+| Column | Source | Example | Description |
+|--------|--------|---------|-------------|
+| `stn=[x,y]` | `creep.memory.stationX/Y` | `stn=[41,18]` | Station position the creep should be at (remoteMiners) |
+| **target** | `creep.memory.stationaryTargetId` | `cont`, `src` | Abbreviated type of the structure/object the creep is targeting |
+| **body** | `creep.getActiveBodyparts()` | `W5C1M2` | Live body parts (work/carry/move) |
+
+**Allocation** block shows per-source breakdown: miner/hauler counts, WORK/CARRY parts, demand targets, and path distance.
+
+**Source Details** block shows per-source live state (room visible) or plan data (room not visible):
+- **Source row**: source ID (last 8 chars), position, energy/regen ticks, or `station=[x,y] (not visible)` when the room is not in `Game.rooms`
+- **Container row** (indented, present only when `containerId` exists in plan): container ID (last 8 chars), position, stored energy, HP; or `(not visible)` when the room isn't visible and the container can't be resolved
+- **Miner row** (indented, one per assigned remoteMiner): name, WORK parts, TTL, status (`mining`/`traveling`/`renewing`/`standby`), position
 
 ### `debug.dumpHome(homeRoom)`
 

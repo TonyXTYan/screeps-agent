@@ -61,6 +61,27 @@ Body planning lives in `planBodyForArchetype()` in `creep.capabilities.ts`. Lega
 **Gate**: If any local spawn request is pending (not enough energy), remote requests are skipped
 entirely. This prevents remote expansion from starving the home economy.
 
+## Gathering Priority
+
+When an empty (or partially-loaded) creep decides what to collect:
+
+```
+For haulers/workers with free capacity:
+  1. Pick up dropped resources       (any type, any amount — decays fastest)
+  2. Salvage tombstones / ruins      (non-decaying or slow-decaying)
+  3. Withdraw from containers / links / storage / terminal
+
+For haulers carrying energy but with free capacity & available drops:
+  → Continue gathering dropped resources (skip spending phase)
+
+Exclusive for workers (fallback if nothing above):
+  4. Harvest from source
+```
+
+Dropped resources are prioritized above all other sources because they decay
+at `ceil(amount / 1000)` per tick. Tombstones last 5M ticks, ruins last 500,
+containers/storage are permanent — only floor drops are time-critical.
+
 ## Energy Spending Priority
 
 When a creep has energy and needs a spending job:

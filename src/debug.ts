@@ -22,6 +22,20 @@ const STRUCT_LABEL: Record<string, string> = {
     [STRUCTURE_FACTORY]: 'fact',
 };
 
+function remoteTargetLabel(creep: Creep): string {
+    const targetId = creep.memory.stationaryTargetId;
+    if (!targetId) { return ''; }
+    const target = Game.getObjectById(targetId as Id<any>);
+    if (!target) { return ''; }
+    if ('structureType' in (target as any)) {
+        return STRUCT_LABEL[(target as any).structureType] ?? (target as any).structureType;
+    }
+    if (target instanceof Source) {
+        return 'src';
+    }
+    return '';
+}
+
 function targetLabel(creep: Creep): string {
     const targetId = creep.memory.jobTargetId;
     if (!targetId) { return ''; }
@@ -94,9 +108,23 @@ function printRemoteCreepStatus(filterHome?: string, filterRemote?: string): voi
                     status = 'traveling';
                 }
 
+                const body = `W${creep.getActiveBodyparts(WORK)}C${creep.getActiveBodyparts(CARRY)}M${creep.getActiveBodyparts(MOVE)}`;
+                const tgt = remoteTargetLabel(creep);
+                const stn = creep.memory.stationX !== undefined
+                    ? ` stn=[${creep.memory.stationX},${creep.memory.stationY}]`
+                    : '';
+                const job = creep.memory.jobType ? ` job=${creep.memory.jobType}` : '';
+                const jtgt = creep.memory.jobTargetId ? ` tgt=${creep.memory.jobTargetId.slice(-8)}` : '';
+
                 lines.push(
                     `${archetype.padEnd(16)} ${name.padEnd(14)} ttl=${String(ttl).padStart(4)}  ` +
-                    `${curRoom.padEnd(8)} ${status.padEnd(11)} en=${storeInfo.padEnd(7)} src=${src}`
+                    `${curRoom.padEnd(8)} ${status.padEnd(11)} en=${storeInfo.padEnd(7)}` +
+                    ` src=${src}` +
+                    stn +
+                    (tgt ? ` ${tgt}` : '') +
+                    ` ${body}` +
+                    job +
+                    jtgt
                 );
             }
 
@@ -158,6 +186,73 @@ function printRemoteCreepStatus(filterHome?: string, filterRemote?: string): voi
                 console.log(`  --- Allocation ---`);
                 for (const s of sourceSummary) {
                     console.log(s);
+                }
+            }
+
+            const sourceLines: string[] = [];
+            for (const [sourceId, sourcePlan] of Object.entries(plan.sources ?? {})) {
+                const shortId = sourceId.slice(-8);
+
+                const source = Game.getObjectById(sourceId as Id<Source>);
+                if (source) {
+                    sourceLines.push(
+                        `  src=${shortId}  pos=[${source.pos.x},${source.pos.y}]` +
+                        `  energy=${source.energy}/${source.energyCapacity}` +
+                        `  regen=${source.ticksToRegeneration ?? 0}`
+                    );
+                } else {
+                    const pos = sourcePlan.stationX !== undefined
+                        ? `${sourcePlan.stationX},${sourcePlan.stationY}`
+                        : '?';
+                    sourceLines.push(`  src=${shortId}  station=[${pos}]  (not visible)`);
+                }
+
+                if (sourcePlan.containerId) {
+                    const container = Game.getObjectById(sourcePlan.containerId as Id<StructureContainer>);
+                    if (container) {
+                        const energy = container.store.getUsedCapacity(RESOURCE_ENERGY);
+                        const cap = container.store.getCapacity(RESOURCE_ENERGY);
+                        sourceLines.push(
+                            `    container=${sourcePlan.containerId.slice(-8)} at [${container.pos.x},${container.pos.y}]` +
+                            `  energy=${energy}/${cap}  hp=${container.hits}/${container.hitsMax}`
+                        );
+                    } else {
+                        sourceLines.push(`    container=${sourcePlan.containerId.slice(-8)}  (not visible)`);
+                    }
+                }
+
+                for (const name in Game.creeps) {
+                    const creep = Game.creeps[name];
+                    if (creep.spawning) { continue; }
+                    if (creep.memory.homeRoom !== room.name) { continue; }
+                    if (creep.memory.remoteRoom !== remoteName) { continue; }
+                    const src = creep.memory.assignedSourceId ?? creep.memory.sourceId ?? '';
+                    if (src !== sourceId) { continue; }
+                    if (ensureArchetype(creep) !== 'remoteMiner') { continue; }
+
+                    const ttl = creep.ticksToLive ?? -1;
+                    const work = creep.getActiveBodyparts(WORK);
+
+                    let status: string;
+                    if (creep.memory.remoteRenewing) {
+                        status = 'renewing';
+                    } else if (creep.memory.remoteStandby) {
+                        status = 'standby';
+                    } else if (creep.room?.name === remoteName) {
+                        status = 'mining';
+                    } else {
+                        status = 'traveling';
+                    }
+
+                    const creepPos = creep.room ? `${creep.pos.x},${creep.pos.y}` : '?,?';
+                    sourceLines.push(`    miner=${name}  W=${work}  TTL=${ttl}  ${status}  pos=[${creepPos}]`);
+                }
+            }
+
+            if (sourceLines.length > 0) {
+                console.log(`  --- Source Details ---`);
+                for (const line of sourceLines) {
+                    console.log(line);
                 }
             }
         }

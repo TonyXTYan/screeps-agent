@@ -11,6 +11,7 @@ import * as roomController from './room.controller';
 import * as towerBasics from './tower.basics';
 import * as memoryAudit from './memoryAudit';
 import * as debug from './debug';
+import { findHostiles, isHostile } from './hostileUtils';
 
 const DOCTOR_EMERGENCY_HITS_RATIO = 0.35;
 const DOCTOR_THREAT_RADIUS = 4;
@@ -255,7 +256,7 @@ function mergeRolePathStyle(opts: MoveToOpts | undefined, color: string): MoveTo
 }
 
 function fleeFromHostiles(creep: Creep): boolean {
-    const hostiles = armedHostilesInRoom(creep.room);
+    const hostiles = findHostiles(creep.room);
     if (hostiles.length === 0) { return false; }
     const nearbyHostile = hostiles.find(h => creep.pos.getRangeTo(h) <= 5);
     if (!nearbyHostile) { return false; }
@@ -299,22 +300,14 @@ function emergencyHealTarget(creep: Creep): Creep | null {
     const emergency = injured.filter((target) =>
         target.hits / Math.max(1, target.hitsMax) <= DOCTOR_EMERGENCY_HITS_RATIO ||
         target.pos.findInRange(FIND_HOSTILE_CREEPS, DOCTOR_THREAT_RADIUS, {
-            filter: isArmedHostile
+            filter: isHostile
         }).length > 0);
     if (emergency.length === 0) { return null; }
 
     return mostCriticalCreep(creep, emergency);
 }
 
-function armedHostilesInRoom(room: Room): Creep[] {
-    return room.find(FIND_HOSTILE_CREEPS, {
-        filter: isArmedHostile
-    });
-}
 
-function isArmedHostile(creep: Creep): boolean {
-    return creep.getActiveBodyparts(ATTACK) > 0 || creep.getActiveBodyparts(RANGED_ATTACK) > 0;
-}
 
 function emergencyHealWhileRetreating(creep: Creep): void {
     if (creep.getActiveBodyparts(HEAL) <= 0) { return; }

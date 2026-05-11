@@ -2,6 +2,7 @@ import { bodyCost, ensureArchetype, getBodyCapabilities, getCreepCapabilities, p
 import { clearJob } from './creep.jobRunner';
 import { getRoomStructures, RoomStructureCache } from './room.structures';
 import { repairStructureFilter, wallRampartRepairCap } from './role.doctor';
+import { findHostiles, isHostile } from './hostileUtils';
 
 interface RoomControllerContext {
     room: Room;
@@ -205,7 +206,7 @@ export function assignRemoteCreep(creep: Creep): boolean {
             return assignOverflowRemoteScout(creep, homeRoom, remoteRoom);
         }
 
-        if (armedHostilesInRoom(creep.room).length > 0 && creep.room.name !== homeRoom) {
+        if (findHostiles(creep.room).length > 0 && creep.room.name !== homeRoom) {
             setTravelJob(creep, homeRoom);
             return true;
         }
@@ -466,7 +467,7 @@ function updateRemoteRoomPlans(homeRoom: Room): void {
         if (!visible) { continue; }
 
         remote.lastScouted = Game.time;
-        const hostiles = armedHostilesInRoom(visible);
+        const hostiles = findHostiles(visible);
         const hostileCore = visible.find(FIND_STRUCTURES, {
             filter: s => s.structureType === STRUCTURE_INVADER_CORE
         });
@@ -1714,7 +1715,7 @@ function assignOverflowRemoteScout(
     homeRoomName: string,
     wanderFallbackRoom: string = homeRoomName
 ): boolean {
-    const hostiles = armedHostilesInRoom(creep.room);
+    const hostiles = findHostiles(creep.room);
     if (hostiles.length > 0) {
         setTravelJob(creep, homeRoomName);
         return true;
@@ -3064,18 +3065,8 @@ function isEmergencyHealTarget(target: Creep): boolean {
         return true;
     }
     return target.pos.findInRange(FIND_HOSTILE_CREEPS, DOCTOR_THREAT_RADIUS, {
-        filter: isArmedHostile
+        filter: isHostile
     }).length > 0;
-}
-
-function armedHostilesInRoom(room: Room): Creep[] {
-    return room.find(FIND_HOSTILE_CREEPS, {
-        filter: isArmedHostile
-    });
-}
-
-function isArmedHostile(creep: Creep): boolean {
-    return creep.getActiveBodyparts(ATTACK) > 0 || creep.getActiveBodyparts(RANGED_ATTACK) > 0;
 }
 
 function closestByRange<T extends RoomObject>(origin: RoomObject, targets: T[]): T | null {

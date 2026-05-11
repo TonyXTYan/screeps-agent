@@ -82,7 +82,7 @@ function cleanupStaleRemotePlans(activeRooms: Set<string>): number {
 
             if (remote.skipReason && Game.rooms[remoteName]) {
                 const hostiles = Game.rooms[remoteName].find(FIND_HOSTILE_CREEPS, {
-                    filter: (c: Creep) => c.getActiveBodyparts(ATTACK) > 0 || c.getActiveBodyparts(RANGED_ATTACK) > 0
+                    filter: (c: Creep) => c.body.some(p => p.type === ATTACK) || c.body.some(p => p.type === RANGED_ATTACK) || c.body.some(p => p.type === HEAL)
                 });
                 if (hostiles.length === 0) {
                     remote.skipReason = undefined;

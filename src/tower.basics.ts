@@ -1,4 +1,5 @@
 import { repairStructureFilter } from './role.doctor';
+import { isHostile } from './hostileUtils';
 
 export function run(room: Room): void {
     const towers = room.find(FIND_STRUCTURES, {
@@ -9,7 +10,7 @@ export function run(room: Room): void {
 
     const rcl = room.controller?.level ?? 0;
     const armedHostiles = room.find(FIND_HOSTILE_CREEPS, {
-        filter: isArmedHostile
+        filter: isHostile
     });
 
     // Pre-compute repair candidates sorted by hits ascending, then distribute across towers
@@ -70,7 +71,7 @@ export function run(room: Room): void {
 }
 
 export function tryFillTowerUnderSiege(creep: Creep): boolean {
-    if (creep.room.find(FIND_HOSTILE_CREEPS, { filter: isArmedHostile }).length === 0) { return false; }
+    if (creep.room.find(FIND_HOSTILE_CREEPS, { filter: isHostile }).length === 0) { return false; }
     if (creep.store.getUsedCapacity(RESOURCE_ENERGY) === 0) { return false; }
 
     const tower = creep.pos.findClosestByRange(FIND_MY_STRUCTURES, {
@@ -90,6 +91,4 @@ export function tryFillTowerUnderSiege(creep: Creep): boolean {
     return transferCode === OK;
 }
 
-function isArmedHostile(creep: Creep): boolean {
-    return creep.getActiveBodyparts(ATTACK) > 0 || creep.getActiveBodyparts(RANGED_ATTACK) > 0;
-}
+

@@ -1,8 +1,11 @@
-import * as creepHarvest from './creep.harvest';
+import { isHostile } from './hostileUtils';
+
+const DEFENDER_RENEW_THRESHOLD = 800;
+const DEFENDER_PARK_RANGE = 5;
 
 export function run(creep: Creep): void {
     const hostiles = creep.room.find(FIND_HOSTILE_CREEPS, {
-        filter: isArmedHostile
+        filter: isHostile
     });
 
     if (creep.memory.attacking && hostiles.length === 0) {
@@ -21,10 +24,6 @@ export function run(creep: Creep): void {
             creep.moveTo(target, { reusePath: 5, visualizePathStyle: { stroke: '#ff0000' } });
         }
     } else {
-        if (creep.getActiveBodyparts(WORK) > 0 && creep.getActiveBodyparts(CARRY) > 0) {
-            creepHarvest.run(creep);
-            return;
-        }
         let rally = creep.memory.rallySpawnId ? Game.getObjectById<StructureSpawn>(creep.memory.rallySpawnId) : null;
         if (!rally || rally.room.name !== creep.room.name) {
             rally = creep.room.find(FIND_MY_SPAWNS)[0] ?? null;
@@ -34,12 +33,19 @@ export function run(creep: Creep): void {
                 creep.memory.rallySpawnId = undefined;
             }
         }
-        if (rally) {
-            creep.moveTo(rally, { reusePath: 20, visualizePathStyle: { stroke: '#ffaa00' } });
+        if (!rally) { return; }
+
+        const ttl = creep.ticksToLive ?? 0;
+        if (ttl > 0 && ttl < DEFENDER_RENEW_THRESHOLD) {
+            if (creep.pos.isNearTo(rally)) {
+                rally.renewCreep(creep);
+            } else {
+                creep.moveTo(rally, { range: 1, visualizePathStyle: { stroke: '#ffaa00' } });
+            }
+        } else {
+            creep.moveTo(rally, { range: DEFENDER_PARK_RANGE, visualizePathStyle: { stroke: '#ffaa00' } });
         }
     }
 }
 
-function isArmedHostile(creep: Creep): boolean {
-    return creep.getActiveBodyparts(ATTACK) > 0 || creep.getActiveBodyparts(RANGED_ATTACK) > 0;
-}
+

@@ -1,5 +1,6 @@
 import * as creepRoleBalance from './creep.roleBalance';
 import { bodyCost } from './creep.capabilities';
+import { isHostile } from './hostileUtils';
 
 const DEFENDER_SPAWN_ATTEMPT_INTERVAL = 5;
 
@@ -8,7 +9,7 @@ export function checkDefenders(room: Room): void {
     if (!spawn) { return; }
 
     const hostiles = room.find(FIND_HOSTILE_CREEPS, {
-        filter: isArmedHostile
+        filter: isHostile
     });
     if (hostiles.length === 0) { return; }
 
@@ -40,6 +41,4 @@ export function checkDefenders(room: Room): void {
     console.log('creep.populationControl: Spawning new defender: ' + newName + ', returned: ' + o);
 }
 
-function isArmedHostile(creep: Creep): boolean {
-    return creep.getActiveBodyparts(ATTACK) > 0 || creep.getActiveBodyparts(RANGED_ATTACK) > 0;
-}
+

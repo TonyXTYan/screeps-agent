@@ -132,9 +132,9 @@ Current high-level order:
 1. Scout (if sources are unknown or stale).
 2. Claimer (if reserve/claim is needed).
 3. Miner per source (based on WORK deficit).
-4. Standby miner (one per remote room, idle at home, dispatches when active miner TTL < 300).
-5. Hauler per source (capped at 2 per source, capacity demand capped at 500 per source).
-6. Maintainer (if roads/containers need building or repair).
+4. Hauler per source (capped at 2 per source, capacity demand capped at 500 per source).
+5. Maintainer (if roads/containers need building or repair).
+6. Standby miner (one per remote room, idle at home, dispatches when active miner TTL < 300).
 
 Body planning happens in `planBodyForArchetype()`.
 
@@ -204,7 +204,7 @@ Remote behavior is opt-in through `room.memory.plan.remoteRooms` or `room.memory
 
 - unknown-source remotes request `remoteScout` first
 - known-source remotes request `remoteMiner` and `remoteHauler` from source-level deficits (capped at 2 haulers per source)
-- reserve/claim requests use `claimer` and enforce 2 `CLAIM` parts for claim mode
+- reserve/claim requests use `claimer`; reserve mode enforces 2 `CLAIM` parts and claim mode allows 1
 - maintenance requests spawn `remoteMaintainer` when roads/containers need work
 - one `remoteStandby` miner per remote room
 

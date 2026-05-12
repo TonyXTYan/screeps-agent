@@ -96,6 +96,7 @@ export function inferArchetype(creep: Creep): CreepArchetype {
     if (capabilities.work > 0 && creep.memory.role === 'doctor') { return 'doctor'; }
     if (capabilities.work > 0 && capabilities.carry > 0) { return 'worker'; }
     if (capabilities.carry > 0) { return 'hauler'; }
+    if (creep.memory.role === 'defender') { return 'defender'; }
     return 'worker';
 }
 

@@ -88,6 +88,34 @@ This project uses `.ai/` for agent-readable project context that doesn't belong 
 
 **Documentation truth:** `.ai/api-reference/` and `.ai/guides/` are convenience snapshots. When in doubt, check the official online Screeps docs at `https://docs.screeps.com/api/` and `https://docs.screeps.com/` as the source of truth.
 
+## screepsconsole
+
+`screeps_console/` is a git submodule cloned from https://github.com/screepers/screeps_console. It provides a terminal UI for interacting with the Screeps server programmatically — agents in Maestri can use it instead of the OCR-based portal.
+
+**Python environment:** An isolated venv lives at `screeps_console/.venv/` (created with `uv`, never touches system Python or conda). To recreate it from scratch:
+
+```bash
+uv venv screeps_console/.venv
+# relaxed installs — requirements.txt pins old versions that no longer resolve
+uv pip install --python /path/to/screeps-agent/screeps_console/.venv colorama nose PyYAML requests screepsapi six urwid websocket-client
+# setuptools<70 required — 70+ dropped pkg_resources as a top-level module
+uv pip install --python /path/to/screeps-agent/screeps_console/.venv "setuptools<70"
+uv pip install --python /path/to/screeps-agent/screeps_console/.venv -e screeps_console/
+```
+
+**Invoking screepsconsole** (interactive terminal only — no --help flag):
+
+```bash
+# activate venv, then run from project root (Python adds the script's dir to sys.path automatically)
+source screeps_console/.venv/bin/activate
+python screeps_console/screeps_console/interactive.py
+
+# or one-liner without activating:
+screeps_console/.venv/bin/python screeps_console/screeps_console/interactive.py
+```
+
+Config is saved to `~/.screepsconsole.yaml` on first run (credentials stored there).
+
 ## Memory Index
 
 Quick reference for persistent project knowledge:

@@ -21,6 +21,7 @@ type CreepArchetype =
     'hauler' |
     'doctor' |
     'claimer' |
+    'defender' |
     'remoteMiner' |
     'remoteHauler' |
     'remoteMaintainer' |

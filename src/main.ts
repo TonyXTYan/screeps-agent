@@ -71,7 +71,7 @@ export function loop(): void {
     installConsoleHelpers();
     debug.installDebugHelpers();
     installMoveDebugHook();
-    console.log('main: ✅ Current game time is: ' + Game.time + ', cpu.bucket=' + Game.cpu.bucket);
+    console.log('main: ✅ .time=' + Game.time + ', cpu.bucket=' + Game.cpu.bucket);
     if (Game.cpu.bucket >= 10000) {
         Game.cpu.generatePixel();
     }

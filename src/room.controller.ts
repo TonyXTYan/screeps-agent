@@ -194,16 +194,6 @@ export function assignRemoteCreep(creep: Creep): boolean {
         return true;
     }
 
-    if (archetype === 'remoteHauler' && creep.room.name === homeRoom) {
-        const structs = getRoomStructures(creep.room);
-        const linkTarget = closest(creep, [...structs.links.controller, ...structs.links.hub, ...structs.links.sink, ...structs.links.source]
-            .filter(l => l.store.getUsedCapacity(RESOURCE_ENERGY) > 0));
-        if (linkTarget) {
-            setJob(creep, 'withdrawEnergy', linkTarget);
-            return true;
-        }
-    }
-
     if (archetype === 'remoteScout') {
         const scoutPack = remoteScoutPack(homeRoom, remoteRoom);
         const scoutRank = scoutPack.indexOf(creep.name);
@@ -855,7 +845,7 @@ function rememberLoad(context: RoomControllerContext): void {
         minerWork: capacities.minerWork,
         minerWorkDemand: totalSourcePlanWorkDemand(context.sourcePlans),
         haulerCapacity: capacities.haulerCapacity,
-        haulerCapacityDemand: desiredHaulerCapacity(context),
+        haulerCapacityDemand: desiredHaulerCapacity(context).demand,
         workerWork: capacities.workerWork,
         workerWorkDemand: desiredWorkerWork(context),
         spawnEnergyDeficit,
@@ -1094,6 +1084,15 @@ function assignJob(context: RoomControllerContext, creep: Creep, reservations: J
             return;
         }
 
+        if (archetype === 'hauler' &&
+            context.structures.storage &&
+            context.structures.storage.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
+            if (refillSpawnTarget(context, creep, reservations) || refillTowerTarget(context, creep, reservations)) {
+                setJob(creep, 'withdrawEnergy', context.structures.storage);
+                return;
+            }
+        }
+
         const withdrawalTarget = energyWithdrawalTarget(context, creep, archetype);
         if (withdrawalTarget) {
             setJob(creep, 'withdrawEnergy', withdrawalTarget);
@@ -1165,16 +1164,6 @@ function assignEnergySpendingJob(
         }
     }
 
-    if (reservations.upgraderWork === 0 &&
-        capabilities.upgrade > 0 &&
-        context.room.controller &&
-        shouldReserveUpgrade(context, reservations)) {
-        reservations.upgraderWork += capabilities.upgrade;
-        rememberPrimaryJob(creep, 'upgrade', context.room.controller);
-        setJob(creep, 'upgrade', context.room.controller);
-        return;
-    }
-
     if (Object.keys(reservations.constructionProgress).length === 0 && capabilities.build > 0 && context.constructionSites.length > 0) {
         const guaranteedSite = bestConstructionSite(creep, context.constructionSites, reservations, capabilities.build);
         if (guaranteedSite) {
@@ -1183,6 +1172,16 @@ function assignEnergySpendingJob(
             setJob(creep, 'build', guaranteedSite);
             return;
         }
+    }
+
+    if (reservations.upgraderWork === 0 &&
+        capabilities.upgrade > 0 &&
+        context.room.controller &&
+        shouldReserveUpgrade(context, reservations)) {
+        reservations.upgraderWork += capabilities.upgrade;
+        rememberPrimaryJob(creep, 'upgrade', context.room.controller);
+        setJob(creep, 'upgrade', context.room.controller);
+        return;
     }
 
     if (capabilities.upgrade > 0 && context.room.controller && shouldReserveUpgrade(context, reservations)) {
@@ -1407,10 +1406,10 @@ function workerWorkRatio(context: RoomControllerContext): number {
 
 function chooseSpawnRequest(context: RoomControllerContext, pending: SpawnRequest[] = []): SpawnRequest | null {
     const capacities = measureCapabilities(context.creeps);
-    const haulerCapacityDemand = desiredHaulerCapacity(context);
+    const { demand: haulerCapacityDemand, maxCount: maxHaulerCount } = desiredHaulerCapacity(context);
     const workerWorkDemand = desiredWorkerWork(context);
 
-    if (context.creeps.length === 0) {
+    if (context.creeps.length === 0 && !pending.some(r => r.archetype === 'worker')) {
         return { archetype: 'worker', reason: 'emergency recovery' };
     }
 
@@ -1449,12 +1448,20 @@ function chooseSpawnRequest(context: RoomControllerContext, pending: SpawnReques
         return { archetype: 'hauler', reason: 'min hauler count 2' };
     }
 
-    if (capacities.haulerCapacity < haulerCapacityDemand && !pending.some(r => r.archetype === 'hauler')) {
-        return { archetype: 'hauler', reason: 'haul deficit ' + capacities.haulerCapacity + '/' + haulerCapacityDemand };
+    const haulerCountWithPending = haulerCount + pending.filter(r => r.archetype === 'hauler').length;
+    if (capacities.haulerCapacity < haulerCapacityDemand &&
+        haulerCountWithPending < maxHaulerCount &&
+        !pending.some(r => r.archetype === 'hauler')) {
+        return { archetype: 'hauler', reason: 'haul deficit ' + capacities.haulerCapacity + '/' + haulerCapacityDemand + ' ' + haulerCountWithPending + '/' + maxHaulerCount };
     }
 
     if (capacities.workerWork < workerWorkDemand && !pending.some(r => r.archetype === 'worker')) {
-        return { archetype: 'worker', reason: 'worker deficit ' + capacities.workerWork + '/' + workerWorkDemand, workRatio: workerWorkRatio(context) };
+        const rcl = context.room.controller?.level ?? 0;
+        const maxWorkerCount = [0, 2, 2, 2, 3, 4, 4, 4, 4][Math.min(rcl, 8)] || 4;
+        const workerCreeps = context.creeps.filter(c => ensureArchetype(c) === 'worker' && !c.spawning).length;
+        if (workerCreeps < maxWorkerCount) {
+            return { archetype: 'worker', reason: 'worker deficit ' + capacities.workerWork + '/' + workerWorkDemand + ' ' + workerCreeps + '/' + maxWorkerCount, workRatio: workerWorkRatio(context) };
+        }
     }
 
     if (mineralReadyToMine(context) && context.mineralPlan &&
@@ -2064,7 +2071,7 @@ function measureCapabilities(creeps: Creep[]): {
         else if (archetype === 'remoteMiner') { remoteMinerWork += capabilities.harvest; }
         else if (archetype === 'remoteHauler') { remoteHaulerCapacity += capabilities.haul; }
         else if (archetype === 'remoteMaintainer' || archetype === 'remoteScout') { /* tracked separately */ }
-        else if (archetype === 'doctor' || archetype === 'claimer') { /* tracked separately */ }
+        else if (archetype === 'doctor' || archetype === 'claimer' || archetype === 'defender') { /* tracked separately */ }
         else { workerWork += capabilities.work; }
 
         heal += capabilities.heal;
@@ -2083,15 +2090,15 @@ function measureCapabilities(creeps: Creep[]): {
     };
 }
 
-function desiredHaulerCapacity(context: RoomControllerContext): number {
+function desiredHaulerCapacity(context: RoomControllerContext): { demand: number; maxCount: number } {
     const base = context.structures.storage ? 600 : 300;
     const rclBonus = (context.room.controller?.level ?? 0) >= 7 ? 300 : 0;
     const salvageBonus = context.tombstones.length > 0 || context.ruins.length > 0 || context.droppedResources.length > 10 ? 300 : 0;
     const rawDemand = context.sources.length * base + rclBonus + salvageBonus;
 
     const maxCarryPerHauler = 2 * Math.floor(context.room.energyCapacityAvailable / 150) * CARRY_CAPACITY;
-    const maxHaulerCreeps = Math.max(2, Math.ceil(rawDemand / Math.max(1, maxCarryPerHauler)) + 1);
-    return Math.min(rawDemand, maxCarryPerHauler * maxHaulerCreeps);
+    const maxCount = Math.max(2, Math.ceil(rawDemand / Math.max(1, maxCarryPerHauler)) + 1);
+    return { demand: Math.min(rawDemand, maxCarryPerHauler * maxCount), maxCount };
 }
 
 function desiredWorkerWork(context: RoomControllerContext): number {

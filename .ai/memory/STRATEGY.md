@@ -46,7 +46,10 @@ Local energy economy is the foundation.
 - When an active local miner is near death, the standby miner swaps in on that source and the low-TTL miner rotates to standby/renew duty.
 - Remote rooms mirror this: `sources + 1` miners per remote room, with one `remoteStandby` miner idle at the home spawn, dispatched to replace a dying active miner when its TTL drops below 300.
 - Link-backed miners may keep carry capacity so they can fill nearby links.
-- Haulers move energy from containers, links, dropped resources, ruins, and tombstones into storage, spawn/extensions, towers, and other sinks.
+- Haulers operate in two modes depending on current demand:
+  - **Refill mode** (priority): when spawns/extensions or towers need energy and storage has it, withdraw from storage and deliver directly to those structures.
+  - **Haul mode** (steady-state): withdraw from source containers, source links, and demand links; deposit to storage.
+  - Dropped resources, tombstones, and ruins are opportunistically collected in either mode.
 - Remote haulers use pure CARRY+MOVE bodies (no WORK) to maximize carry capacity, minimizing the number of creeps needed per source.
 - Hauler capacity demand per remote source is capped at 500, and at most 2 remote haulers are spawned per source regardless of distance.
 - Workers build, repair, and upgrade from stored energy before falling back to direct harvesting.

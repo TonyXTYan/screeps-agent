@@ -42,14 +42,14 @@ Use this as the first stop before editing code.
 - Body capability derivation — `src/creep.capabilities.ts`
 - Body planning by archetype — `src/creep.capabilities.ts`
 - Remote hauler capacity cap (per source) — `src/room.controller.ts`
-- Hauling, refill, build, repair, upgrade assignment — `src/room.controller.ts`
+- Hauling, refill, build, repair, upgrade assignment — `src/room.controller.ts`; haulers use storage as the withdrawal source when refill targets are pending (gathering phase of `assignJob`), containers/links otherwise
 - Job execution for those assignments — `src/creep.jobRunner.ts`
 
 ## Types And Memory
 
 - Creep, room, spawn memory extensions — `src/types.d.ts`
 - Job type union — `src/types.d.ts`
-- Archetype union (worker, miner, hauler, doctor, claimer, remoteMiner, remoteHauler, remoteMaintainer, remoteScout, mineralMiner) — `src/types.d.ts`
+- Archetype union (worker, miner, hauler, doctor, claimer, defender, remoteMiner, remoteHauler, remoteMaintainer, remoteScout, mineralMiner) — `src/types.d.ts`
 - Room plan and load memory — `src/types.d.ts`
 - Runtime Memory writes for structures/load/plans — `src/room.controller.ts`, `src/room.structures.ts`
 

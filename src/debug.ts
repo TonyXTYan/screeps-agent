@@ -115,16 +115,20 @@ function printRemoteCreepStatus(filterHome?: string, filterRemote?: string): voi
                     : '';
                 const job = creep.memory.jobType ? ` job=${creep.memory.jobType}` : '';
                 const jtgt = creep.memory.jobTargetId ? ` tgt=${creep.memory.jobTargetId.slice(-8)}` : '';
+                const pos = ` pos=[${creep.pos.x},${creep.pos.y}]`;
+                const result = creep.memory.lastJobResult !== undefined ? ` res=${creep.memory.lastJobResult}` : '';
 
                 lines.push(
                     `${archetype.padEnd(16)} ${name.padEnd(14)} ttl=${String(ttl).padStart(4)}  ` +
                     `${curRoom.padEnd(8)} ${status.padEnd(11)} en=${storeInfo.padEnd(7)}` +
                     ` src=${src}` +
+                    pos +
                     stn +
                     (tgt ? ` ${tgt}` : '') +
                     ` ${body}` +
                     job +
-                    jtgt
+                    jtgt +
+                    result
                 );
             }
 
@@ -255,11 +259,63 @@ function printRemoteCreepStatus(filterHome?: string, filterRemote?: string): voi
                     console.log(line);
                 }
             }
+
+            const droppedLines: string[] = [];
+            const remoteRoomObj = Game.rooms[remoteName];
+            if (remoteRoomObj) {
+                const droppedResources = remoteRoomObj.find(FIND_DROPPED_RESOURCES);
+                for (const resource of droppedResources) {
+                    droppedLines.push(
+                        `  dropped=${resource.resourceType}` +
+                        `  amount=${resource.amount}` +
+                        `  pos=[${resource.pos.x},${resource.pos.y}]`
+                    );
+                }
+            }
+
+            if (droppedLines.length > 0) {
+                console.log(`  --- Dropped Resources ---`);
+                for (const line of droppedLines) {
+                    console.log(line);
+                }
+            }
         }
     }
 }
 
+function printMineralStatus(room: Room): void {
+    const mineral = room.find(FIND_MINERALS)[0];
+    if (!mineral) { return; }
+
+    const extractor = room.find(FIND_MY_STRUCTURES).find((s) => s.structureType === STRUCTURE_EXTRACTOR) as StructureExtractor | undefined;
+    const containers = room.find(FIND_STRUCTURES).filter((s) => s.structureType === STRUCTURE_CONTAINER) as StructureContainer[];
+    const adjacentContainers = containers.filter((c) => c.pos.getRangeTo(mineral) <= 1);
+
+    let containerStr = 'none adjacent';
+    if (adjacentContainers.length > 0) {
+        const c = adjacentContainers[0];
+        const energy = c.store.getUsedCapacity(RESOURCE_ENERGY);
+        const cap = c.store.getCapacity();
+        containerStr = `${c.id.slice(-8)} at [${c.pos.x},${c.pos.y}] energy=${energy}/${cap}`;
+    } else if (containers.length > 0) {
+        const nearby = containers.filter((c) => c.pos.getRangeTo(mineral) <= 3);
+        if (nearby.length > 0) {
+            const c = nearby[0];
+            const range = c.pos.getRangeTo(mineral);
+            containerStr = `${c.id.slice(-8)} at range ${range} (too far)`;
+        }
+    }
+
+    console.log(`[MINERAL] ${mineral.id.slice(-8)} at [${mineral.pos.x},${mineral.pos.y}]  ` +
+        `amount=${mineral.mineralAmount}  type=${mineral.mineralType}  ` +
+        `extractor=${extractor ? 'yes' : 'no'}  ` +
+        `container=${containerStr}`);
+}
+
 function printHomeCreepStatus(homeRoom: string): void {
+    const room = Game.rooms[homeRoom];
+    if (room) { printMineralStatus(room); }
+
     const archetypes: string[] = [];
     const counts: Record<string, number> = {};
     const lines: string[] = [];

@@ -1,4 +1,9 @@
 export function run(creep: Creep): boolean {
+    if (honorTrafficYieldRequest(creep)) {
+        creep.memory.lastJobResult = OK;
+        return true;
+    }
+
     const jobType = creep.memory.jobType;
     if (!jobType) { return false; }
 
@@ -40,6 +45,7 @@ export function run(creep: Creep): boolean {
 
 const MOVE_STUCK_REPATH_TICKS = 2;
 const MOVE_STUCK_RESET_PATH_TICKS = 4;
+const TRAFFIC_YIELD_TTL = 2;
 
 export function clearJob(creep: Creep): void {
     creep.memory.jobType = undefined;
@@ -86,7 +92,7 @@ function withdrawEnergy(creep: Creep): number {
 
     const code = creep.withdraw(target, RESOURCE_ENERGY);
     if (code === ERR_NOT_IN_RANGE) {
-        moveToJobTarget(creep, target, '#875641');
+        moveToWithdrawTarget(creep, target, '#875641');
     }
     return code;
 }
@@ -217,7 +223,8 @@ function mineMineral(creep: Creep): number {
     const station = stationaryTarget(creep);
     if (station && !atStation(creep, station)) {
         const isPositionTarget = station instanceof RoomPosition;
-        moveToJobTarget(creep, station, '#41a7a7', { range: isPositionTarget ? 0 : 1 });
+        const isContainerTarget = station instanceof StructureContainer;
+        moveToJobTarget(creep, station, '#41a7a7', { range: (isPositionTarget || isContainerTarget) ? 0 : 1 });
         return ERR_NOT_IN_RANGE;
     }
 
@@ -285,6 +292,9 @@ function travelRoom(creep: Creep): number {
     const stuckTicks = creep.memory.travelStuckTicks ?? 0;
     const needsDynamicTraffic = stuckTicks >= MOVE_STUCK_REPATH_TICKS;
     const needsPathReset = stuckTicks >= MOVE_STUCK_RESET_PATH_TICKS;
+    if (stuckTicks >= MOVE_STUCK_REPATH_TICKS) {
+        requestTrafficYieldForPath(creep, new RoomPosition(25, 25, roomName), 1);
+    }
 
     if (stuckTicks >= 2) {
         const nudged = nudgeFromRoomEdge(creep);
@@ -609,6 +619,199 @@ function nudgeFromRoomEdge(creep: Creep): boolean {
     return false;
 }
 
+function honorTrafficYieldRequest(creep: Creep): boolean {
+    const until = creep.memory.trafficYieldUntil;
+    const roomName = creep.memory.trafficYieldRoom;
+    const x = creep.memory.trafficYieldX;
+    const y = creep.memory.trafficYieldY;
+    if (until == null || roomName == null || x == null || y == null) {
+        clearTrafficYieldRequest(creep);
+        return false;
+    }
+    if (until < Game.time) {
+        clearTrafficYieldRequest(creep);
+        return false;
+    }
+    if (creep.room.name !== roomName || creep.fatigue > 0) { return false; }
+
+    const target = new RoomPosition(x, y, roomName);
+    if (creep.pos.isEqualTo(target)) {
+        clearTrafficYieldRequest(creep);
+        return false;
+    }
+
+    const code = creep.moveTo(target, {
+        range: 0,
+        reusePath: 0,
+        ignoreCreeps: false
+    });
+    if (code !== ERR_NO_PATH) { return true; }
+
+    clearTrafficYieldRequest(creep);
+    return false;
+}
+
+function clearTrafficYieldRequest(creep: Creep): void {
+    creep.memory.trafficYieldX = undefined;
+    creep.memory.trafficYieldY = undefined;
+    creep.memory.trafficYieldRoom = undefined;
+    creep.memory.trafficYieldUntil = undefined;
+}
+
+function requestTrafficYieldForPath(creep: Creep, targetPos: RoomPosition, targetRange: number): boolean {
+    if (creep.fatigue > 0) { return false; }
+    if (creep.room.name !== targetPos.roomName) { return false; }
+
+    const nextStep = nextStepTowards(creep, targetPos, targetRange);
+    if (!nextStep || nextStep.getRangeTo(creep.pos) > 1) { return false; }
+
+    const blockers = nextStep.lookFor(LOOK_CREEPS).filter((other) => other.my && other.id !== creep.id);
+    let yielded = false;
+    for (const blocker of blockers) {
+        if (!shouldYieldForTraffic(blocker, creep)) { continue; }
+        if (!assignYieldPosition(blocker, creep, targetPos)) { continue; }
+        yielded = true;
+    }
+    return yielded;
+}
+
+function nextStepTowards(creep: Creep, targetPos: RoomPosition, targetRange: number): RoomPosition | null {
+    const route = PathFinder.search(creep.pos, { pos: targetPos, range: Math.max(0, targetRange) }, {
+        maxRooms: 1
+    });
+    if (route.path.length === 0) { return null; }
+    return route.path[0];
+}
+
+function shouldYieldForTraffic(blocker: Creep, requester: Creep): boolean {
+    if (!blocker.my || blocker.spawning) { return false; }
+    if (blocker.fatigue > 0 || blocker.getActiveBodyparts(MOVE) <= 0) { return false; }
+    if (isStationaryMinerOnContainer(blocker)) { return false; }
+    return trafficPriority(blocker) <= trafficPriority(requester);
+}
+
+function isStationaryMinerOnContainer(creep: Creep): boolean {
+    if (!creep.memory.staticMining) { return false; }
+    const archetype = creep.memory.archetype;
+    if (archetype !== 'miner' && archetype !== 'remoteMiner') { return false; }
+    const stationId = creep.memory.stationaryTargetId;
+    if (!stationId) { return false; }
+    const station = Game.getObjectById(stationId as Id<any>);
+    if (!(station instanceof StructureContainer)) { return false; }
+    return creep.pos.isEqualTo(station.pos);
+}
+
+function trafficPriority(creep: Creep): number {
+    const archetype = creep.memory.archetype;
+    const job = creep.memory.jobType;
+    if (archetype === 'defender' || job === 'heal') { return 100; }
+    if (archetype === 'remoteHauler' || archetype === 'hauler') { return 80; }
+    if (job === 'travelRoom') { return 60; }
+    if (job === 'idle') { return 10; }
+    return 40;
+}
+
+function assignYieldPosition(blocker: Creep, requester: Creep, requesterTarget: RoomPosition): boolean {
+    const room = Game.rooms[blocker.room.name];
+    if (!room) { return false; }
+    const terrain = room.getTerrain();
+
+    let best: RoomPosition | null = null;
+    let bestScore = -Infinity;
+    for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+            if (dx === 0 && dy === 0) { continue; }
+            const x = blocker.pos.x + dx;
+            const y = blocker.pos.y + dy;
+            if (x <= 0 || x >= 49 || y <= 0 || y >= 49) { continue; }
+            if (terrain.get(x, y) === TERRAIN_MASK_WALL) { continue; }
+
+            const candidate = new RoomPosition(x, y, blocker.room.name);
+            if (candidate.isEqualTo(requester.pos)) { continue; }
+            if (candidate.lookFor(LOOK_CREEPS).some((other) => other.id !== blocker.id && other.id !== requester.id)) { continue; }
+            const blocked = candidate.lookFor(LOOK_STRUCTURES).some((structure) =>
+                structure.structureType !== STRUCTURE_ROAD &&
+                structure.structureType !== STRUCTURE_CONTAINER &&
+                structure.structureType !== STRUCTURE_RAMPART);
+            if (blocked) { continue; }
+
+            const score = candidate.getRangeTo(requesterTarget) - candidate.getRangeTo(requester.pos) * 0.5;
+            if (!best || score > bestScore) {
+                best = candidate;
+                bestScore = score;
+            }
+        }
+    }
+
+    if (!best) { return false; }
+    blocker.memory.trafficYieldX = best.x;
+    blocker.memory.trafficYieldY = best.y;
+    blocker.memory.trafficYieldRoom = best.roomName;
+    blocker.memory.trafficYieldUntil = Game.time + TRAFFIC_YIELD_TTL;
+    return true;
+}
+
+function moveToWithdrawTarget(
+    creep: Creep,
+    target: StructureContainer | StructureStorage | StructureTerminal | StructureLink,
+    stroke: string
+): number {
+    if (creep.memory.archetype === 'remoteHauler' && target.structureType === STRUCTURE_CONTAINER) {
+        const access = containerAccessPosition(creep, target as StructureContainer);
+        if (access) {
+            return moveToJobTarget(creep, access, stroke, { range: 0 });
+        }
+    }
+
+    return moveToJobTarget(creep, target, stroke);
+}
+
+function containerAccessPosition(creep: Creep, container: StructureContainer): RoomPosition | null {
+    const room = Game.rooms[container.pos.roomName];
+    if (!room) { return null; }
+
+    const terrain = room.getTerrain();
+    const candidates: RoomPosition[] = [];
+    for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+            if (dx === 0 && dy === 0) { continue; }
+            const x = container.pos.x + dx;
+            const y = container.pos.y + dy;
+            if (x <= 0 || x >= 49 || y <= 0 || y >= 49) { continue; }
+            if (terrain.get(x, y) === TERRAIN_MASK_WALL) { continue; }
+            const pos = new RoomPosition(x, y, container.pos.roomName);
+            if (pos.lookFor(LOOK_SOURCES).length > 0) { continue; }
+            if (pos.lookFor(LOOK_MINERALS).length > 0) { continue; }
+            if (pos.lookFor(LOOK_CREEPS).some(other => other.id !== creep.id)) { continue; }
+            const blocked = pos.lookFor(LOOK_STRUCTURES).some((structure) =>
+                structure.structureType !== STRUCTURE_ROAD &&
+                structure.structureType !== STRUCTURE_CONTAINER &&
+                structure.structureType !== STRUCTURE_RAMPART);
+            if (blocked) { continue; }
+            candidates.push(pos);
+        }
+    }
+
+    if (candidates.length === 0) { return null; }
+    const byPath = creep.pos.findClosestByPath(candidates, { ignoreCreeps: false }) as RoomPosition | null;
+    return byPath ?? closestPositionByRange(creep.pos, candidates);
+}
+
+function closestPositionByRange(origin: RoomPosition, positions: RoomPosition[]): RoomPosition | null {
+    if (positions.length === 0) { return null; }
+
+    let best = positions[0];
+    let bestRange = origin.getRangeTo(best);
+    for (const pos of positions) {
+        const range = origin.getRangeTo(pos);
+        if (range < bestRange) {
+            best = pos;
+            bestRange = range;
+        }
+    }
+    return best;
+}
+
 function moveToJobTarget(
     creep: Creep,
     target: RoomPosition | { pos: RoomPosition },
@@ -619,6 +822,12 @@ function moveToJobTarget(
     const stuckTicks = creep.memory.travelStuckTicks ?? 0;
     const needsDynamicTraffic = stuckTicks >= MOVE_STUCK_REPATH_TICKS;
     const needsPathReset = stuckTicks >= MOVE_STUCK_RESET_PATH_TICKS;
+    const targetPos = target instanceof RoomPosition ? target : target.pos;
+    const targetRange = extra.range ?? 1;
+
+    if (stuckTicks >= MOVE_STUCK_REPATH_TICKS) {
+        requestTrafficYieldForPath(creep, targetPos, targetRange);
+    }
 
     const moveOpts: MoveToOpts = {
         ...extra,
@@ -639,9 +848,6 @@ function moveToJobTarget(
     });
     if (code === ERR_NO_PATH || (needsPathReset && creep.fatigue === 0)) {
         if (!nudgeFromRoomEdge(creep) && needsPathReset) {
-            const targetPos = target instanceof RoomPosition
-                ? target
-                : ('pos' in target ? target.pos : null);
             if (targetPos && creep.room.name === targetPos.roomName) {
                 const pfResult = PathFinder.search(creep.pos, { pos: targetPos, range: 1 }, { maxRooms: 1 });
                 if (pfResult.path.length > 0 && pfResult.path[0].getRangeTo(creep.pos) <= 1) {

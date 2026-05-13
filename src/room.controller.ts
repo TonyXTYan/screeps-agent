@@ -25,7 +25,6 @@ interface SpawnRequest {
     archetype: CreepArchetype;
     reason: string;
     sourceId?: string;
-    minerDuty?: 'active' | 'standby';
     mineralId?: string;
     stationaryTargetId?: string;
     staticMining?: boolean;
@@ -92,8 +91,6 @@ const REMOTE_SCOUT_CROWD_THRESHOLD = 4;
 const REMOTE_PLANNING_LOG_INTERVAL = 100;
 const DOCTOR_EMERGENCY_HITS_RATIO = 0.35;
 const DOCTOR_THREAT_RADIUS = 4;
-const MINER_STANDBY_COUNT = 1;
-const MINER_SWAP_TTL_THRESHOLD = 180;
 const REMOTE_AUX_BUILD_RANGE = 8;
 const REMOTE_RENEW_MIN_TTL = 220;
 const REMOTE_RENEW_BUFFER_TICKS = 80;
@@ -110,7 +107,6 @@ export function run(room: Room): void {
     initialiseRoomPlan(room);
     updateRemoteRoomPlans(room);
     rememberRcl(room);
-    manageMinerStandby(context);
     updatePlanAssignments(context);
     rememberLoad(context);
     rememberPlans(context);
@@ -484,7 +480,11 @@ function updateRemoteRoomPlans(homeRoom: Room): void {
             remote.skipReason = 'danger';
             continue;
         }
+        const hadAutoDanger = remote.skipReason === 'danger';
         remote.skipReason = undefined;
+        if (hadAutoDanger) {
+            remote.dangerUntil = undefined;
+        }
 
         if (!remote.sources) { remote.sources = {}; }
         let roadsPlaced = 0;
@@ -900,95 +900,6 @@ function isDedicatedRemoteCreep(creep: Creep, homeRoomName: string): boolean {
     return creep.memory.homeRoom === homeRoomName && Boolean(creep.memory.remoteRoom);
 }
 
-function manageMinerStandby(context: RoomControllerContext): void {
-    const miners = context.creeps.filter((creep) => ensureArchetype(creep) === 'miner');
-    if (miners.length === 0) { return; }
-
-    for (const miner of miners) {
-        if (miner.memory.minerDuty !== 'standby') {
-            miner.memory.minerDuty = 'active';
-        }
-    }
-
-    if (context.sourcePlans.length === 0 || miners.length <= context.sourcePlans.length) {
-        for (const miner of miners) {
-            miner.memory.minerDuty = 'active';
-        }
-        return;
-    }
-
-    const anchor = context.structures.spawns[0];
-    let standby = miners.find((creep) => isStandbyMiner(creep)) ?? null;
-    if (!standby || standby.spawning) {
-        standby = chooseStandbyMiner(miners, anchor);
-    }
-    if (!standby) { return; }
-
-    for (const miner of miners) {
-        miner.memory.minerDuty = miner.id === standby.id ? 'standby' : 'active';
-    }
-
-    const retiring = activeMinerNearDeath(miners, standby);
-    if (!retiring) { return; }
-    if (!standby.ticksToLive || !retiring.ticksToLive || standby.ticksToLive <= retiring.ticksToLive) { return; }
-
-    const retiringSourceId = retiring.memory.assignedSourceId ?? retiring.memory.sourceId;
-    if (!retiringSourceId) { return; }
-
-    retiring.memory.minerDuty = 'standby';
-    retiring.memory.sourceId = undefined;
-    retiring.memory.assignedSourceId = undefined;
-    clearStaticMiningMemory(retiring);
-
-    standby.memory.minerDuty = 'active';
-    standby.memory.sourceId = retiringSourceId;
-    standby.memory.assignedSourceId = retiringSourceId;
-    const sourcePlan = context.sourcePlans.find((plan) => plan.source.id === retiringSourceId);
-    if (sourcePlan) {
-        setStaticHarvestMemory(standby, sourcePlan);
-    } else {
-        clearStaticMiningMemory(standby);
-    }
-}
-
-function chooseStandbyMiner(miners: Creep[], anchor: StructureSpawn | undefined): Creep | null {
-    const candidates = miners.filter((creep) => !creep.spawning);
-    if (candidates.length === 0) { return null; }
-
-    const unassigned = candidates.filter((creep) => !(creep.memory.assignedSourceId ?? creep.memory.sourceId));
-    const pool = unassigned.length > 0 ? unassigned : candidates;
-
-    let best = pool[0];
-    let bestTtl = best.ticksToLive ?? 0;
-    let bestRange = anchor ? best.pos.getRangeTo(anchor) : 0;
-    for (const candidate of pool) {
-        const ttl = candidate.ticksToLive ?? 0;
-        const range = anchor ? candidate.pos.getRangeTo(anchor) : 0;
-        if (ttl > bestTtl || (ttl === bestTtl && range < bestRange)) {
-            best = candidate;
-            bestTtl = ttl;
-            bestRange = range;
-        }
-    }
-    return best;
-}
-
-function activeMinerNearDeath(miners: Creep[], standby: Creep): Creep | null {
-    let retiring: Creep | null = null;
-    let lowestTtl = Infinity;
-    for (const miner of miners) {
-        if (miner.id === standby.id) { continue; }
-        if (miner.spawning || isStandbyMiner(miner)) { continue; }
-        const ttl = miner.ticksToLive ?? 0;
-        if (ttl > MINER_SWAP_TTL_THRESHOLD) { continue; }
-        if (!(miner.memory.assignedSourceId ?? miner.memory.sourceId)) { continue; }
-        if (ttl < lowestTtl) {
-            retiring = miner;
-            lowestTtl = ttl;
-        }
-    }
-    return retiring;
-}
 
 function assignJob(context: RoomControllerContext, creep: Creep, reservations: JobReservations): void {
     const capabilities = getCreepCapabilities(creep);
@@ -1003,14 +914,6 @@ function assignJob(context: RoomControllerContext, creep: Creep, reservations: J
             setResourceJob(creep, 'depositResource', resourceSink, firstStoredResource(creep.store));
             return;
         }
-    }
-
-    if (archetype === 'miner' && isStandbyMiner(creep)) {
-        creep.memory.sourceId = undefined;
-        creep.memory.assignedSourceId = undefined;
-        clearStaticMiningMemory(creep);
-        setJob(creep, 'idle', context.structures.storage ?? context.room.controller ?? context.structures.spawns[0]);
-        return;
     }
 
     if ((archetype === 'miner' || archetype === 'remoteMiner') && capabilities.harvest > 0) {
@@ -1248,7 +1151,6 @@ function runSpawnPlanner(context: RoomControllerContext): void {
         pending.push({
             archetype: memory.archetype,
             sourceId: memory.sourceId ?? memory.assignedSourceId,
-            minerDuty: memory.minerDuty,
             remoteRoom: memory.remoteRoom,
             remoteStandby: memory.remoteStandby,
             reason: 'currently spawning'
@@ -1300,7 +1202,6 @@ function runSpawnPlanner(context: RoomControllerContext): void {
                                 role: aRole,
                                 sourceId: request.sourceId,
                                 assignedSourceId: request.sourceId,
-                                minerDuty: request.minerDuty,
                                 assignedMineralId: request.mineralId,
                                 stationaryTargetId: request.stationaryTargetId,
                                 staticMining: request.staticMining,
@@ -1345,7 +1246,6 @@ function runSpawnPlanner(context: RoomControllerContext): void {
                         role,
                         sourceId: request.sourceId,
                         assignedSourceId: request.sourceId,
-                        minerDuty: request.minerDuty,
                         assignedMineralId: request.mineralId,
                         stationaryTargetId: request.stationaryTargetId,
                         staticMining: request.staticMining,
@@ -1393,24 +1293,14 @@ function chooseSpawnRequest(context: RoomControllerContext, pending: SpawnReques
     const pendingSourceIds = new Set(
         pending.filter(r => r.archetype === 'miner' && r.sourceId).map(r => r.sourceId!)
     );
-    const pendingStandbyMiners = pending.filter(r => r.archetype === 'miner' && r.minerDuty === 'standby').length;
-    const sourceDeficit = sourceSpawnDeficit(context, pendingSourceIds, pendingStandbyMiners);
+    const sourceDeficit = sourceSpawnDeficit(context, pendingSourceIds);
     if (sourceDeficit) {
         return {
             archetype: 'miner',
             reason: 'source harvest deficit ' + sourceDeficit.source.id,
             sourceId: sourceDeficit.source.id,
-            minerDuty: 'active',
             stationaryTargetId: stationaryTargetIdForSource(sourceDeficit),
             staticMining: sourceDeficit.staticMining
-        };
-    }
-
-    if (standbyMinerDeficit(context, pendingStandbyMiners) > 0) {
-        return {
-            archetype: 'miner',
-            minerDuty: 'standby',
-            reason: 'standby miner coverage ' + standbyMinerCount(context.creeps) + '/' + MINER_STANDBY_COUNT
         };
     }
 
@@ -1975,17 +1865,28 @@ function bestRemoteSourceContainer(creep: Creep, remotePlan: RemoteRoomPlan): St
 }
 
 function findRemoteEnergySource(creep: Creep, remotePlan: RemoteRoomPlan): { jobType: 'withdrawEnergy' | 'pickupEnergy'; target: RoomObject & { id: string } } | null {
-    const bigDroppedPile = closest(creep, creep.room.find(FIND_DROPPED_RESOURCES, {
-        filter: (resource) => resource.resourceType === RESOURCE_ENERGY &&
-            remoteEnergyAvailableAfterClaims(creep, resource as Resource<RESOURCE_ENERGY>) >= 500
-    }) as Resource<RESOURCE_ENERGY>[]);
-    if (bigDroppedPile) {
-        return { jobType: 'pickupEnergy', target: bigDroppedPile };
-    }
-
     const bestContainer = bestRemoteSourceContainer(creep, remotePlan);
     if (bestContainer) {
         return { jobType: 'withdrawEnergy', target: bestContainer };
+    }
+
+    const minPickup = Math.ceil(creep.store.getCapacity(RESOURCE_ENERGY) * 0.5);
+    const containers = creep.room.find(FIND_STRUCTURES, {
+        filter: (structure) =>
+            structure.structureType === STRUCTURE_CONTAINER &&
+            remoteEnergyAvailableAfterClaims(creep, structure as StructureContainer) >= minPickup
+    }) as StructureContainer[];
+    const container = closest(creep, containers);
+    if (container) {
+        return { jobType: 'withdrawEnergy', target: container };
+    }
+
+    const bigDroppedPile = closestReachable(creep, creep.room.find(FIND_DROPPED_RESOURCES, {
+        filter: (resource) => resource.resourceType === RESOURCE_ENERGY &&
+            remoteEnergyAvailableAfterClaims(creep, resource as Resource<RESOURCE_ENERGY>) >= Math.max(500, minPickup)
+    }) as Resource<RESOURCE_ENERGY>[]);
+    if (bigDroppedPile) {
+        return { jobType: 'pickupEnergy', target: bigDroppedPile };
     }
 
     // Find dropped energy, but avoid targets that other EMPTY creeps are already heading to
@@ -2004,20 +1905,9 @@ function findRemoteEnergySource(creep: Creep, remotePlan: RemoteRoomPlan): { job
                 remoteEnergyAvailableAfterClaims(creep, resource as Resource<RESOURCE_ENERGY>) > 0;
         }
     }) as Resource<RESOURCE_ENERGY>[];
-    const droppedEnergy = closest(creep, droppedCandidates);
+    const droppedEnergy = closestReachable(creep, droppedCandidates);
     if (droppedEnergy) {
         return { jobType: 'pickupEnergy', target: droppedEnergy };
-    }
-
-    const minPickup = Math.ceil(creep.store.getCapacity(RESOURCE_ENERGY) * 0.5);
-    const containers = creep.room.find(FIND_STRUCTURES, {
-        filter: (structure) =>
-            structure.structureType === STRUCTURE_CONTAINER &&
-            remoteEnergyAvailableAfterClaims(creep, structure as StructureContainer) >= minPickup
-    }) as StructureContainer[];
-    const container = closest(creep, containers);
-    if (container) {
-        return { jobType: 'withdrawEnergy', target: container };
     }
 
     const link = closest(creep, creep.room.find(FIND_STRUCTURES, {
@@ -2085,9 +1975,7 @@ function measureCapabilities(creeps: Creep[]): {
         const capabilities = getCreepCapabilities(creep);
 
         if (archetype === 'miner') {
-            if (!isStandbyMiner(creep)) {
-                minerWork += capabilities.harvest;
-            }
+            minerWork += capabilities.harvest;
         }
         else if (archetype === 'hauler') { haulerCapacity += capabilities.haul; }
         else if (archetype === 'mineralMiner') { mineralMinerWork += capabilities.harvest; }
@@ -2195,7 +2083,7 @@ function createReservations(context: RoomControllerContext): JobReservations {
     for (const creep of context.creeps) {
         const capabilities = getCreepCapabilities(creep);
         const sourceId = creep.memory.assignedSourceId ?? creep.memory.sourceId;
-        if (sourceId && ensureArchetype(creep) === 'miner' && !isStandbyMiner(creep)) {
+        if (sourceId && ensureArchetype(creep) === 'miner') {
             reservations.sourceWork[sourceId] = (reservations.sourceWork[sourceId] ?? 0) + capabilities.harvest;
             reservations.sourceMinerCount[sourceId] = (reservations.sourceMinerCount[sourceId] ?? 0) + 1;
         }
@@ -2225,12 +2113,6 @@ function keepCurrentJob(
 ): boolean {
     const jobType = creep.memory.jobType;
     if (!jobType) { return false; }
-
-    if (archetype === 'miner' && isStandbyMiner(creep) && jobType !== 'idle') {
-        clearJob(creep);
-        creep.memory.interruptReason = 'standby';
-        return false;
-    }
 
     const capabilities = getCreepCapabilities(creep);
     const energyUsed = creep.store.getUsedCapacity(RESOURCE_ENERGY);
@@ -2607,7 +2489,11 @@ function buildSourcePlans(sources: Source[], structures: RoomStructureCache): So
 }
 
 function buildMineralPlan(mineral: Mineral, structures: RoomStructureCache): MineralPlan {
-    const container = closestByRange(mineral, structures.containers.filter((structure) => structure.pos.getRangeTo(mineral) <= 1));
+    let container = closestByRange(mineral, structures.containers.filter((structure) => structure.pos.getRangeTo(mineral) <= 1));
+    if (!container && mineral.room) {
+        const allContainers = mineral.room.find(FIND_STRUCTURES).filter((s) => s.structureType === STRUCTURE_CONTAINER) as StructureContainer[];
+        container = closestByRange(mineral, allContainers.filter((c) => c.pos.getRangeTo(mineral) <= 1));
+    }
     const link = closestByRange(mineral, [...structures.links.hub, ...structures.links.other].filter((structure) => structure.pos.getRangeTo(mineral) <= 2));
     return {
         mineral,
@@ -2632,49 +2518,21 @@ function sourceWorkDemand(source: Source): number {
     return Math.ceil(source.energyCapacity / ENERGY_REGEN_TIME / HARVEST_POWER);
 }
 
-function sourceSpawnDeficit(context: RoomControllerContext, pendingSourceIds: Set<string> = new Set(), pendingStandbyMiners: number = 0): SourcePlan | null {
+function sourceSpawnDeficit(context: RoomControllerContext, pendingSourceIds: Set<string> = new Set()): SourcePlan | null {
     for (const plan of context.sourcePlans) {
         if (pendingSourceIds.has(plan.source.id)) { continue; }
         const assignedMiners = assignedSourceMinerCount(context.creeps, plan.source.id);
         if (assignedMiners === 0) {
-            if (pendingStandbyMiners > 0) {
-                const totalCovered = context.sourcePlans.filter(p =>
-                    assignedSourceMinerCount(context.creeps, p.source.id) > 0 || pendingSourceIds.has(p.source.id)
-                ).length;
-                if (totalCovered + pendingStandbyMiners >= context.sourcePlans.length) {
-                    continue;
-                }
-            }
             return plan;
         }
     }
     return null;
 }
 
-function standbyMinerDeficit(context: RoomControllerContext, pendingStandbyMiners: number = 0): number {
-    if (context.sourcePlans.length === 0) { return 0; }
-    const activeMiners = activeMinerCount(context.creeps);
-    if (activeMiners < context.sourcePlans.length) { return 0; }
-    const desired = MINER_STANDBY_COUNT;
-    const totalStandby = standbyMinerCount(context.creeps) + pendingStandbyMiners;
-    return Math.max(0, desired - totalStandby);
-}
-
 function activeMinerCount(creeps: Creep[]): number {
     let count = 0;
     for (const creep of creeps) {
         if (ensureArchetype(creep) !== 'miner') { continue; }
-        if (isStandbyMiner(creep)) { continue; }
-        count++;
-    }
-    return count;
-}
-
-function standbyMinerCount(creeps: Creep[]): number {
-    let count = 0;
-    for (const creep of creeps) {
-        if (ensureArchetype(creep) !== 'miner') { continue; }
-        if (!isStandbyMiner(creep)) { continue; }
         count++;
     }
     return count;
@@ -2685,7 +2543,6 @@ function assignedSourceMinerCount(creeps: Creep[], sourceId: string): number {
     for (const creep of creeps) {
         if ((creep.memory.assignedSourceId ?? creep.memory.sourceId) !== sourceId) { continue; }
         if (ensureArchetype(creep) !== 'miner') { continue; }
-        if (isStandbyMiner(creep)) { continue; }
         count++;
     }
     return count;
@@ -2697,7 +2554,6 @@ function assignedSourceWork(creeps: Creep[], sourceId: string): number {
         if (creep.spawning) { continue; }
         if ((creep.memory.assignedSourceId ?? creep.memory.sourceId) !== sourceId) { continue; }
         if (ensureArchetype(creep) !== 'miner') { continue; }
-        if (isStandbyMiner(creep)) { continue; }
         work += getCreepCapabilities(creep).harvest;
     }
     return work;
@@ -3123,8 +2979,9 @@ function closest<T extends RoomObject>(creep: Creep, targets: T[]): T | null {
     return best;
 }
 
-function isStandbyMiner(creep: Creep): boolean {
-    return ensureArchetype(creep) === 'miner' && creep.memory.minerDuty === 'standby';
+function closestReachable<T extends RoomObject>(creep: Creep, targets: T[]): T | null {
+    if (targets.length === 0) { return null; }
+    return creep.pos.findClosestByPath(targets, { ignoreCreeps: false }) as T | null;
 }
 
 function bestHealTarget(creep: Creep, targets: Creep[]): Creep | null {

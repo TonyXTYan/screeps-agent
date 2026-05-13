@@ -18,6 +18,9 @@ This file tracks known follow-up work that future agents should consider before 
 - Legacy role scripts (`role.harvester.ts`, `role.builder.ts`) still `delete Memory.creeps[creep.name]` when idle. This can destroy remote-creep memory (archetype, remoteRoom, sourceId, homeRoom) if a remote creep falls through to legacy fallback and happens to be idle. Remove or add a guard.
 - Remote danger detection is visibility-driven only; unseen hostiles between scout passes can still cause delayed pauses.
 - (Fixed) Remote haulers no longer all converge on the same pickup target when empty. Remote energy selection now subtracts other empty remote-hauler claims before choosing source containers, links, or dropped-energy piles, reducing corner jams at tight remote sources.
+- (Fixed) Remote haulers no longer prioritize a large dropped-energy pile over full remote source containers. Full containers are now selected before dropped piles, preventing unreachable or congested dropped energy from pinning empty haulers while containers are full.
+- (Fixed) Remote haulers no longer path directly at occupied source containers. When withdrawing from a remote source container, haulers choose a free adjacent access tile because the static miner normally occupies the container tile.
+- (Fixed) Shared movement now negotiates creep congestion: stuck creeps request nearby blockers to yield into valid adjacent tiles, and blockers execute that yield request on their own turn. Static miners on source containers are explicitly exempt.
 - (Fixed) Remote danger handling now lets any remote creep that sees nearby hostiles mark `dangerUntil` for the remote and head toward the home-room exit instead of only local-fleeing inside the dangerous room.
 - (Fixed) Remote miner over-spawning: `projectedRemoteMinerWork` now uses full body capabilities for spawning creeps and the spawn loop caps room miners at `sourceCount` active to prevent accumulation.
 - (Fixed) Remote hauler now picks from the source container with the most energy (not just the assigned source's container), preventing haulers from ignoring productive sources.
@@ -56,4 +59,4 @@ This file tracks known follow-up work that future agents should consider before 
 - Combat squads and remote defense are not enabled.
 - Autonomous claiming is not enabled.
 
-These should stay disabled until `.ai/memory/STRATEGY.md` is updated with explicit policy.
+These should stay disabled until `architecture/*.md` (or explicit `room.memory.plan` policy config) documents enabling rules.

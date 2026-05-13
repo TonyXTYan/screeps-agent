@@ -16,7 +16,7 @@ import { bodyCost } from './creep.capabilities';
 
 const DOCTOR_EMERGENCY_HITS_RATIO = 0.35;
 const DOCTOR_THREAT_RADIUS = 4;
-const STANDBY_MINER_RENEW_THRESHOLD = 1450;
+const REMOTE_STANDBY_RENEW_THRESHOLD = 1450;
 const HOME_RENEW_MIN_BODY_COST = 1000;
 const HOME_RENEW_START_TTL = 500;
 const HOME_RENEW_STOP_TTL = 1300;
@@ -76,10 +76,12 @@ export function loop(): void {
     installConsoleHelpers();
     debug.installDebugHelpers();
     installMoveDebugHook();
-    console.log('main: ✅ .time=' + Game.time + ', cpu.bucket=' + Game.cpu.bucket);
     if (Game.cpu.bucket >= 10000) {
+        console.log('main: ✅ .time=' + Game.time + ', cpu.bucket=' + Game.cpu.bucket);
         Game.cpu.generatePixel();
     }
+
+    
 
     creepMemoryManagement.run();
     memoryAudit.runIfBuildChanged();
@@ -442,7 +444,6 @@ function nudgeFromEdge(creep: Creep): void {
 
 function tryRenewHomeCreep(creep: Creep): boolean {
     if (creep.memory.remoteRoom) { return false; }
-    if (creep.memory.minerDuty) { return false; }
     if (creep.memory.role === 'defender') { return false; }
 
     const ttl = creep.ticksToLive;
@@ -489,7 +490,7 @@ function tryRenewHomeCreep(creep: Creep): boolean {
 }
 
 function tryRenewStandbyMiner(creep: Creep): void {
-    if (creep.memory.minerDuty !== 'standby' && !creep.memory.remoteStandby) { return; }
+    if (!creep.memory.remoteStandby) { return; }
     const ttl = creep.ticksToLive ?? 0;
 
     const homeSpawn = creep.pos.findClosestByRange(FIND_MY_SPAWNS) as StructureSpawn | null;
@@ -497,7 +498,7 @@ function tryRenewStandbyMiner(creep: Creep): void {
     const spawn = creep.pos.findClosestByRange(FIND_MY_SPAWNS, {
         filter: (s) => !s.spawning
     }) as StructureSpawn | null;
-    const needsRenew = ttl > 0 && ttl < STANDBY_MINER_RENEW_THRESHOLD;
+    const needsRenew = ttl > 0 && ttl < REMOTE_STANDBY_RENEW_THRESHOLD;
     if (!needsRenew || !spawn) {
         parkStandbyMinerAwayFromSpawn(creep, homeSpawn);
         return;
@@ -506,7 +507,7 @@ function tryRenewStandbyMiner(creep: Creep): void {
     if (creep.pos.isNearTo(spawn)) {
         const code = spawn.renewCreep(creep);
         if (code === OK) {
-            if ((creep.ticksToLive ?? 0) >= STANDBY_MINER_RENEW_THRESHOLD) {
+            if ((creep.ticksToLive ?? 0) >= REMOTE_STANDBY_RENEW_THRESHOLD) {
                 parkStandbyMinerAwayFromSpawn(creep, spawn);
             }
         } else if (code === ERR_BUSY || code === ERR_NOT_ENOUGH_ENERGY) {

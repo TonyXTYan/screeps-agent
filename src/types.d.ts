@@ -178,7 +178,6 @@ interface CreepMemory {
     remoteMode?: RemoteRoomMode;
     sourceId?: string;
     assignedSourceId?: string;
-    minerDuty?: 'active' | 'standby';
     assignedMineralId?: string;
     stationaryTargetId?: string;
     staticMining?: boolean;
@@ -203,6 +202,10 @@ interface CreepMemory {
     travelLastY?: number;
     travelLastRoom?: string;
     travelStuckTicks?: number;
+    trafficYieldX?: number;
+    trafficYieldY?: number;
+    trafficYieldRoom?: string;
+    trafficYieldUntil?: number;
 }
 
 interface RoomMemory {

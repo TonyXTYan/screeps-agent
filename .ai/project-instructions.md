@@ -22,9 +22,9 @@ SCREEPS_BRANCH=default
 
 This is a Screeps bot written in TypeScript, bundled by Rollup into a single `dist/main.js` that gets pushed to the Screeps server via `grunt-screeps`.
 
-**Strategy source of truth:** `.ai/memory/STRATEGY.md` describes the intended game behavior. Code changes should align with that strategy, or the strategy should be updated first.
+**Behavior and architecture source of truth:** `architecture/OVERVIEW.md` describes intended runtime behavior and module boundaries. Code changes should align with it, or architecture docs should be updated first.
 
-**Memory consistency:** After each non-trivial code or strategy job, check `.ai/memory/STRATEGY.md`, `.ai/memory/CODEMAP.md`, `.ai/memory/CURRENT_ARCHITECTURE.md`, `.ai/memory/KNOWN_ISSUES.md`, `.ai/memory/ROADMAP.md`, and `.ai/memory/MEMORY.md` for consistency with the change. Update them when behavior, file ownership, architecture, deferred work, or known issues have changed.
+**Memory consistency:** After each non-trivial code/documentation job, check `.ai/memory/CODEMAP.md`, `.ai/memory/KNOWN_ISSUES.md`, `.ai/memory/ROADMAP.md`, `.ai/memory/MEMORY.md`, and relevant docs under `architecture/` for consistency with the change. Update them when behavior, file ownership, architecture, deferred work, or known issues have changed.
 
 **Entry point:** `src/main.ts` exports `loop()` — the function Screeps calls every game tick. It drives all systems in order: memory cleanup → memory audit (on build change) → emergency defender population control → room controller → tower behavior → assigned job runner → legacy role fallback.
 

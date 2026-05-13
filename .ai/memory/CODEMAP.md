@@ -1,6 +1,6 @@
 ---
 name: Code Map
-description: Quick mapping from strategy concepts to implementation files
+description: Quick mapping from architecture concepts to implementation files
 type: project
 ---
 
@@ -25,10 +25,12 @@ Use this as the first stop before editing code.
 - `firstStoredResource(store)` — duplicated in `creep.jobRunner.ts` and `room.controller.ts`.
 - `closest()` / `closestByRange()` — overlap in `room.controller.ts`.
 
-## Strategy To Code
+## Architecture Docs
 
-- Strategy contract — `.ai/memory/STRATEGY.md`
-- Current architecture notes — `.ai/memory/CURRENT_ARCHITECTURE.md`
+- Architecture overview — `architecture/OVERVIEW.md`
+- Economy details — `architecture/ECONOMY.md`
+- Remote behavior details — `architecture/REMOTES.md`
+- Defense details — `architecture/DEFENSE.md`
 - Known follow-up work — `.ai/memory/KNOWN_ISSUES.md`
 - RCL/labs/power deferred work — `.ai/memory/ROADMAP.md`
 
@@ -61,7 +63,7 @@ Use this as the first stop before editing code.
 - `wallRampartRepairCap(rcl)` — returns the hit cap for the given RCL; imported by `room.controller.ts`
 - `repairJob(creep)` / `repairTargetToRepair(creep)` — used by legacy fallback roles
 
-Wall/rampart hit caps live in `wallRampartRepairCap()`. Tower threshold (90 % charge gate) lives in `tower.basics.ts`. To change staged caps, edit `role.doctor.ts` and update STRATEGY.md.
+Wall/rampart hit caps live in `wallRampartRepairCap()`. Tower threshold (90 % charge gate) lives in `tower.basics.ts`. To change staged caps, edit `role.doctor.ts` and update `architecture/DEFENSE.md`.
 
 ## Legacy Compatibility
 
@@ -83,24 +85,24 @@ Adding a new local economy job:
 2. Add execution in `src/creep.jobRunner.ts`.
 3. Add assignment and reservation logic in `src/room.controller.ts`.
 4. Add or update capability/body planning in `src/creep.capabilities.ts` if needed.
-5. Update `.ai/memory/STRATEGY.md` if behavior changes.
+5. Update relevant `architecture/*.md` docs if behavior changes.
 
 Adding a new strategic Memory setting:
 
 1. Update `src/types.d.ts`.
 2. Initialize defaults in `src/room.controller.ts`.
 3. Read the setting in assignment or spawn planning.
-4. Add an example in `.ai/memory/STRATEGY.md`.
+4. Add an example in the relevant `architecture/*.md` doc.
 
 Changing construction priority:
 
-1. Update `.ai/memory/STRATEGY.md`.
+1. Update `architecture/ECONOMY.md`.
 2. Update `constructionPriority()` in `src/room.controller.ts`.
 3. Validate in-game that builders choose the intended sites.
 
 Changing remote behavior:
 
-1. Update `.ai/memory/STRATEGY.md`.
+1. Update `architecture/REMOTES.md`.
 2. Update `RemoteRoomPlan` in `src/types.d.ts` if the config changes.
 3. Update `updateRemoteRoomPlans()`, `remoteSpawnRequest()`, and `assignRemoteCreep()` in `src/room.controller.ts`.
 4. Update console-facing docs in `console/REMOTE_MINING_CONSOLE.md` if API behavior or defaults change.
@@ -108,7 +110,7 @@ Changing remote behavior:
 
 Changing wall/rampart repair caps or tower repair policy:
 
-1. Update `.ai/memory/STRATEGY.md` first.
+1. Update `architecture/DEFENSE.md` first.
 2. Edit `wallRampartRepairCap()` in `src/role.doctor.ts` for the staged hit caps.
 3. Edit the `energyRatio >= 0.9` gate in `src/tower.basics.ts` if the tower threshold changes.
 4. The repair-job validity check in `currentJobStillValid()` (`src/room.controller.ts`) automatically uses `wallRampartRepairCap` — no separate update needed.

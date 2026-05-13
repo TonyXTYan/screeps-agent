@@ -16,7 +16,9 @@ This file tracks known follow-up work that future agents should consider before 
 
 - Local miners now include one standby substitute, but active source miner scaling is still mostly count-based and does not explicitly add extra active miners when per-source WORK is under target.
 - Legacy role scripts (`role.harvester.ts`, `role.builder.ts`) still `delete Memory.creeps[creep.name]` when idle. This can destroy remote-creep memory (archetype, remoteRoom, sourceId, homeRoom) if a remote creep falls through to legacy fallback and happens to be idle. Remove or add a guard.
-- Remote danger detection is visibility-driven only; unseen hostiles between scout passes can still cause delayed pauses. Additionally, only scouts write `dangerUntil` — miners and haulers that detect hostiles flee locally but never communicate back, so the home room keeps spawning replacements into danger.
+- Remote danger detection is visibility-driven only; unseen hostiles between scout passes can still cause delayed pauses.
+- (Fixed) Remote haulers no longer all converge on the same pickup target when empty. Remote energy selection now subtracts other empty remote-hauler claims before choosing source containers, links, or dropped-energy piles, reducing corner jams at tight remote sources.
+- (Fixed) Remote danger handling now lets any remote creep that sees nearby hostiles mark `dangerUntil` for the remote and head toward the home-room exit instead of only local-fleeing inside the dangerous room.
 - (Fixed) Remote miner over-spawning: `projectedRemoteMinerWork` now uses full body capabilities for spawning creeps and the spawn loop caps room miners at `sourceCount` active to prevent accumulation.
 - (Fixed) Remote hauler now picks from the source container with the most energy (not just the assigned source's container), preventing haulers from ignoring productive sources.
 - (Fixed) Remote hauler now opportunistically builds road/container construction sites within range 3 while transiting (not only in the remote room with a near-full container).

@@ -298,7 +298,7 @@ function travelRoom(creep: Creep): number {
     const centerCode = creep.moveTo(new RoomPosition(25, 25, roomName), {
         visualizePathStyle: { stroke: '#ffffff' },
         reusePath: needsPathReset ? 0 : 5,
-        ignoreCreeps: needsPathReset ? true : false
+        ignoreCreeps: true
     });
     if (centerCode !== ERR_NO_PATH) {
         return ERR_NOT_IN_RANGE;
@@ -311,7 +311,7 @@ function travelRoom(creep: Creep): number {
             const exitCode = creep.moveTo(closestExit, {
                 visualizePathStyle: { stroke: '#ffffff' },
                 reusePath: needsPathReset ? 0 : 5,
-                ignoreCreeps: needsPathReset ? true : false
+                ignoreCreeps: true
             });
             if (exitCode !== ERR_NO_PATH) {
                 return ERR_NOT_IN_RANGE;
@@ -465,7 +465,6 @@ function shouldClearJob(creep: Creep, jobType: CreepJobType, result: number): bo
 
     if (jobType === 'mineMineral') {
         return result === ERR_INVALID_TARGET ||
-            result === ERR_FULL ||
             (result === ERR_NOT_ENOUGH_RESOURCES && mineralDepleted(creep));
     }
 
@@ -624,7 +623,7 @@ function moveToJobTarget(
     const moveOpts: MoveToOpts = {
         ...extra,
         reusePath: needsPathReset ? 0 : (extra.reusePath ?? 10),
-        ignoreCreeps: needsPathReset ? true : (extra.ignoreCreeps ?? false),
+        ignoreCreeps: needsDynamicTraffic ? true : (extra.ignoreCreeps ?? false),
         visualizePathStyle: {
             ...(extra.visualizePathStyle ?? {}),
             stroke

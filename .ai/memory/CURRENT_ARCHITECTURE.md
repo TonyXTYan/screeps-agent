@@ -213,9 +213,9 @@ Remote behavior is opt-in through `room.memory.plan.remoteRooms` or `room.memory
 
 `assignRemoteCreep()` handles remote execution:
 
-- danger-aware retreat to home room
+- danger-aware retreat to home room, with remote creeps marking `dangerUntil` when they see nearby hostiles
 - `remoteScout` hold behavior, with overflow scouts wandering to avoid home-exit blocking
-- source-assigned remote mining/hauling
+- source-assigned remote mining/hauling; empty remote haulers subtract other empty hauler claims before selecting containers, links, or dropped piles
 - remote standby dispatch when an active miner is near death
 - reserve/claim controller actions for configured modes
 

@@ -12,13 +12,18 @@ import * as towerBasics from './tower.basics';
 import * as memoryAudit from './memoryAudit';
 import * as debug from './debug';
 import { findHostiles, isHostile } from './hostileUtils';
+import { bodyCost } from './creep.capabilities';
 
 const DOCTOR_EMERGENCY_HITS_RATIO = 0.35;
 const DOCTOR_THREAT_RADIUS = 4;
 const STANDBY_MINER_RENEW_THRESHOLD = 1450;
+const HOME_RENEW_MIN_BODY_COST = 1000;
+const HOME_RENEW_START_TTL = 500;
+const HOME_RENEW_STOP_TTL = 1300;
 const STANDBY_MINER_PARK_MIN_RANGE = 2;
 const STANDBY_MINER_PARK_MAX_RANGE = 4;
 const DEBUG_PATH_SCAN_INTERVAL = 25;
+const REMOTE_RETREAT_DANGER_TICKS = 1500;
 const DEFAULT_ROLE_PATH_STYLE = {
     fill: 'transparent',
     lineStyle: 'dashed' as const,
@@ -98,6 +103,7 @@ export function loop(): void {
         if (creep.memory.role === 'defender') { roleDefender.run(creep); continue; }
 
         if (fleeFromHostiles(creep)) { continue; }
+        if (tryRenewHomeCreep(creep)) { continue; }
         if (creepJobRunner.run(creep)) { continue; }
 
         if (creep.memory.role === 'builder') { roleBuilder.run(creep); }
@@ -261,6 +267,8 @@ function fleeFromHostiles(creep: Creep): boolean {
     const nearbyHostile = hostiles.find(h => creep.pos.getRangeTo(h) <= 5);
     if (!nearbyHostile) { return false; }
 
+    if (retreatRemoteCreepFromHostiles(creep)) { return true; }
+
     const emergencyTarget = emergencyHealTarget(creep);
     if (emergencyTarget) {
         creep.say('🩺');
@@ -288,6 +296,49 @@ function fleeFromHostiles(creep: Creep): boolean {
         nudgeFromEdge(creep);
     }
     return true;
+}
+
+function retreatRemoteCreepFromHostiles(creep: Creep): boolean {
+    const homeRoom = creep.memory.homeRoom;
+    if (!homeRoom || creep.room.name === homeRoom) { return false; }
+
+    markRemoteDanger(creep, homeRoom);
+    emergencyHealWhileRetreating(creep);
+    creep.say('🏠');
+
+    const exitDir = Game.map.findExit(creep.room, homeRoom);
+    if (typeof exitDir === 'number' && exitDir >= TOP && exitDir <= LEFT) {
+        const closestExit = creep.pos.findClosestByPath(exitDir as ExitConstant, {
+            ignoreCreeps: true
+        });
+        if (closestExit) {
+            const exitCode = creep.moveTo(closestExit, {
+                ignoreCreeps: true,
+                maxRooms: 1,
+                reusePath: 0,
+                visualizePathStyle: { stroke: '#ff4d4d' }
+            });
+            if (exitCode !== ERR_NO_PATH) { return true; }
+        }
+    }
+
+    creep.moveTo(new RoomPosition(25, 25, homeRoom), {
+        ignoreCreeps: true,
+        maxRooms: 8,
+        reusePath: 0,
+        visualizePathStyle: { stroke: '#ff4d4d' }
+    });
+    return true;
+}
+
+function markRemoteDanger(creep: Creep, homeRoom: string): void {
+    const remoteRoom = creep.memory.remoteRoom ?? creep.room.name;
+    const plan = Memory.rooms[homeRoom]?.plan?.remoteRooms?.[remoteRoom];
+    if (!plan) { return; }
+
+    plan.lastSeenHostiles = Game.time;
+    plan.dangerUntil = Math.max(plan.dangerUntil ?? 0, Game.time + REMOTE_RETREAT_DANGER_TICKS);
+    plan.skipReason = 'danger';
 }
 
 function emergencyHealTarget(creep: Creep): Creep | null {
@@ -387,6 +438,54 @@ function nudgeFromEdge(creep: Creep): void {
     if (creep.pos.y === 49) {
         creep.move(TOP);
     }
+}
+
+function tryRenewHomeCreep(creep: Creep): boolean {
+    if (creep.memory.remoteRoom) { return false; }
+    if (creep.memory.minerDuty) { return false; }
+    if (creep.memory.role === 'defender') { return false; }
+
+    const ttl = creep.ticksToLive;
+    if (!ttl) { return false; }
+
+    if (creep.body.some(b => b.type === CLAIM)) { return false; }
+    if (bodyCost(creep.body.map(b => b.type)) < HOME_RENEW_MIN_BODY_COST) { return false; }
+
+    const homeRoomName = creep.memory.homeRoom ?? creep.room.name;
+    if (creep.room.name !== homeRoomName) { return false; }
+
+    if (!creep.memory.renewing && ttl <= HOME_RENEW_START_TTL) {
+        creep.memory.renewing = true;
+    }
+    if (creep.memory.renewing && ttl >= HOME_RENEW_STOP_TTL) {
+        creep.memory.renewing = false;
+    }
+    if (!creep.memory.renewing) { return false; }
+
+    const spawn = creep.pos.findClosestByRange(FIND_MY_SPAWNS, {
+        filter: (s) => !s.spawning
+    }) as StructureSpawn | null;
+
+    if (!spawn) {
+        const anySpawn = creep.pos.findClosestByRange(FIND_MY_SPAWNS) as StructureSpawn | null;
+        if (anySpawn && !creep.pos.isNearTo(anySpawn)) {
+            creep.moveTo(anySpawn, { range: 1, visualizePathStyle: { stroke: '#f5f57a' } });
+        }
+        return true;
+    }
+
+    if (!creep.pos.isNearTo(spawn)) {
+        creep.moveTo(spawn, { range: 1, visualizePathStyle: { stroke: '#f5f57a' } });
+        return true;
+    }
+
+    const code = spawn.renewCreep(creep);
+    if (code === OK || code === ERR_BUSY || code === ERR_NOT_ENOUGH_ENERGY) {
+        return true;
+    }
+
+    creep.memory.renewing = false;
+    return false;
 }
 
 function tryRenewStandbyMiner(creep: Creep): void {

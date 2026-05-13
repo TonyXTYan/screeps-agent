@@ -63,7 +63,9 @@ export function run(room: Room): void {
                     tower.repair(target);
                     claimedIds.add(target.id);
                 } else {
-                    console.log('tower.basics: ' + tower + ' is idle');
+                    if (room.memory.debug_tower) {
+                        console.log('tower.basics: ' + tower + ' is idle');
+                    }
                 }
             }
         }

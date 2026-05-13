@@ -196,6 +196,7 @@ interface CreepMemory {
     stationY?: number;
     scoutWanderRoom?: string;
     scoutWanderUntil?: number;
+    renewing?: boolean;
     remoteRenewing?: boolean;
     remoteStandby?: boolean;
     travelLastX?: number;
@@ -209,6 +210,7 @@ interface RoomMemory {
     structures?: RoomStructureMemory;
     load?: RoomLoadMemory;
     plan?: RoomPlanMemory;
+    debug_tower?: boolean;
 }
 
 interface SpawnMemory {

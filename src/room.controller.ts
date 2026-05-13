@@ -80,7 +80,7 @@ const MINERAL_WORK_DEMAND = 5;
 const LINK_TRANSFER_THRESHOLD = 400;
 const BUILD_RESERVATION_TICKS = 10;
 const REPAIR_RESERVATION_TICKS = 5;
-const REMOTE_DANGER_TICKS = 50;
+const REMOTE_DANGER_TICKS = 1500;
 const REMOTE_PATH_REFRESH_INTERVAL = 5000;
 const REMOTE_PATH_INCOMPLETE_RETRY_TICKS = 100;
 const REMOTE_ROAD_SITES_PER_TICK = 4;
@@ -167,30 +167,10 @@ export function assignRemoteCreep(creep: Creep): boolean {
         return true;
     }
 
-    if (archetype === 'remoteHauler' && energyUsed > 0) {
-        if (creep.room.name !== homeRoom) {
-            setTravelJob(creep, homeRoom);
-            return true;
-        }
-
-        const structures = getRoomStructures(creep.room);
-        const sink = (structures.storage && structures.storage.store.getFreeCapacity(RESOURCE_ENERGY) > 0)
-            ? structures.storage
-            : closest(creep, [...structures.spawns, ...structures.extensions]
-                .filter((structure) => structure.store.getFreeCapacity(RESOURCE_ENERGY) > 0));
-        if (sink) {
-            if (sink.structureType !== STRUCTURE_STORAGE && energyUsed > 200) {
-                console.log(`[HAULER_DIAG] ${creep.name} en=${energyUsed} room=${creep.room.name} sink=${sink.structureType} at ${sink.pos}`);
-            }
-            setJob(creep, 'depositEnergy', sink);
-        } else {
-            const towerFill = closest(creep, structures.towers.filter(t => t.store.getFreeCapacity(RESOURCE_ENERGY) > 0));
-            if (towerFill) {
-                setJob(creep, 'refillTower', towerFill);
-            } else {
-                setJob(creep, 'idle', structures.spawns[0] ?? creep.room.controller ?? structures.storage);
-            }
-        }
+    if (archetype === 'remoteHauler' &&
+        energyUsed > 0 &&
+        (energyUsed >= creep.store.getCapacity(RESOURCE_ENERGY) || creep.room.name !== remoteRoom)) {
+        assignRemoteHaulerDelivery(creep, homeRoom, energyUsed);
         return true;
     }
 
@@ -393,6 +373,33 @@ export function assignRemoteCreep(creep: Creep): boolean {
         setTravelJob(creep, homeRoom);
     }
     return true;
+}
+
+function assignRemoteHaulerDelivery(creep: Creep, homeRoom: string, energyUsed: number): void {
+    if (creep.room.name !== homeRoom) {
+        setTravelJob(creep, homeRoom);
+        return;
+    }
+
+    const structures = getRoomStructures(creep.room);
+    const sink = (structures.storage && structures.storage.store.getFreeCapacity(RESOURCE_ENERGY) > 0)
+        ? structures.storage
+        : closest(creep, [...structures.spawns, ...structures.extensions]
+            .filter((structure) => structure.store.getFreeCapacity(RESOURCE_ENERGY) > 0));
+    if (sink) {
+        if (sink.structureType !== STRUCTURE_STORAGE && energyUsed > 200) {
+            console.log(`[HAULER_DIAG] ${creep.name} en=${energyUsed} room=${creep.room.name} sink=${sink.structureType} at ${sink.pos}`);
+        }
+        setJob(creep, 'depositEnergy', sink);
+        return;
+    }
+
+    const towerFill = closest(creep, structures.towers.filter(t => t.store.getFreeCapacity(RESOURCE_ENERGY) > 0));
+    if (towerFill) {
+        setJob(creep, 'refillTower', towerFill);
+    } else {
+        setJob(creep, 'idle', structures.spawns[0] ?? creep.room.controller ?? structures.storage);
+    }
 }
 
 function buildContext(room: Room): RoomControllerContext {
@@ -1937,13 +1944,14 @@ function hasIdleRemoteHauler(creeps: Creep[], remoteRoom: string): boolean {
 function bestRemoteSourceContainer(creep: Creep, remotePlan: RemoteRoomPlan): StructureContainer | null {
     if (!remotePlan.sources) { return null; }
 
+    const minPickup = Math.ceil(creep.store.getCapacity(RESOURCE_ENERGY) * 0.5);
     const assignedSourceId = creep.memory.assignedSourceId ?? creep.memory.sourceId;
 
     if (assignedSourceId) {
         const cfg = remotePlan.sources[assignedSourceId];
         if (cfg?.containerId) {
             const container = Game.getObjectById(cfg.containerId as Id<StructureContainer>);
-            if (container && container.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
+            if (container && remoteEnergyAvailableAfterClaims(creep, container) >= minPickup) {
                 return container;
             }
         }
@@ -1957,8 +1965,8 @@ function bestRemoteSourceContainer(creep: Creep, remotePlan: RemoteRoomPlan): St
         if (!cfg.containerId) { continue; }
         const container = Game.getObjectById(cfg.containerId as Id<StructureContainer>);
         if (!container) { continue; }
-        const energy = container.store.getUsedCapacity(RESOURCE_ENERGY);
-        if (energy > bestEnergy) {
+        const energy = remoteEnergyAvailableAfterClaims(creep, container);
+        if (energy >= minPickup && energy > bestEnergy) {
             best = container;
             bestEnergy = energy;
         }
@@ -1968,7 +1976,8 @@ function bestRemoteSourceContainer(creep: Creep, remotePlan: RemoteRoomPlan): St
 
 function findRemoteEnergySource(creep: Creep, remotePlan: RemoteRoomPlan): { jobType: 'withdrawEnergy' | 'pickupEnergy'; target: RoomObject & { id: string } } | null {
     const bigDroppedPile = closest(creep, creep.room.find(FIND_DROPPED_RESOURCES, {
-        filter: (resource) => resource.resourceType === RESOURCE_ENERGY && resource.amount >= 500
+        filter: (resource) => resource.resourceType === RESOURCE_ENERGY &&
+            remoteEnergyAvailableAfterClaims(creep, resource as Resource<RESOURCE_ENERGY>) >= 500
     }) as Resource<RESOURCE_ENERGY>[]);
     if (bigDroppedPile) {
         return { jobType: 'pickupEnergy', target: bigDroppedPile };
@@ -1991,7 +2000,8 @@ function findRemoteEnergySource(creep: Creep, remotePlan: RemoteRoomPlan): { job
                     (other.memory.jobType === 'pickupEnergy' || other.memory.jobType === 'pickupResource') &&
                     other.store.getUsedCapacity(RESOURCE_ENERGY) === 0  // Only block if they're still empty
             });
-            return othersTargeting.length === 0;
+            return othersTargeting.length === 0 &&
+                remoteEnergyAvailableAfterClaims(creep, resource as Resource<RESOURCE_ENERGY>) > 0;
         }
     }) as Resource<RESOURCE_ENERGY>[];
     const droppedEnergy = closest(creep, droppedCandidates);
@@ -1999,10 +2009,11 @@ function findRemoteEnergySource(creep: Creep, remotePlan: RemoteRoomPlan): { job
         return { jobType: 'pickupEnergy', target: droppedEnergy };
     }
 
+    const minPickup = Math.ceil(creep.store.getCapacity(RESOURCE_ENERGY) * 0.5);
     const containers = creep.room.find(FIND_STRUCTURES, {
         filter: (structure) =>
             structure.structureType === STRUCTURE_CONTAINER &&
-            (structure as StructureContainer).store.getUsedCapacity(RESOURCE_ENERGY) > 0
+            remoteEnergyAvailableAfterClaims(creep, structure as StructureContainer) >= minPickup
     }) as StructureContainer[];
     const container = closest(creep, containers);
     if (container) {
@@ -2011,13 +2022,42 @@ function findRemoteEnergySource(creep: Creep, remotePlan: RemoteRoomPlan): { job
 
     const link = closest(creep, creep.room.find(FIND_STRUCTURES, {
         filter: s => s.structureType === STRUCTURE_LINK &&
-            (s as StructureLink).store.getUsedCapacity(RESOURCE_ENERGY) > 0
+            remoteEnergyAvailableAfterClaims(creep, s as StructureLink) > 0
     }) as StructureLink[]);
     if (link) {
         return { jobType: 'withdrawEnergy', target: link };
     }
 
     return null;
+}
+
+function remoteEnergyAvailableAfterClaims(
+    creep: Creep,
+    target: StructureContainer | StructureLink | Resource<RESOURCE_ENERGY>
+): number {
+    const amount = 'amount' in target
+        ? target.amount
+        : target.store.getUsedCapacity(RESOURCE_ENERGY);
+    return Math.max(0, amount - remoteEnergyClaimsForTarget(creep, target.id));
+}
+
+function remoteEnergyClaimsForTarget(creep: Creep, targetId: string): number {
+    const remoteRoom = creep.memory.remoteRoom;
+    if (!remoteRoom) { return 0; }
+
+    let reserved = 0;
+    for (const name in Game.creeps) {
+        const other = Game.creeps[name];
+        if (other.id === creep.id) { continue; }
+        if (ensureArchetype(other) !== 'remoteHauler') { continue; }
+        if (other.memory.remoteRoom !== remoteRoom) { continue; }
+        if (other.memory.homeRoom !== creep.memory.homeRoom) { continue; }
+        if (other.memory.jobTargetId !== targetId) { continue; }
+        if (other.memory.jobType !== 'withdrawEnergy' && other.memory.jobType !== 'pickupEnergy') { continue; }
+        if (other.store.getUsedCapacity(RESOURCE_ENERGY) > 0) { continue; }
+        reserved += other.store.getFreeCapacity(RESOURCE_ENERGY);
+    }
+    return reserved;
 }
 
 function measureCapabilities(creeps: Creep[]): {

@@ -59,7 +59,7 @@ For each configured remote room:
   ├─ No source data?          → spawn remoteScout
   ├─ Mode: harvest, needs reserve? → spawn claimer (min 2 CLAIM)
   ├─ For each known source:
-  │   ├─ Miner work deficit?  → spawn remoteMiner
+  │   ├─ Miner work deficit?  → spawn remoteMiner (respect per-source active slot cap)
   │   ├─ Hauler cap deficit?  → spawn remoteHauler (max 2/source)
   │   └─ (Standby dispatched separately)
   ├─ Needs maintenance?       → spawn remoteMaintainer
@@ -81,6 +81,20 @@ haulerCapacityDemand = min(
 - The **2500 cap** bounds distance-weighted demand for far remotes
 - **Max 2 haulers per source** regardless of distance
 - Body uses CARRY+MOVE as the core, with optional trailing WORK when budget allows
+
+## Remote Miner Slot Caps
+
+- Active remote miners are slot-capped per source to avoid static-mining deadlocks.
+- Sources with a planned container or fixed station tile allow **1 active miner**.
+- Non-static sources allow up to **2 active miners** (terrain/access permitting).
+- If all source slots are full, extra remote miners are pushed into standby flow instead of crowding source stations.
+
+## Hauler Target Selection
+
+- Empty remote haulers select from source containers first, then dropped energy, then links.
+- Candidate energy is reduced by in-flight remote-hauler claims before selection.
+- Per-target assignment is decongested with an access-tile-aware soft cap (up to 2 empty haulers per target).
+- If a hauler remains stuck on one tile for 4+ ticks while on `withdrawEnergy`/`pickupEnergy`, it temporarily avoids its current target and retargets.
 
 ## Path Caching
 
@@ -129,6 +143,7 @@ Remote haulers and maintainers (not miners, not claimers) can renew at the home 
 
 ### Miner Replacement (Standby Dispatch)
 - One `remoteStandby` miner per remote room, idle at home spawn
+- Standby routing is evaluated before generic outbound remote travel, so standby miners remain in home until dispatched
 - When active miner TTL < 300 → standby dispatched to that source
 - Double-dispatch prevention: checks no other miner already holds the same source
 

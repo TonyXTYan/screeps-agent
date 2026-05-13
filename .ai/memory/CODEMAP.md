@@ -63,7 +63,7 @@ Use this as the first stop before editing code.
 - `wallRampartRepairCap(rcl)` — returns the hit cap for the given RCL; imported by `room.controller.ts`
 - `repairJob(creep)` / `repairTargetToRepair(creep)` — used by legacy fallback roles
 
-Wall/rampart hit caps live in `wallRampartRepairCap()`. Tower threshold (90 % charge gate) lives in `tower.basics.ts`. To change staged caps, edit `role.doctor.ts` and update `architecture/DEFENSE.md`.
+Wall/rampart hit caps live in `wallRampartRepairCap()`. Tower energy thresholds (dynamic peace/combat gates) live in `tower.basics.ts`. To change staged caps, edit `role.doctor.ts` and update `architecture/DEFENSE.md`.
 
 ## Legacy Compatibility
 
@@ -112,5 +112,7 @@ Changing wall/rampart repair caps or tower repair policy:
 
 1. Update `architecture/DEFENSE.md` first.
 2. Edit `wallRampartRepairCap()` in `src/role.doctor.ts` for the staged hit caps.
-3. Edit the `energyRatio >= 0.9` gate in `src/tower.basics.ts` if the tower threshold changes.
+3. Edit the energy thresholds in `tower.basics.ts` (lines 46–47):
+   - `minEnergyForRepair` — controls heal/repair of normal structures (0.5 combat, 0.7 peace)
+   - `minEnergyForDefense` — controls wall/rampart repair (0.4 combat, 0.75 peace)
 4. The repair-job validity check in `currentJobStillValid()` (`src/room.controller.ts`) automatically uses `wallRampartRepairCap` — no separate update needed.

@@ -214,6 +214,8 @@ interface RoomMemory {
     load?: RoomLoadMemory;
     plan?: RoomPlanMemory;
     debug_tower?: boolean;
+    debug_home?: boolean;
+    debug_remotes?: boolean;
 }
 
 interface SpawnMemory {

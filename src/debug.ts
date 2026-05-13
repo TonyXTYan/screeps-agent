@@ -54,6 +54,111 @@ function targetLabel(creep: Creep): string {
     return '';
 }
 
+function remoteEnergyTargetClaimCount(creep: Creep, targetId: string): number {
+    const remoteRoom = creep.memory.remoteRoom;
+    if (!remoteRoom) { return 0; }
+
+    let claims = 0;
+    for (const name in Game.creeps) {
+        const other = Game.creeps[name];
+        if (other.id === creep.id) { continue; }
+        if (ensureArchetype(other) !== 'remoteHauler') { continue; }
+        if (other.memory.remoteRoom !== remoteRoom) { continue; }
+        if (other.memory.homeRoom !== creep.memory.homeRoom) { continue; }
+        if (other.memory.jobTargetId !== targetId) { continue; }
+        if (other.memory.jobType !== 'withdrawEnergy' && other.memory.jobType !== 'pickupEnergy') { continue; }
+        if (other.store.getUsedCapacity(RESOURCE_ENERGY) > 0) { continue; }
+        claims++;
+    }
+    return claims;
+}
+
+function exitDirectionLabel(direction: number): string {
+    if (direction === TOP) { return 'N'; }
+    if (direction === RIGHT) { return 'E'; }
+    if (direction === BOTTOM) { return 'S'; }
+    if (direction === LEFT) { return 'W'; }
+    return '?';
+}
+
+function remoteNavLabel(creep: Creep): string {
+    const jobType = creep.memory.jobType;
+    const jobRoom = creep.memory.jobRoomName;
+
+    if (jobType === 'travelRoom' && jobRoom) {
+        const dir = Game.map.findExit(creep.room, jobRoom);
+        const onEdge = creep.pos.x === 0 || creep.pos.x === 49 || creep.pos.y === 0 || creep.pos.y === 49;
+        const dirLabel = typeof dir === 'number' ? exitDirectionLabel(dir) : '?';
+        return ` to=${jobRoom} ex=${dirLabel}${onEdge ? ' edge' : ''}`;
+    }
+
+    const targetId = creep.memory.jobTargetId;
+    if (!targetId) { return ''; }
+    const target = Game.getObjectById(targetId as Id<any>) as (RoomObject & { id: string }) | null;
+    if (!target) { return ' trg=[?]'; }
+
+    const targetPos = target.pos;
+    let label = ` trg=[${targetPos.x},${targetPos.y}]`;
+    if (creep.room.name !== targetPos.roomName) {
+        label += ` to=${targetPos.roomName}`;
+        return label;
+    }
+
+    const range = creep.pos.getRangeTo(targetPos);
+    label += ` r=${range}`;
+
+    const shouldPathInspect = jobType === 'withdrawEnergy' ||
+        jobType === 'withdrawResource' ||
+        jobType === 'pickupEnergy' ||
+        jobType === 'pickupResource' ||
+        jobType === 'travelRoom';
+    if (!shouldPathInspect) { return label; }
+
+    const desiredRange = jobType === 'withdrawEnergy' ||
+        jobType === 'withdrawResource' ||
+        jobType === 'pickupEnergy' ||
+        jobType === 'pickupResource'
+        ? 1
+        : 0;
+    const route = PathFinder.search(
+        creep.pos,
+        { pos: targetPos, range: desiredRange },
+        { maxRooms: 1, maxOps: 2000 }
+    );
+    if (route.incomplete) {
+        label += ' p=X';
+    } else {
+        const pathLen = route.path.length;
+        const isLong = pathLen > Math.max(25, range * 4);
+        label += isLong ? ` p=!${pathLen}` : ` p=${pathLen}`;
+    }
+    return label;
+}
+
+function remoteSourceMinerCap(sourceId: string, sourcePlan: RemoteSourcePlan): number {
+    if (sourcePlan.containerId) { return 1; }
+    if (sourcePlan.stationX != null && sourcePlan.stationY != null) { return 1; }
+
+    const source = Game.getObjectById(sourceId as Id<Source>);
+    if (!source) { return 2; }
+
+    const room = Game.rooms[source.pos.roomName];
+    if (!room) { return 2; }
+    const terrain = room.getTerrain();
+    let slots = 0;
+    for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+            if (dx === 0 && dy === 0) { continue; }
+            const x = source.pos.x + dx;
+            const y = source.pos.y + dy;
+            if (x <= 0 || x >= 49 || y <= 0 || y >= 49) { continue; }
+            if (terrain.get(x, y) === TERRAIN_MASK_WALL) { continue; }
+            slots++;
+        }
+    }
+    return Math.max(1, Math.min(2, slots));
+}
+
 export function ownedRooms(): Room[] {
     const rooms: { [roomName: string]: Room } = {};
     for (const spawnName in Game.spawns) {
@@ -117,6 +222,14 @@ function printRemoteCreepStatus(filterHome?: string, filterRemote?: string): voi
                 const jtgt = creep.memory.jobTargetId ? ` tgt=${creep.memory.jobTargetId.slice(-8)}` : '';
                 const pos = ` pos=[${creep.pos.x},${creep.pos.y}]`;
                 const result = creep.memory.lastJobResult !== undefined ? ` res=${creep.memory.lastJobResult}` : '';
+                const stuckTicks = creep.memory.travelStuckTicks ?? 0;
+                const stuck = stuckTicks > 0 ? ` stuck=${stuckTicks}` : '';
+                const claimCount = ensureArchetype(creep) === 'remoteHauler' &&
+                    creep.memory.jobTargetId &&
+                    (creep.memory.jobType === 'withdrawEnergy' || creep.memory.jobType === 'pickupEnergy')
+                    ? ` clm=${remoteEnergyTargetClaimCount(creep, creep.memory.jobTargetId)}`
+                    : '';
+                const nav = remoteNavLabel(creep);
 
                 lines.push(
                     `${archetype.padEnd(16)} ${name.padEnd(14)} ttl=${String(ttl).padStart(4)}  ` +
@@ -128,7 +241,10 @@ function printRemoteCreepStatus(filterHome?: string, filterRemote?: string): voi
                     ` ${body}` +
                     job +
                     jtgt +
-                    result
+                    result +
+                    claimCount +
+                    stuck +
+                    nav
                 );
             }
 
@@ -145,7 +261,7 @@ function printRemoteCreepStatus(filterHome?: string, filterRemote?: string): voi
                     a.slice(17, 31).localeCompare(b.slice(17, 31));
             });
 
-            console.log(`[REMOTE] ${remoteName} (home: ${room.name}):`);
+            console.log(`[REMOTE] t=${Game.time} ${remoteName} (home: ${room.name}):`);
             for (const line of lines) {
                 console.log(`  ${line}`);
             }
@@ -179,8 +295,10 @@ function printRemoteCreepStatus(filterHome?: string, filterRemote?: string): voi
                 const wd = sourcePlan.workDemand ?? '?';
                 const hd = sourcePlan.haulerCapacityDemand ?? '?';
                 const dist = sourcePlan.pathDistance ?? '?';
+                const minerCap = remoteSourceMinerCap(sourceId, sourcePlan);
+                const overload = minerCount > minerCap ? '!' : '';
                 sourceSummary.push(
-                    `  src=${shortId}  miners=${minerCount} (${minerWork}W)` +
+                    `  src=${shortId}  miners=${minerCount}/${minerCap}${overload} (${minerWork}W)` +
                     `  haulers=${haulerCount} (${haulerCap}C)` +
                     `  demand=${wd}W/${hd}C  dist=${dist}`
                 );
@@ -306,7 +424,7 @@ function printMineralStatus(room: Room): void {
         }
     }
 
-    console.log(`[MINERAL] ${mineral.id.slice(-8)} at [${mineral.pos.x},${mineral.pos.y}]  ` +
+    console.log(`[MINERAL] t=${Game.time} ${mineral.id.slice(-8)} at [${mineral.pos.x},${mineral.pos.y}]  ` +
         `amount=${mineral.mineralAmount}  type=${mineral.mineralType}  ` +
         `extractor=${extractor ? 'yes' : 'no'}  ` +
         `container=${containerStr}`);
@@ -389,7 +507,7 @@ function printHomeCreepStatus(homeRoom: string): void {
     }
 
     if (lines.length === 0) {
-        console.log(`[HOME] ${homeRoom}: no creeps`);
+        console.log(`[HOME] t=${Game.time} ${homeRoom}: no creeps`);
         return;
     }
 
@@ -399,7 +517,7 @@ function printHomeCreepStatus(homeRoom: string): void {
         .join('  ');
     const total = Object.values(counts).reduce((a, b) => a + b, 0);
 
-    console.log(`[HOME] ${homeRoom}:  ${fleetSummary}  total=${total}`);
+    console.log(`[HOME] t=${Game.time} ${homeRoom}:  ${fleetSummary}  total=${total}`);
     for (const line of lines) {
         console.log(`  ${line}`);
     }
@@ -410,6 +528,19 @@ export type DebugConsoleApi = {
     dumpRemote: (homeRoom: string, remoteRoom: string) => string;
     dumpHome: (homeRoom: string) => string;
 };
+
+export function tickAutoDebug(): void {
+    const tick = Game.time % 10;
+    if (tick === 0) {
+        for (const room of ownedRooms()) {
+            if (room.memory.debug_home) { printHomeCreepStatus(room.name); }
+        }
+    } else if (tick === 1) {
+        for (const room of ownedRooms()) {
+            if (room.memory.debug_remotes) { printRemoteCreepStatus(room.name); }
+        }
+    }
+}
 
 export function tickRemoteCreepLog(): void {
     if (debugCreepsLastPrintedAt === undefined ||

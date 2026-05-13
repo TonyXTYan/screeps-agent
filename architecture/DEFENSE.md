@@ -34,23 +34,33 @@ Executed every tick per room in `towerBasics.run(room)`.
 ### Priority per tower (in order):
 
 ```
-1. Attack closest armed hostile creep
-2. Heal closest injured friendly creep        (only if energy > 50%)
+1. Attack closest armed hostile creep         (always, any energy)
+2. Heal closest injured friendly creep        (if energy ≥ 50% in combat, ≥ 70% in peace)
 3. Repair:
    a. Very urgent  (< 500 hits, non-wall)     [hits ascending]
    b. Urgent       (< 10K hits, non-wall)     [hits ascending]
    c. Normal       (repairStructureFilter)     [hits ascending]
-   d. Walls/ramparts (only if energy ≥ 90%)   [hits ascending]
+   d. Walls/ramparts                          (≥ 40% in combat, ≥ 75% in peace)
 ```
 
 **Claim distribution**: Towers track claimed repair IDs per tick so multiple towers don't all
 repair the same target. Each tower picks the next-most-urgent unclaimed structure.
 
-### Repair thresholds
+### Energy thresholds (dynamic based on combat state)
+
+**During peace** (no armed hostiles):
+- Heal/repair normal structures: ≥ 70% energy
+- Repair walls/ramparts: ≥ 75% energy
+
+**During combat** (armed hostiles present):
+- Heal/repair normal structures: ≥ 50% energy
+- Repair walls/ramparts: ≥ 40% energy
+- Attack: always (no energy minimum)
+
+### Repair structure criteria
 
 - **Normal structures**: repair when hits < 90% of max
-- **Walls/ramparts**: staged cap by RCL (see below), only at ≥90% tower energy
-- **Tower minimum energy**: heal/repair branch only runs when tower energy is > 50%
+- **Walls/ramparts**: staged cap by RCL (see below)
 
 ### Wall/rampart staged caps
 

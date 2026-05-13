@@ -29,13 +29,14 @@ debug.dumpRemote('W7N9', 'W8N9')
 Output:
 
 ```
-[REMOTE] W8N9 (home: W7N9):
+[REMOTE] t=70912861 W8N9 (home: W7N9):
   remoteMiner      John          ttl= 450  W8N9     mining      en=50/100  src=59cba123 stn=[41,18] cont W5C1M2
-  remoteHauler     Alice         ttl= 380  W7N9     traveling   en=0/250   src=59cba123                       W0C8M4
+  remoteHauler     Alice         ttl= 380  W7N9     traveling   en=0/250   src=59cba123 pos=[22,29] W0C8M4 job=travelRoom res=-9 stuck=6
+  remoteHauler     Bob           ttl= 390  W8N9     hauling     en=0/1400  src=59cba123 pos=[46,12] W0C28M14 job=pickupEnergy tgt=c2fc85f0 res=-9 clm=1
   ...
   --- Allocation ---
-  src=4adbfc69  miners=10 (36W)  haulers=1 (600C)  demand=5W/500C  dist=90
-  src=4adbfc6b  miners=2 (5W)  haulers=1 (1000C)  demand=5W/500C  dist=68
+  src=4adbfc69  miners=2/1! (8W)  haulers=1 (600C)  demand=5W/500C  dist=90
+  src=4adbfc6b  miners=1/1 (4W)  haulers=1 (1000C)  demand=5W/500C  dist=68
   --- Source Details ---
   src=4adbfc69  pos=[42,18]  energy=2500/3000  regen=30
     container=xyz789ab at [41,18]  energy=1200/2000  hp=45000/50000
@@ -45,7 +46,7 @@ Output:
     miner=Bob  W=12  TTL=300  traveling  pos=[?,?]
 ```
 
-Columns: `archetype  name  ttl  currentRoom  status  energy  sourceId  [stn=[x,y]]  [target]  body`
+Columns: `archetype  name  ttl  currentRoom  status  energy  sourceId  pos  [stn=[x,y]]  [target]  body  [job=...] [tgt=...] [res=...] [clm=...] [stuck=...] [to=... ex=...] [trg=[x,y] r=.. p=..]`
 
 Status values:
 - `mining` — at remote room with assigned source
@@ -64,8 +65,16 @@ Additional columns beyond the basic fields:
 | `stn=[x,y]` | `creep.memory.stationX/Y` | `stn=[41,18]` | Station position the creep should be at (remoteMiners) |
 | **target** | `creep.memory.stationaryTargetId` | `cont`, `src` | Abbreviated type of the structure/object the creep is targeting |
 | **body** | `creep.getActiveBodyparts()` | `W5C1M2` | Live body parts (work/carry/move) |
+| `job=...` / `tgt=...` | `creep.memory.jobType` / `jobTargetId` | `job=pickupEnergy tgt=c2fc85f0` | Current assigned job and target |
+| `res=...` | `creep.memory.lastJobResult` | `res=-9` | Last action return code from the job runner |
+| `clm=...` | computed in debug | `clm=1` | Other empty remote haulers already claiming the same energy target |
+| `stuck=...` | `creep.memory.travelStuckTicks` | `stuck=6` | Consecutive ticks on the same tile (only shown when > 0) |
+| `to=... ex=...` | `jobRoomName` + `Game.map.findExit` | `to=W8N9 ex=N` | Current travel target room and chosen exit direction for `travelRoom` jobs |
+| `trg=[x,y] r=.. p=..` | target position + local path probe | `trg=[42,6] r=8 p=12`, `p=!84`, or `p=X` | Target coords, current range, and same-room path length (`X` means incomplete/no path, `!` marks unusually long local path) |
 
 **Allocation** block shows per-source breakdown: miner/hauler counts, WORK/CARRY parts, demand targets, and path distance.
+- `miners=A/B` means `A = currently assigned remoteMiners`, `B = estimated safe miner slots for that source`.
+- `miners=A/B!` means over-assigned miners for available slots (likely congestion/deadlock risk).
 
 **Source Details** block shows per-source live state (room visible) or plan data (room not visible):
 - **Source row**: source ID (last 8 chars), position, energy/regen ticks, or `station=[x,y] (not visible)` when the room is not in `Game.rooms`
@@ -127,6 +136,45 @@ Status labels are mapped from each creep's `jobType`:
 | *(undefined)* | `-` |
 
 A creep showing `IDLE` for many ticks is likely starved of work. A miner with no `src=` means it hasn't been assigned a source yet.
+
+## Auto-Print Memory Flags
+
+Two flags in `RoomMemory` trigger periodic prints without any console interaction. They use `Game.time % 10` offsets so the two outputs don't land on the same tick.
+
+| Flag | Tick offset | What prints |
+|------|-------------|-------------|
+| `Memory.rooms[room].debug_home` | `% 10 === 0` | same output as `debug.dumpHome(room)` |
+| `Memory.rooms[room].debug_remotes` | `% 10 === 1` | same output as calling `debug.dumpRemote(room, remote)` for every remote of that room |
+
+### Enable
+
+```js
+// auto-print home creep status every 10 ticks
+Memory.rooms['W7N9'].debug_home = true
+
+// auto-print all remote statuses every 10 ticks
+Memory.rooms['W7N9'].debug_remotes = true
+```
+
+### Disable
+
+```js
+delete Memory.rooms['W7N9'].debug_home
+delete Memory.rooms['W7N9'].debug_remotes
+```
+
+Or set to `false` if you prefer to flip without deleting:
+
+```js
+Memory.rooms['W7N9'].debug_home = false
+Memory.rooms['W7N9'].debug_remotes = false
+```
+
+### Notes
+
+- Both flags survive redeploys (stored in `Memory`, not module-level state).
+- `debug_remotes` prints **all** remotes of the room regardless of their individual `debugCreeps` flag. Use `debug.trackRemote()` to limit printing to a single remote instead.
+- The two flags are independent; you can enable either or both.
 
 ## Troubleshooting
 

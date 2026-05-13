@@ -42,10 +42,13 @@ export function run(room: Room): void {
     for (const tower of towers) {
         const closestHostile = tower.pos.findClosestByRange(armedHostiles);
         const energyRatio = tower.store.getUsedCapacity(RESOURCE_ENERGY) / tower.store.getCapacity(RESOURCE_ENERGY)!;
+        const underSiege = armedHostiles.length > 0;
+        const minEnergyForRepair = underSiege ? 0.5 : 0.7;
+        const minEnergyForDefense = underSiege ? 0.4 : 0.75;
 
         if (closestHostile) {
             tower.attack(closestHostile);
-        } else if (energyRatio > 0.5) {
+        } else if (energyRatio >= minEnergyForRepair) {
             // Heal uses closest-by-range because tower heal power decreases with distance
             const closestDamagedCreep = tower.pos.findClosestByRange(FIND_MY_CREEPS, {
                 filter: (c) => c.hits < c.hitsMax
@@ -57,7 +60,7 @@ export function run(room: Room): void {
                 const target = veryUrgent.find(s => !claimedIds.has(s.id))
                     ?? urgent.find(s => !claimedIds.has(s.id))
                     ?? normal.find(s => !claimedIds.has(s.id))
-                    ?? (energyRatio >= 0.9 ? defense.find(s => !claimedIds.has(s.id)) : null);
+                    ?? (energyRatio >= minEnergyForDefense ? defense.find(s => !claimedIds.has(s.id)) : null);
 
                 if (target) {
                     tower.repair(target);

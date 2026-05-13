@@ -116,6 +116,7 @@ export function loop(): void {
     }
 
     debug.tickRemoteCreepLog();
+    debug.tickAutoDebug();
 }
 
 declare global {

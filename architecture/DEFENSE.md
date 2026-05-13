@@ -50,7 +50,7 @@ repair the same target. Each tower picks the next-most-urgent unclaimed structur
 
 - **Normal structures**: repair when hits < 90% of max
 - **Walls/ramparts**: staged cap by RCL (see below), only at ≥90% tower energy
-- **Tower minimum energy**: heal only when > 50%; repair at any amount > 10%
+- **Tower minimum energy**: heal/repair branch only runs when tower energy is > 50%
 
 ### Wall/rampart staged caps
 
@@ -93,8 +93,8 @@ When `attacking`:
 - Move into range
 
 When no hostiles present:
-- If has WORK + CARRY: fall back to harvesting (legacy)
-- Otherwise: rally at `rallySpawnId` (nearest spawn)
+- Rally near `rallySpawnId` (nearest spawn)
+- Renew at spawn when TTL is low (request under 800, top up toward 1000)
 
 ### Execution priority
 
@@ -102,7 +102,7 @@ In the main loop, defenders run **before** the job runner:
 ```
 if (creep.memory.role === 'defender') { roleDefender.run(creep); continue; }
 ```
-This prevents defenders from being misclassified as `worker` archetype and receiving economic jobs.
+This gives defenders immediate combat/renewal behavior and bypasses economic job assignment.
 
 ## Layer 3: Non-Combat Flee (main.ts)
 

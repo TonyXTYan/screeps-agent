@@ -19,9 +19,9 @@ Use this as the first stop before editing code.
 - `src/tower.basics.ts` — tower attack, heal, and repair behavior
 - `src/creep.jobRunner.ts` — executes assigned jobs before legacy role fallback
 
-## Shared Utilities (Duplicate Definitions)
+## Shared Utilities
 
-- `isArmedHostile(creep)` — currently duplicated identically in 5 files (`main.ts`, `room.controller.ts`, `tower.basics.ts`, `creep.populationControl.ts`, `role.defender.ts`). When extracted to a shared module, update all imports.
+- Hostile detection is centralized in `src/hostileUtils.ts` (`isHostile`, `findHostiles`) and used by `main.ts`, `room.controller.ts`, `tower.basics.ts`, `creep.populationControl.ts`, and `role.defender.ts`.
 - `firstStoredResource(store)` — duplicated in `creep.jobRunner.ts` and `room.controller.ts`.
 - `closest()` / `closestByRange()` — overlap in `room.controller.ts`.
 

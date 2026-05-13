@@ -50,8 +50,8 @@ Local energy economy is the foundation.
   - **Refill mode** (priority): when spawns/extensions or towers need energy and storage has it, withdraw from storage and deliver directly to those structures.
   - **Haul mode** (steady-state): withdraw from source containers, source links, and demand links; deposit to storage.
   - Dropped resources, tombstones, and ruins are opportunistically collected in either mode.
-- Remote haulers use pure CARRY+MOVE bodies (no WORK) to maximize carry capacity, minimizing the number of creeps needed per source.
-- Hauler capacity demand per remote source is capped at 500, and at most 2 remote haulers are spawned per source regardless of distance.
+- Remote haulers use CARRY+MOVE cores with an optional trailing WORK part when budget allows.
+- Hauler capacity demand per remote source is capped at 2500, and at most 2 remote haulers are spawned per source regardless of distance.
 - Workers build, repair, and upgrade from stored energy before falling back to direct harvesting.
 - Direct harvesting by non-miners is an emergency or fallback behavior, not the steady-state goal.
 
@@ -122,7 +122,7 @@ Walls and ramparts use a staged hit cap by RCL to prevent low-RCL rooms from sin
 | 7     | 300,000  |
 | 8     | uncapped |
 
-Towers only repair walls/ramparts when charged to ≥ 90 % and no other repair work or combat is active. Normal structure repair (roads, containers, etc.) proceeds at > 10 % energy as before.
+Towers only repair walls/ramparts when charged to ≥ 90 % and no other repair work or combat is active. Normal structure repair (roads, containers, etc.) proceeds once tower energy is > 50 %.
 
 Non-combat creeps should flee nearby hostiles. Remote work should pause or abandon rooms with active danger until a future combat policy exists.
 
@@ -166,7 +166,7 @@ Remote harvest policy:
 - Discover and cache per-source remote plan fields (station tile, container id, path, path distance, miner/hauler demand).
 - Spawn dedicated per-source `remoteMiner` and `remoteHauler`.
 - Remote miners target `sources + 1` per room: one active per source plus one `remoteStandby` idle at home spawn that dispatches when an active miner's TTL drops below 300.
-- Remote haulers are capped at 2 per source and use pure CARRY+MOVE bodies (no WORK) to maximize capacity.
+- Remote haulers are capped at 2 per source and use CARRY+MOVE cores with optional trailing WORK when energy budget allows.
 - Spawn `remoteMaintainer` when enabled remote roads/containers need build or repair.
 - Use `claimer` for reserve/claim modes; reserve mode requires at least 2 `CLAIM` parts. Claimer body scales CLAIM+MOVE segments with available energy, building the largest effective reserving/claiming body possible.
 - Apply danger pause (`dangerUntil`) on visible hostile signals and retreat remote creeps home during danger windows.
@@ -175,8 +175,8 @@ Remote harvest policy:
 Remote throughput model:
 
 - `workDemand = ceil(source.energyCapacity / ENERGY_REGEN_TIME / HARVEST_POWER)`
-- `haulerCapacityDemand = min(500, ceil((source.energyCapacity / ENERGY_REGEN_TIME) * pathDistance * 2 * 1.2))`
-- The hauler capacity cap (500) prevents the distance-multiplied formula from spawning excessive tiny haulers for distant rooms. Combined with the 2-hauler-per-source hard limit, a 2-source room spawns at most 4 remote haulers total.
+- `haulerCapacityDemand = min(2500, ceil((source.energyCapacity / ENERGY_REGEN_TIME) * pathDistance * 2 * 1.2))`
+- The hauler capacity cap (2500) bounds the distance-multiplied formula for far remotes. Combined with the 2-hauler-per-source hard limit, a 2-source room spawns at most 4 remote haulers total.
 
 Example remote Memory config:
 
@@ -287,7 +287,7 @@ The audit performs cleanup that shouldn't run every tick:
 - Resets stale travel stuck memory (stuck > 20 ticks).
 - Clears invalid remote room assignments, orphaned `remoteStandby` flags, stale `scoutWanderRoom` references, and remote fields on non-remote creeps.
 
-The audit skips when CPU bucket is below 500. It can also be invoked manually from the console via `require('memoryAudit').runFullAudit()`.
+The audit skips when CPU bucket is below 500. It can also be invoked manually from the console via `runMemoryAudit()`.
 
 ## Verification
 

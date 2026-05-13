@@ -11,8 +11,6 @@ This file tracks known follow-up work that future agents should consider before 
 ## Runtime Cleanup
 
 - `.DS_Store` files exist in the repo and `.ai`; remove them in a dedicated cleanup commit and make sure `.gitignore` covers them.
-- `isArmedHostile()` is duplicated 5 times identically (`role.defender.ts`, `tower.basics.ts`, `creep.populationControl.ts`, `room.controller.ts`, `main.ts`). Extract to a shared `utils.ts` module.
-- `installMoveDebugHook` in `main.ts` monkey-patches `Creep.prototype.moveTo` every tick unconditionally. Should be guarded behind a check for whether any remote room has `debugPaths: true`.
 
 ## Strategic Alignment
 

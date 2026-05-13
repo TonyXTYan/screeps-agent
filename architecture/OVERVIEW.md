@@ -6,15 +6,16 @@ A TypeScript Screeps AI bot that manages a colony economy — source mining, hau
 upgrading, remote harvesting, and defense. Bundled via Rollup into `dist/main.js` and pushed to the
 Screeps server via `grunt-screeps`.
 
-## Source Map (20 modules)
+## Source Map (21 modules)
 
 ```
 src/
   main.ts                  Entry point — Screeps calls loop() every tick
   env.ts                   BUILD_COMMIT from git hash (injected by rollup banner)
+  hostileUtils.ts          Shared hostile detection helpers (`isHostile`, `findHostiles`)
 
   creep.capabilities.ts    Body → capability derivation, archetype inference, body planning
-  creep.jobRunner.ts       Job execution dispatch (20+ job types)
+  creep.jobRunner.ts       Job execution dispatch (19 job types)
   creep.memoryManagement.ts Dead creep cleanup, fallback role assignment
   creep.populationControl.ts Emergency defender spawning
   creep.harvest.ts         Legacy direct-harvest helper
@@ -107,7 +108,7 @@ The strategic path is the primary path. Legacy fallback exists for compatibility
 **CreepArchetype** — spawn intent + capability label:
 ```
 worker | miner | hauler | doctor | claimer | remoteMiner |
-remoteHauler | remoteMaintainer | remoteScout | mineralMiner
+remoteHauler | remoteMaintainer | remoteScout | mineralMiner | defender
 ```
 
 **CreepJobType** — executable work unit:

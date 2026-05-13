@@ -12,11 +12,13 @@ approach.
 
 ```
 buildContext()       → gather structures, sources, creeps, sites, resources
-updatePlanAssignments() → tally assigned work per source/mineral
-rememberLoad()      → write room.memory.load (capabilities, demand, deficits)
 initialiseRoomPlan()→ ensure plan/remoteRooms/claimTargets exist
 updateRemoteRoomPlans() → learn remote source data, place roads/containers
+rememberRcl()       → persist current controller level
 manageMinerStandby() → promote/demote standby miners
+updatePlanAssignments() → tally assigned work per source/mineral
+rememberLoad()      → write room.memory.load (capabilities, demand, deficits)
+rememberPlans()     → persist source/mineral planning snapshots
 runLinks()          → transfer energy from source→hub/controller links
 reportPassiveInfrastructure() → periodic log (every 100 ticks)
 assignJobs()        → assign jobType/jobTargetId to each creep
@@ -28,12 +30,12 @@ runSpawnPlanner()   → spawn creeps to fill measured deficits
 | Archetype | Body Strategy |
 |-----------|--------------|
 | `miner` | WORK-heavy, static (5W1C1M) or mobile (5W1C3M), scales down with energy |
-| `hauler` | CARRY+MOVE triples (2C1M per 150 energy), optional +WORK at ≥300 energy |
+| `hauler` | CARRY+MOVE triples (2C1M per 150 energy), optional trailing WORK when budget allows |
 | `worker` | WORK:CARRY:MOVE at configurable `workRatio` (1–3 WORK per CARRY+MOVE pair) |
 | `doctor` | Fixed templates with HEAL; WORK+CARRY for energy handling |
 | `mineralMiner` | Same body as static miner, assigned to mineral |
 | `remoteMiner` | Static (container) or mobile variant, WORK-heavy |
-| `remoteHauler` | Pure CARRY+MOVE (no WORK) — maximizes capacity per energy |
+| `remoteHauler` | CARRY+MOVE triples, optional trailing WORK at higher budgets |
 | `remoteMaintainer` | WORK+CARRY+MOVE fixed templates |
 | `remoteScout` | 1–2 MOVE parts only |
 | `claimer` | CLAIM+MOVE pairs scaled to budget; min 1 part, reserve mode min 2 |

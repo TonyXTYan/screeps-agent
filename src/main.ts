@@ -117,7 +117,7 @@ declare global {
         dumpRemote: (homeRoom: string, remoteRoom: string) => string;
         dumpHome: (homeRoom: string) => string;
     } | undefined;
-    var runMemoryAudit: () => void;
+    var runMemoryAudit: () => number;
 }
 
 function installConsoleHelpers(): void {

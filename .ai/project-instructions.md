@@ -116,6 +116,8 @@ screeps_console/.venv/bin/python screeps_console/screeps_console/interactive.py
 
 Config is saved to `~/.screepsconsole.yaml` on first run (credentials stored there).
 
+**Auto-logging:** The console automatically logs all I/O (incoming game messages + outgoing commands) to daily NDJSON files in `screeps_console/logs/screeps_console_YYYY-MM-DD.json`. Each line is a JSON object with `ts` (timestamp), `direction` (`"in"` or `"out"`), `shard`, `line` (message text), and `type` (for incoming messages). This allows agents to inspect recent tick history without the UI running. See `screeps_console/README.md` for details.
+
 ## Memory Index
 
 Quick reference for persistent project knowledge:

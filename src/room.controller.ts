@@ -221,32 +221,6 @@ export function assignRemoteCreep(creep: Creep): boolean {
         return true;
     }
 
-    if (archetype === 'remoteHauler' && creep.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
-        if (creep.room.name !== homeRoom) {
-            setTravelJob(creep, homeRoom);
-            return true;
-        }
-        const structs = getRoomStructures(creep.room);
-        const sink = (structs.storage && structs.storage.store.getFreeCapacity(RESOURCE_ENERGY) > 0)
-            ? structs.storage
-            : closest(creep, [...structs.spawns, ...structs.extensions]
-                .filter((s) => s.store.getFreeCapacity(RESOURCE_ENERGY) > 0));
-        if (sink) {
-            if (sink.structureType !== STRUCTURE_STORAGE) {
-                console.log(`[HAULER_DIAG] ${creep.name} (safety) en=${creep.store.getUsedCapacity(RESOURCE_ENERGY)} room=${creep.room.name} sink=${sink.structureType} at ${sink.pos}`);
-            }
-            setJob(creep, 'depositEnergy', sink);
-        } else {
-            const towerFill = closest(creep, structs.towers.filter(t => t.store.getFreeCapacity(RESOURCE_ENERGY) > 0));
-            if (towerFill) {
-                setJob(creep, 'refillTower', towerFill);
-            } else {
-                setJob(creep, 'idle', structs.spawns[0] ?? creep.room.controller ?? structs.storage);
-            }
-        }
-        return true;
-    }
-
     if (creep.room.name !== remoteRoom) {
         setTravelJob(creep, remoteRoom);
         return true;
@@ -1059,10 +1033,6 @@ function assignJob(context: RoomControllerContext, creep: Creep, reservations: J
             creep.store.getFreeCapacity(RESOURCE_ENERGY) > 0 &&
             hasEnergyToGather(context)) {
             // Not full and there's ambient energy — fall through to gather more
-        } else if ((archetype === 'hauler' || archetype === 'remoteHauler') &&
-            creep.store.getFreeCapacity() > 0 &&
-            context.droppedResources.length > 0) {
-            // Hauler has free space and there are dropped resources — pick them up first
         } else {
             assignEnergySpendingJob(context, creep, archetype, capabilities, reservations);
             return;
@@ -1093,7 +1063,7 @@ function assignJob(context: RoomControllerContext, creep: Creep, reservations: J
             }
         }
 
-        const withdrawalTarget = energyWithdrawalTarget(context, creep, archetype);
+        const withdrawalTarget = energyWithdrawalTarget(context, creep, archetype, reservations);
         if (withdrawalTarget) {
             setJob(creep, 'withdrawEnergy', withdrawalTarget);
             return;
@@ -2009,9 +1979,22 @@ function findRemoteEnergySource(creep: Creep, remotePlan: RemoteRoomPlan): { job
         return { jobType: 'withdrawEnergy', target: bestContainer };
     }
 
-    const droppedEnergy = closest(creep, creep.room.find(FIND_DROPPED_RESOURCES, {
-        filter: (resource) => resource.resourceType === RESOURCE_ENERGY && resource.amount >= 50
-    }) as Resource<RESOURCE_ENERGY>[]);
+    // Find dropped energy, but avoid targets that other EMPTY creeps are already heading to
+    const droppedCandidates = creep.room.find(FIND_DROPPED_RESOURCES, {
+        filter: (resource) => {
+            if (resource.resourceType !== RESOURCE_ENERGY || resource.amount < 50) return false;
+            // Only block if another creep is still empty AND targeting this resource
+            // Once they pick up energy, they leave the area and next hauler can go
+            const othersTargeting = creep.room.find(FIND_MY_CREEPS, {
+                filter: (other) => other.id !== creep.id &&
+                    other.memory.jobTargetId === resource.id &&
+                    (other.memory.jobType === 'pickupEnergy' || other.memory.jobType === 'pickupResource') &&
+                    other.store.getUsedCapacity(RESOURCE_ENERGY) === 0  // Only block if they're still empty
+            });
+            return othersTargeting.length === 0;
+        }
+    }) as Resource<RESOURCE_ENERGY>[];
+    const droppedEnergy = closest(creep, droppedCandidates);
     if (droppedEnergy) {
         return { jobType: 'pickupEnergy', target: droppedEnergy };
     }
@@ -2314,8 +2297,10 @@ function currentJobStillValid(
     }
     if (jobType === 'withdrawEnergy') {
         const storeTarget = target as StructureContainer | StructureStorage | StructureTerminal | StructureLink;
+        const reserved = reservations.resources[storeTarget.id] ?? 0;
+        // Check remaining available energy after accounting for other creeps' reservations
         return creep.store.getFreeCapacity(RESOURCE_ENERGY) > 0 &&
-            storeTarget.store.getUsedCapacity(RESOURCE_ENERGY) > 0;
+            storeTarget.store.getUsedCapacity(RESOURCE_ENERGY) > reserved;
     }
     if (jobType === 'withdrawResource') {
         const storeTarget = target as WithdrawStructure;
@@ -2384,6 +2369,8 @@ function reserveCurrentJob(
 
     if (jobType === 'withdrawResource') {
         reserveResourceTarget(reservations, target.id, creep.store.getFreeCapacity());
+    } else if (jobType === 'withdrawEnergy') {
+        reserveResourceTarget(reservations, target.id, creep.store.getFreeCapacity(RESOURCE_ENERGY));
     } else if (jobType === 'pickupEnergy' || jobType === 'pickupResource') {
         reserveDroppedTarget(reservations, target.id, creep.store.getFreeCapacity());
     } else if (jobType === 'depositEnergy' || jobType === 'refillSpawn' || jobType === 'refillTower') {
@@ -2493,10 +2480,15 @@ function energyDepositTarget(context: RoomControllerContext, creep: Creep): Stru
 function energyWithdrawalTarget(
     context: RoomControllerContext,
     creep: Creep,
-    archetype: CreepArchetype
+    archetype: CreepArchetype,
+    reservations: JobReservations
 ): StructureContainer | StructureStorage | StructureTerminal | StructureLink | null {
     const sourceContainers = context.structures.containers
-        .filter((container) => container.store.getUsedCapacity(RESOURCE_ENERGY) >= Math.min(200, creep.store.getFreeCapacity(RESOURCE_ENERGY)));
+        .filter((container) => {
+            // Threshold of 50 prevents idle stalls when containers dip below 200. Subtract reservations to avoid over-committing.
+            const reserved = reservations.resources[container.id] ?? 0;
+            return container.store.getUsedCapacity(RESOURCE_ENERGY) - reserved >= Math.min(50, creep.store.getFreeCapacity(RESOURCE_ENERGY));
+        });
     const sourceLinks = context.structures.links.source
         .filter((link) => link.store.getUsedCapacity(RESOURCE_ENERGY) > 0);
 

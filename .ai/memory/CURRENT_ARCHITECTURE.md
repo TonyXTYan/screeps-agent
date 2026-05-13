@@ -87,6 +87,7 @@ Current archetypes:
 - `hauler`
 - `doctor`
 - `claimer`
+- `defender`
 - `remoteMiner`
 - `remoteHauler`
 - `remoteMaintainer`
@@ -100,8 +101,8 @@ Archetypes are spawn intent and debugging metadata. Job assignment is driven by 
 | Archetype | Body strategy |
 |-----------|---------------|
 | `miner` / `remoteMiner` / `mineralMiner` | WORK-heavy, CARRY+MOVE for static; extra MOVE for non-static |
-| `hauler` (local) | Hybrid WORK+CARRY+MOVE at ≥300 energy; pure CARRY+MOVE otherwise |
-| `remoteHauler` | Pure CARRY+MOVE (no WORK) — maximizes CARRY capacity per energy spent |
+| `hauler` (local) | CARRY+MOVE triples with optional trailing WORK when budget allows |
+| `remoteHauler` | CARRY+MOVE triples with optional trailing WORK when budget allows |
 | `worker` | WORK:CARRY:MOVE at configurable workRatio |
 | `remoteMaintainer` | Fixed templates: WORK+WORK+CARRY+CARRY+MOVE×3, scaled down |
 | `remoteScout` | Single MOVE or double MOVE |
@@ -132,7 +133,7 @@ Current high-level order:
 1. Scout (if sources are unknown or stale).
 2. Claimer (if reserve/claim is needed).
 3. Miner per source (based on WORK deficit).
-4. Hauler per source (capped at 2 per source, capacity demand capped at 500 per source).
+4. Hauler per source (capped at 2 per source, capacity demand capped at 2500 per source).
 5. Maintainer (if roads/containers need building or repair).
 6. Standby miner (one per remote room, idle at home, dispatches when active miner TTL < 300).
 
@@ -180,6 +181,8 @@ Tower repair priority (when no hostiles present):
 4. Normal structure repair via `repairStructureFilter` — non-wall/rampart only.
 5. Wall/rampart repair via staged cap — **only at ≥ 90 % energy**; cap scales by RCL (see STRATEGY.md).
 
+Heal/repair behavior only runs when tower energy is above 50 %.
+
 Walls and ramparts are intentionally separated from normal repair to prevent low-RCL rooms from sinking energy into fortifications. The staged caps live in `wallRampartRepairCap()` in `src/role.doctor.ts`.
 
 There is no strategic combat squad logic yet.
@@ -198,7 +201,7 @@ Remote behavior is opt-in through `room.memory.plan.remoteRooms` or `room.memory
 - places container and road construction sites with per-tick caps
 - skips road placement in owned rooms so manual base layouts are preserved
 
-**Hauler capacity demand is capped** at `MAX_REMOTE_HAULER_CAPACITY_PER_SOURCE` (500) to prevent the `income * distance * 2 * 1.2` formula from demanding excessive hauler capacity for distant rooms.
+**Hauler capacity demand is capped** at `MAX_REMOTE_HAULER_CAPACITY_PER_SOURCE` (2500) to bound the `income * distance * 2 * 1.2` demand for distant rooms.
 
 `remoteSpawnRequest()` is per-remote and per-source:
 

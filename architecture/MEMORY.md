@@ -110,7 +110,7 @@ Memory
 ## CreepMemory (types.d.ts)
 
 Key interface `CreepMemory` extends Screeps default with all the fields above. Type union `CreepJobType`
-enumerates all 20 job types. Type union `CreepArchetype` enumerates all 10 archetypes.
+enumerates all 19 job types. Type union `CreepArchetype` enumerates all 11 archetypes.
 
 ### Archetype assignment
 
@@ -121,6 +121,7 @@ enumerates all 20 job types. Type union `CreepArchetype` enumerates all 10 arche
 - Has WORK + CARRY + harvester/builder/upgrader role → `worker`
 - Has WORK + CARRY → `worker`
 - Has CARRY only → `hauler`
+- Has role `defender` with combat body → `defender`
 - Fallback → `worker`
 
 Miners, remote roles, and mineral miners must have `archetype` set explicitly at spawn time.

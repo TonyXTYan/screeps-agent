@@ -87,7 +87,7 @@ remoteMining.status('W7N9', 'W8N9')  // one remote room
 4. Gradual road construction along discovered paths in non-owned rooms only.
 5. Spawning and assignment for:
    - `remoteMiner`
-   - `remoteHauler` (pure `CARRY`+`MOVE`, no `WORK`)
+   - `remoteHauler` (`CARRY`+`MOVE` core, optional trailing `WORK` at higher energy budgets)
    - `remoteScout` (overflow scouts wander to avoid blocking spawn exits)
    - `remoteMaintainer`
    - `claimer` for reserve mode (targeting at least 2 `CLAIM` parts)
@@ -148,4 +148,3 @@ remoteMining.disable('W7N9', 'W8N9')
   - bot needs visibility in that remote room before it can discover sources/paths.
 - Remote roads are not being placed:
   - roads are intentionally skipped in owned rooms; automatic remote road placement is for non-owned rooms.
-

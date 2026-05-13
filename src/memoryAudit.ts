@@ -12,7 +12,7 @@ export function runIfBuildChanged(): void {
     (Memory as { lastBuildCommit?: string }).lastBuildCommit = BUILD_COMMIT;
 }
 
-export function runFullAudit(): void {
+export function runFullAudit(): number {
     let fixed = 0;
 
     const activeRooms = new Set<string>();
@@ -32,7 +32,11 @@ export function runFullAudit(): void {
 
     if (fixed > 0) {
         console.log(`[memoryAudit] Done: ${fixed} issue(s) fixed`);
+    } else {
+        console.log('[memoryAudit] Done: no issues found');
     }
+
+    return fixed;
 }
 
 function cleanupOrphanedRoomMemory(activeRooms: Set<string>): number {

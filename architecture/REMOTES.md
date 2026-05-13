@@ -73,14 +73,14 @@ Hauler demand is computed per source:
 
 ```
 haulerCapacityDemand = min(
-  500,
+  2500,
   ceil((source.energyCapacity / ENERGY_REGEN_TIME) * pathDistance * 2 * 1.2)
 )
 ```
 
-- The **500 cap** prevents distant rooms from demanding excessive haulers
+- The **2500 cap** bounds distance-weighted demand for far remotes
 - **Max 2 haulers per source** regardless of distance
-- Body is pure CARRY+MOVE (no WORK) to maximize capacity per energy
+- Body uses CARRY+MOVE as the core, with optional trailing WORK when budget allows
 
 ## Path Caching
 
@@ -92,7 +92,7 @@ Paths from home storage/spawn to each remote source station are cached to avoid 
 3. Store in sourcePlan.pathSerialized
 4. Refresh every 5000 ticks (REMOTE_PATH_REFRESH_INTERVAL)
 5. If PathFinder returns incomplete, fall back to linear distance × 50
-6. Incomplete paths retry quickly (4900 ticks vs 5000)
+6. Incomplete paths retry quickly (about 100 ticks vs 5000)
 ```
 
 ## Infrastructure Placement
@@ -107,7 +107,7 @@ layouts are preserved.
 
 ## Danger Handling
 
-When a remote room is visible and contains hostiles or an invader core:
+When a remote room is visible and contains armed hostiles, an invader core, or hostile controller control/reservation:
 
 ```
 1. remote.lastSeenHostiles = Game.time

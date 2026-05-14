@@ -782,9 +782,21 @@ function updateRemoteRoomPlans(homeRoom: Room): void {
             if (anchor && station && (!existing.pathDistance || !hasCachedPath || pathStale || existing.routeAccessible === undefined)) {
                 const route = PathFinder.search(anchor.pos, { pos: station, range: 0 }, { maxRooms: 8 });
                 if (!route.incomplete) {
-                    const directRoute = !route.path.some(pos =>
-                        pos.roomName !== homeRoom.name && pos.roomName !== remoteName);
-                    if (directRoute) {
+                    // Verify station is reachable from the border facing homeRoom using single-room
+                    // pathfinding. This catches stations behind terrain barriers that are unreachable
+                    // for miners entering from the homeRoom side, even when a longer multi-room path exists.
+                    const exitDir = Game.map.findExit(remoteName, homeRoom.name);
+                    let locallyReachable = false;
+                    if (typeof exitDir === 'number' && exitDir > 0) {
+                        const borderExits = visible.find(exitDir as ExitConstant) as RoomPosition[];
+                        if (borderExits.length > 0) {
+                            const nearestExit = borderExits.reduce((a, b) =>
+                                station.getRangeTo(a) < station.getRangeTo(b) ? a : b);
+                            const localRoute = PathFinder.search(station, { pos: nearestExit, range: 0 }, { maxRooms: 1 });
+                            locallyReachable = !localRoute.incomplete;
+                        }
+                    }
+                    if (locallyReachable) {
                         existing.routeAccessible = true;
                         latestPath = route.path;
                         existing.pathDistance = route.path.length;
@@ -798,7 +810,7 @@ function updateRemoteRoomPlans(homeRoom: Room): void {
                         latestPath = hasCachedPath ? cachedPath : [];
                         if (Game.time % REMOTE_PLANNING_LOG_INTERVAL === 0) {
                             console.log(
-                                'room.controller: indirect remote path (via 3rd room) ' + homeRoom.name + '->' + remoteName +
+                                'room.controller: station not locally reachable ' + homeRoom.name + '->' + remoteName +
                                 ' source=' + source.id
                             );
                         }

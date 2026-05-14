@@ -60,6 +60,9 @@ Memory
 │       travelLastY?: number
 │       travelLastRoom?: string
 │       travelStuckTicks?: number
+│       remoteStationStuckSourceId?: string — Source whose station progress is being watched
+│       remoteStationLastRange?: number     — Last range to remote source while stalled
+│       remoteStationStuckTicks?: number    — No-progress ticks before remote path invalidation
 │
 │       // Legacy role state flags
 │       building?: boolean
@@ -111,6 +114,11 @@ Memory
 │     }
 │   }
 ```
+
+Remote source plans store source station metadata under
+`Memory.rooms[home].plan.remoteRooms[remote].sources[sourceId]`: `stationX/stationY`,
+built `containerId`, pending `containerSiteId`, cached path/distance fields, demand fields, and
+`routeAccessible`.
 
 ## CreepMemory (types.d.ts)
 

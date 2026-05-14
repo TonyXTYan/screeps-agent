@@ -111,6 +111,9 @@ const REMOTE_HAULER_WANDER_MIN_RANGE = 4;
 const REMOTE_HAULER_WANDER_MAX_RANGE = 8;
 const REMOTE_HAULER_RETARGET_STUCK_TICKS = 4;
 const REMOTE_TARGET_MAX_HAULER_CLAIMS = 2;
+const REMOTE_MINER_STUCK_REPLAN_TICKS = 8;
+const REMOTE_LOCAL_PATH_WINDING_FACTOR = 3;
+const REMOTE_LOCAL_PATH_WINDING_BUFFER = 10;
 
 export function run(room: Room): void {
     const context = buildContext(room);
@@ -207,6 +210,10 @@ export function assignRemoteCreep(creep: Creep): boolean {
         return assignStandbyRemoteMiner(creep, homeRoom, remoteRoom);
     }
 
+    if (archetype === 'remoteMiner') {
+        primeRemoteMinerTravelStation(creep, remotePlan);
+    }
+
     if (creep.room.name !== remoteRoom) {
         setTravelJob(creep, remoteRoom);
         return true;
@@ -237,6 +244,7 @@ export function assignRemoteCreep(creep: Creep): boolean {
         const minerCountBySource = new Map<string, number>();
         for (const other of creepsForHomeRoom(homeRoom)) {
             if (other.id === creep.id) { continue; }
+            if (other.spawning) { continue; }
             if (ensureArchetype(other) !== 'remoteMiner') { continue; }
             if (other.memory.remoteRoom !== remoteRoom) { continue; }
             if (other.memory.remoteStandby) { continue; }
@@ -280,8 +288,23 @@ export function assignRemoteCreep(creep: Creep): boolean {
             return true;
         }
 
-        let stationaryTargetId: string | undefined;
         const sourceCfg = remotePlan.sources?.[assignedSourceId];
+        if (sourceCfg && remoteMinerStationRouteStalled(creep, selectedSource, sourceCfg)) {
+            invalidateRemoteSourcePath(sourceCfg);
+            clearRemoteMinerStationMemory(creep);
+            creep.memory.remoteStandby = true;
+            creep.memory.sourceId = undefined;
+            creep.memory.assignedSourceId = undefined;
+            if (creep.room.name !== homeRoom) {
+                setTravelJob(creep, homeRoom);
+            } else {
+                setJob(creep, 'idle', Game.rooms[homeRoom]?.storage
+                    ?? creep.pos.findClosestByRange(FIND_MY_SPAWNS));
+            }
+            return true;
+        }
+
+        let stationaryTargetId: string | undefined;
         if (sourceCfg?.containerId) {
             stationaryTargetId = sourceCfg.containerId;
             creep.memory.stationX = undefined;
@@ -377,6 +400,72 @@ export function assignRemoteCreep(creep: Creep): boolean {
         setTravelJob(creep, homeRoom);
     }
     return true;
+}
+
+function primeRemoteMinerTravelStation(creep: Creep, remotePlan: RemoteRoomPlan): void {
+    const sourceId = creep.memory.assignedSourceId ?? creep.memory.sourceId;
+    if (!sourceId) { return; }
+    const sourcePlan = remotePlan.sources?.[sourceId];
+    if (!sourcePlan || sourcePlan.stationX == null || sourcePlan.stationY == null) { return; }
+    creep.memory.stationX = sourcePlan.stationX;
+    creep.memory.stationY = sourcePlan.stationY;
+}
+
+function remoteMinerStationRouteStalled(
+    creep: Creep,
+    source: Source,
+    sourcePlan: RemoteSourcePlan
+): boolean {
+    if (!remoteSourceHasStaticStation(sourcePlan)) {
+        resetRemoteMinerStationProgress(creep);
+        return false;
+    }
+    if (sourcePlan.routeAccessible === false || creep.room.name !== source.pos.roomName) {
+        resetRemoteMinerStationProgress(creep);
+        return false;
+    }
+    if (creep.memory.jobType !== 'harvestSource' ||
+        creep.memory.jobTargetId !== source.id ||
+        creep.memory.lastJobResult !== ERR_NOT_IN_RANGE) {
+        resetRemoteMinerStationProgress(creep);
+        return false;
+    }
+
+    const range = creep.pos.getRangeTo(source);
+    if (range <= 1) {
+        resetRemoteMinerStationProgress(creep);
+        return false;
+    }
+
+    const sameSource = creep.memory.remoteStationStuckSourceId === source.id;
+    const lastRange = sameSource ? creep.memory.remoteStationLastRange : undefined;
+    const stalled = lastRange !== undefined && range >= lastRange;
+    creep.memory.remoteStationStuckSourceId = source.id;
+    creep.memory.remoteStationLastRange = range;
+    creep.memory.remoteStationStuckTicks = stalled ? (creep.memory.remoteStationStuckTicks ?? 0) + 1 : 0;
+
+    return (creep.memory.remoteStationStuckTicks ?? 0) >= REMOTE_MINER_STUCK_REPLAN_TICKS;
+}
+
+function resetRemoteMinerStationProgress(creep: Creep): void {
+    creep.memory.remoteStationStuckSourceId = undefined;
+    creep.memory.remoteStationLastRange = undefined;
+    creep.memory.remoteStationStuckTicks = undefined;
+}
+
+function clearRemoteMinerStationMemory(creep: Creep): void {
+    creep.memory.stationaryTargetId = undefined;
+    creep.memory.stationX = undefined;
+    creep.memory.stationY = undefined;
+    resetRemoteMinerStationProgress(creep);
+}
+
+function invalidateRemoteSourcePath(sourcePlan: RemoteSourcePlan): void {
+    sourcePlan.routeAccessible = false;
+    sourcePlan.pathSerialized = undefined;
+    const retryOffset = Math.max(0, REMOTE_PATH_REFRESH_INTERVAL - REMOTE_PATH_INCOMPLETE_RETRY_TICKS);
+    sourcePlan.pathUpdatedAt = Game.time - retryOffset;
+    console.log('room.controller: invalidated remote source station path source=' + sourcePlan.sourceId + ' after miner stall');
 }
 
 function assignStandbyRemoteMiner(creep: Creep, homeRoom: string, remoteRoom: string): boolean {
@@ -761,18 +850,34 @@ function updateRemoteRoomPlans(homeRoom: Room): void {
         let unfinishedRoadSites = visible.find(FIND_MY_CONSTRUCTION_SITES, {
             filter: (site) => site.structureType === STRUCTURE_ROAD
         }).length;
+        const remoteEntries = remoteEntryPositions(homeRoom, remoteName);
         for (const source of visible.find(FIND_SOURCES)) {
             const existing = remote.sources[source.id] ?? (remote.sources[source.id] = { sourceId: source.id });
             existing.lastSeen = Game.time;
-            const station = findStationForSource(visible, source);
-            if (station) {
-                existing.stationX = station.x;
-                existing.stationY = station.y;
-            }
             const container = closestByRange(source, visible.find(FIND_STRUCTURES, {
                 filter: (s) => s.structureType === STRUCTURE_CONTAINER && s.pos.getRangeTo(source) <= REMOTE_CONTAINER_BUILD_DISTANCE
             }) as StructureContainer[]);
+            const containerSite = container ? null : closestByRange(source, visible.find(FIND_MY_CONSTRUCTION_SITES, {
+                filter: (site) => site.structureType === STRUCTURE_CONTAINER &&
+                    site.pos.getRangeTo(source) <= REMOTE_CONTAINER_BUILD_DISTANCE
+            }) as ConstructionSite[]);
+            const station = container?.pos ?? containerSite?.pos ?? findStationForSource(visible, source, remoteEntries);
+            if (station) {
+                existing.stationX = station.x;
+                existing.stationY = station.y;
+            } else {
+                existing.stationX = undefined;
+                existing.stationY = undefined;
+                existing.routeAccessible = false;
+                const retryOffset = Math.max(0, REMOTE_PATH_REFRESH_INTERVAL - REMOTE_PATH_INCOMPLETE_RETRY_TICKS);
+                existing.pathUpdatedAt = Game.time - retryOffset;
+            }
             existing.containerId = container?.id;
+            if (containerSite) {
+                existing.containerSiteId = containerSite.id;
+            } else {
+                existing.containerSiteId = undefined;
+            }
             existing.workDemand = sourceWorkDemand(source);
             const anchor = homeRoom.storage ?? homeRoom.find(FIND_MY_SPAWNS)[0];
             let latestPath: RoomPosition[] = [];
@@ -782,31 +887,20 @@ function updateRemoteRoomPlans(homeRoom: Room): void {
             if (anchor && station && (!existing.pathDistance || !hasCachedPath || pathStale || existing.routeAccessible === undefined)) {
                 const route = PathFinder.search(anchor.pos, { pos: station, range: 0 }, { maxRooms: 8 });
                 if (!route.incomplete) {
-                    // Simulate the actual miner entry: nearest exit from homeRoom toward remoteName,
-                    // mirrored into the remote room. Require both reachability and a non-winding path.
-                    const exitDirFromHome = Game.map.findExit(homeRoom.name, remoteName);
-                    let locallyReachable = false;
-                    if (typeof exitDirFromHome === 'number' && exitDirFromHome > 0) {
-                        const homeExits = homeRoom.find(exitDirFromHome as ExitConstant) as RoomPosition[];
-                        if (homeExits.length > 0) {
-                            const nearestHomeExit = homeExits.reduce((a, b) =>
-                                anchor.pos.getRangeTo(a) < anchor.pos.getRangeTo(b) ? a : b);
-                            // Mirror border coordinate into the remote room (x=0↔49, y=0↔49)
-                            let ex = nearestHomeExit.x, ey = nearestHomeExit.y;
-                            if (ex === 0) { ex = 49; } else if (ex === 49) { ex = 0; }
-                            else if (ey === 0) { ey = 49; } else if (ey === 49) { ey = 0; }
-                            const entryInRemote = new RoomPosition(ex, ey, remoteName);
-                            const localRoute = PathFinder.search(entryInRemote, { pos: station, range: 0 }, { maxRooms: 1 });
-                            const directRange = entryInRemote.getRangeTo(station);
-                            // 200 = four room edges: only flag sources that require looping most of the room
-                            const maxLocalDist = Math.max(200, 2 * directRange);
-                            locallyReachable = !localRoute.incomplete && localRoute.path.length <= maxLocalDist;
-                            if (Game.time % REMOTE_PLANNING_LOG_INTERVAL === 0) {
-                                console.log('room.controller: local path check ' + homeRoom.name + '->' + remoteName +
-                                    ' src=' + source.id + ' len=' + localRoute.path.length +
-                                    ' threshold=' + maxLocalDist + (localRoute.incomplete ? ' incomplete' : ''));
-                            }
-                        }
+                    // Simulate the miner's local entry route into the remote room. A complete
+                    // cross-room path is not enough if the selected exit enters a separated pocket.
+                    const localRoute = bestRemoteEntryRoute(remoteEntries, station);
+                    const directRange = closestEntryRange(remoteEntries, station);
+                    const maxLocalDist = Math.max(25,
+                        directRange * REMOTE_LOCAL_PATH_WINDING_FACTOR + REMOTE_LOCAL_PATH_WINDING_BUFFER);
+                    const locallyReachable = !!localRoute &&
+                        !localRoute.incomplete &&
+                        localRoute.path.length <= maxLocalDist;
+                    if (Game.time % REMOTE_PLANNING_LOG_INTERVAL === 0) {
+                        console.log('room.controller: local path check ' + homeRoom.name + '->' + remoteName +
+                            ' src=' + source.id +
+                            ' len=' + (localRoute ? localRoute.path.length : -1) +
+                            ' threshold=' + maxLocalDist + (!localRoute || localRoute.incomplete ? ' incomplete' : ''));
                     }
                     if (locallyReachable) {
                         existing.routeAccessible = true;
@@ -1073,21 +1167,73 @@ function countOpenTilesAround(terrain: RoomTerrain, x: number, y: number): numbe
     return count;
 }
 
-function findStationForSource(room: Room, source: Source): RoomPosition | null {
+function remoteEntryPositions(homeRoom: Room, remoteRoomName: string): RoomPosition[] {
+    const exitDirFromHome = Game.map.findExit(homeRoom.name, remoteRoomName);
+    if (typeof exitDirFromHome !== 'number' || exitDirFromHome <= 0) { return []; }
+
+    const entries: RoomPosition[] = [];
+    for (const homeExit of homeRoom.find(exitDirFromHome as ExitConstant) as RoomPosition[]) {
+        const mirrored = mirrorExitPositionIntoRoom(homeExit, remoteRoomName);
+        if (mirrored) { entries.push(mirrored); }
+    }
+    return entries;
+}
+
+function mirrorExitPositionIntoRoom(exit: RoomPosition, roomName: string): RoomPosition | null {
+    if (exit.x === 0) { return new RoomPosition(49, exit.y, roomName); }
+    if (exit.x === 49) { return new RoomPosition(0, exit.y, roomName); }
+    if (exit.y === 0) { return new RoomPosition(exit.x, 49, roomName); }
+    if (exit.y === 49) { return new RoomPosition(exit.x, 0, roomName); }
+    return null;
+}
+
+function bestRemoteEntryRoute(entries: RoomPosition[], station: RoomPosition): PathFinderPath | null {
+    if (entries.length === 0) { return null; }
+    const route = PathFinder.search(station, entries.map(pos => ({ pos, range: 0 })), { maxRooms: 1 });
+    return route;
+}
+
+function closestEntryRange(entries: RoomPosition[], station: RoomPosition): number {
+    if (entries.length === 0) { return 50; }
+    let best = Infinity;
+    for (const entry of entries) {
+        best = Math.min(best, entry.getRangeTo(station));
+    }
+    return best < Infinity ? best : 50;
+}
+
+function findStationForSource(room: Room, source: Source, entries: RoomPosition[] = []): RoomPosition | null {
     const terrain = room.getTerrain();
     const around = room.lookForAtArea(LOOK_TERRAIN, source.pos.y - 1, source.pos.x - 1, source.pos.y + 1, source.pos.x + 1, true);
     let best: RoomPosition | null = null;
     let bestScore = -1;
     for (const tile of around) {
         if (tile.x === source.pos.x && tile.y === source.pos.y) { continue; }
-        if (tile.terrain === 'wall') { continue; }
-        const score = countOpenTilesAround(terrain, tile.x, tile.y);
+        const pos = new RoomPosition(tile.x, tile.y, room.name);
+        if (!isRemoteStationTileUsable(pos, tile.terrain)) { continue; }
+        const route = entries.length > 0 ? bestRemoteEntryRoute(entries, pos) : null;
+        if (entries.length > 0 && (!route || route.incomplete)) { continue; }
+        const pathCost = route?.path.length ?? 0;
+        const score = countOpenTilesAround(terrain, tile.x, tile.y) * 100 - pathCost;
         if (score > bestScore) {
             bestScore = score;
-            best = new RoomPosition(tile.x, tile.y, room.name);
+            best = pos;
         }
     }
     return best;
+}
+
+function isRemoteStationTileUsable(pos: RoomPosition, terrain: string): boolean {
+    if (terrain === 'wall') { return false; }
+    if (pos.lookFor(LOOK_SOURCES).length > 0 || pos.lookFor(LOOK_MINERALS).length > 0) { return false; }
+    const blocked = pos.lookFor(LOOK_STRUCTURES).some((structure) =>
+        structure.structureType !== STRUCTURE_ROAD &&
+        structure.structureType !== STRUCTURE_CONTAINER &&
+        structure.structureType !== STRUCTURE_RAMPART);
+    if (blocked) { return false; }
+    return !pos.lookFor(LOOK_CONSTRUCTION_SITES).some((site) =>
+        site.structureType !== STRUCTURE_ROAD &&
+        site.structureType !== STRUCTURE_CONTAINER);
 }
 
 function canPlaceContainerSite(position: RoomPosition): boolean {
@@ -1757,6 +1903,25 @@ function remoteSpawnRequest(
             const numSources = Object.keys(remote.sources).length;
             const totalRoomHaulers = countRemoteHaulersForRoom(homeFleet, roomName);
             const totalRoomMiners = countActiveRemoteMinersForRoom(homeFleet, roomName);
+            const standbySourceId = sourceNeedingStandbyReplacement(homeFleet, roomName);
+            if (standbySourceId &&
+                !pending.some(r =>
+                    r.archetype === 'remoteMiner' &&
+                    r.remoteRoom === roomName &&
+                    r.remoteStandby &&
+                    r.sourceId === standbySourceId)) {
+                return {
+                    archetype: 'remoteMiner',
+                    reason: 'remote standby replacement ' + roomName + ':' + standbySourceId,
+                    remoteRoom: roomName,
+                    remoteMode: remote.mode,
+                    remoteStandby: true,
+                    sourceId: standbySourceId,
+                    staticMining: true,
+                    hasContainer: remoteSourceHasContainerStation(remote.sources[standbySourceId])
+                };
+            }
+
             for (const sourceId in remote.sources) {
                 const sourcePlan = remote.sources[sourceId];
                 if (sourcePlan.routeAccessible === false) { continue; }
@@ -1765,25 +1930,26 @@ function remoteSpawnRequest(
                 const minerProjectedWork = projectedRemoteMinerWork(homeFleet, roomName, sourceId, minerCoverageHorizon);
                 const minerCount = countRemoteMinersForSource(homeFleet, roomName, sourceId);
                 const sourceMinerLimit = remoteSourceActiveMinerLimit(sourcePlan);
+                const sourceHasStandby = hasRemoteStandbyMinerForSource(homeFleet, roomName, sourceId) ||
+                    pending.some(r =>
+                        r.archetype === 'remoteMiner' &&
+                        r.remoteRoom === roomName &&
+                        r.remoteStandby &&
+                        r.sourceId === sourceId);
                 if (minerProjectedWork < targetMinerWork && minerCount < sourceMinerLimit && (minerCount === 0 || minerProjectedWork === 0) &&
-                    totalRoomMiners <= numSources) {
-                    const hasStandby = minerCount >= 1 && (
-                        countRemoteStandbyMiners(homeFleet, roomName) > 0 ||
-                        pending.some(r => r.archetype === 'remoteMiner' && r.remoteRoom === roomName && r.remoteStandby)
-                    );
-                    if (!hasStandby &&
-                        !pending.some(r => r.archetype === 'remoteMiner' && r.remoteRoom === roomName && r.sourceId === sourceId)) {
-                        return {
-                            archetype: 'remoteMiner',
-                            reason: 'remote source handoff deficit ' + roomName + ':' + sourceId +
-                                ' projected=' + minerProjectedWork + '/' + targetMinerWork,
-                            remoteRoom: roomName,
-                            remoteMode: remote.mode,
-                            sourceId,
-                            staticMining: true,
-                            hasContainer: !!sourcePlan.containerId
-                        };
-                    }
+                    totalRoomMiners <= numSources &&
+                    !sourceHasStandby &&
+                    !pending.some(r => r.archetype === 'remoteMiner' && r.remoteRoom === roomName && r.sourceId === sourceId)) {
+                    return {
+                        archetype: 'remoteMiner',
+                        reason: 'remote source handoff deficit ' + roomName + ':' + sourceId +
+                            ' projected=' + minerProjectedWork + '/' + targetMinerWork,
+                        remoteRoom: roomName,
+                        remoteMode: remote.mode,
+                        sourceId,
+                        staticMining: true,
+                        hasContainer: remoteSourceHasContainerStation(sourcePlan)
+                    };
                 }
 
                 const targetHaulerCapacity = sourcePlan.haulerCapacityDemand ?? 150;
@@ -1809,25 +1975,6 @@ function remoteSpawnRequest(
                 !hasRemoteMaintainer(homeFleet, roomName) &&
                 !pending.some(r => r.archetype === 'remoteMaintainer' && r.remoteRoom === roomName)) {
                 return { archetype: 'remoteMaintainer', reason: 'remote maintenance ' + roomName, remoteRoom: roomName, remoteMode: remote.mode };
-            }
-
-            const standbySourceId = sourceNeedingStandbyReplacement(homeFleet, roomName);
-            if (standbySourceId &&
-                !pending.some(r =>
-                    r.archetype === 'remoteMiner' &&
-                    r.remoteRoom === roomName &&
-                    r.remoteStandby &&
-                    r.sourceId === standbySourceId)) {
-                return {
-                    archetype: 'remoteMiner',
-                    reason: 'remote standby replacement ' + roomName + ':' + standbySourceId,
-                    remoteRoom: roomName,
-                    remoteMode: remote.mode,
-                    remoteStandby: true,
-                    sourceId: standbySourceId,
-                    staticMining: true,
-                    hasContainer: !!remote.sources[standbySourceId]?.containerId
-                };
             }
         }
         if ((remote.mode === 'reserve' || remote.mode === 'claim') &&
@@ -1886,6 +2033,17 @@ function countRemoteStandbyMiners(creeps: Creep[], remoteRoom: string): number {
         if (creep.memory.remoteStandby) { count++; }
     }
     return count;
+}
+
+function hasRemoteStandbyMinerForSource(creeps: Creep[], remoteRoom: string, sourceId: string): boolean {
+    for (const creep of creeps) {
+        if (ensureArchetype(creep) !== 'remoteMiner') { continue; }
+        if (creep.memory.remoteRoom !== remoteRoom) { continue; }
+        if (!creep.memory.remoteStandby) { continue; }
+        if ((creep.memory.assignedSourceId ?? creep.memory.sourceId) !== sourceId) { continue; }
+        return true;
+    }
+    return false;
 }
 
 function findDyingRemoteMiner(
@@ -1981,8 +2139,7 @@ function countRemoteHaulersForRoom(creeps: Creep[], remoteRoom: string): number 
 
 function remoteSourceMinerSlotCap(remotePlan: RemoteRoomPlan, source: Source): number {
     const sourceCfg = remotePlan.sources?.[source.id];
-    if (sourceCfg?.containerId) { return 1; }
-    if (sourceCfg?.stationX != null && sourceCfg?.stationY != null) { return 1; }
+    if (sourceCfg && remoteSourceHasStaticStation(sourceCfg)) { return 1; }
     return Math.max(1, Math.min(2, remoteTargetAccessSlots(source.pos)));
 }
 
@@ -2235,16 +2392,24 @@ function remoteSourceReplacementHorizon(
     const spawnBody = archetype === 'remoteMiner'
         ? planBodyForArchetype('remoteMiner', context.room.energyCapacityAvailable, {
             staticMining: true,
-            hasContainer: !!sourcePlan.containerId
+            hasContainer: remoteSourceHasContainerStation(sourcePlan)
         })
         : planBodyForArchetype('remoteHauler', context.room.energyCapacityAvailable);
     const spawnTime = Math.max(1, spawnBody.length * CREEP_SPAWN_TIME);
     return oneWayDistance + spawnTime + REMOTE_REPLACEMENT_BUFFER_TICKS;
 }
 
+function remoteSourceHasContainerStation(sourcePlan: RemoteSourcePlan | undefined): boolean {
+    return !!sourcePlan?.containerId || !!sourcePlan?.containerSiteId;
+}
+
+function remoteSourceHasStaticStation(sourcePlan: RemoteSourcePlan | undefined): boolean {
+    return remoteSourceHasContainerStation(sourcePlan) ||
+        (sourcePlan?.stationX != null && sourcePlan?.stationY != null);
+}
+
 function remoteSourceActiveMinerLimit(sourcePlan: RemoteSourcePlan): number {
-    if (sourcePlan.containerId) { return 1; }
-    if (sourcePlan.stationX != null && sourcePlan.stationY != null) { return 1; }
+    if (remoteSourceHasStaticStation(sourcePlan)) { return 1; }
     return 2;
 }
 

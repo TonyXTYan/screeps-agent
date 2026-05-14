@@ -32,7 +32,7 @@ lastSeenHostiles?: number
 skipReason?: string
 sources?: {
   [sourceId: string]: {
-    sourceId, stationX, stationY, containerId,
+    sourceId, stationX, stationY, containerId, containerSiteId,
     pathSerialized, pathDistance, pathUpdatedAt,
     workDemand, haulerCapacityDemand,
     assignedMinerWork, assignedHaulerCapacity, lastSeen
@@ -58,12 +58,11 @@ sources?: {
 For each configured remote room:
   ├─ No source data?          → spawn remoteScout
   ├─ Mode: harvest, needs reserve? → spawn claimer (min 2 CLAIM)
+  ├─ Active miner TTL <= 200? → spawn remoteMiner (remoteStandby=true, source-targeted)
   ├─ For each known source:
   │   ├─ Miner work deficit?  → spawn remoteMiner (respect per-source active slot cap)
   │   ├─ Hauler cap deficit?  → spawn remoteHauler (max 2/source)
-  │   └─ (Standby replacement targeted by low-TTL miner)
   ├─ Needs maintenance?       → spawn remoteMaintainer
-  ├─ Active miner TTL <= 200? → spawn remoteMiner (remoteStandby=true, source-targeted)
   └─ Mode: reserve/claim?     → spawn claimer
 ```
 
@@ -85,7 +84,7 @@ haulerCapacityDemand = min(
 ## Remote Miner Slot Caps
 
 - Active remote miners are slot-capped per source to avoid static-mining deadlocks.
-- Sources with a planned container or fixed station tile allow **1 active miner**.
+- Sources with a built container, pending container construction site, or fixed station tile allow **1 active miner**.
 - Non-static sources allow up to **2 active miners** (terrain/access permitting).
 - If all source slots are full, extra remote miners are pushed into standby flow instead of crowding source stations.
 - A remote miner already parked on its container prioritizes `harvestSource` and does not take auxiliary remote build jobs from that position.
@@ -112,10 +111,16 @@ Paths from home storage/spawn to each remote source station are cached to avoid 
 6. Incomplete paths retry quickly (about 100 ticks vs 5000)
 ```
 
+Remote station validation also checks the local path from the home-to-remote entry edge to the station.
+If a miner repeatedly stalls out of harvest range, the source path is invalidated and retried later rather
+than keeping the miner in a wall-pocket loop.
+
 ## Infrastructure Placement
 
 ### Containers
-Placed adjacent to remote source stations when a station tile exists and no container is present.
+Placed adjacent to remote source stations when a station tile exists and no container is present. Pending
+container construction sites are tracked as `containerSiteId` and treated as static mining stations for
+miner caps/body planning, but haulers only withdraw from built `containerId` containers.
 
 ### Roads
 Placed along discovered paths at `REMOTE_ROAD_SITES_PER_TICK` (4) sites per tick, capped at
@@ -152,6 +157,7 @@ Remote maintainers (not miners, not claimers) can renew at the home spawn:
 ### Miner Replacement (Standby Dispatch)
 - Remote miners do not renew at the home spawn
 - When an active remote miner for a source reaches TTL <= 200, a source-targeted `remoteStandby` replacement is spawned
+- Source-targeted standby miners count as replacement coverage, so active deficit spawning does not bypass them
 - Standby routing is evaluated before generic outbound remote travel
 - While incumbent is alive, standby pre-positions in the remote room near the mining site (range 4-10)
 - Once the incumbent dies, standby is promoted and takes over that source

@@ -40,7 +40,7 @@ Use this as the first stop before editing code.
 - Link classification — `src/room.structures.ts`
 - Spawn demand selection — `src/room.controller.ts`
 - Home room priority gate (blocks remote spawns when home requests pending) — `src/room.controller.ts`
-- Remote standby miner system (TTL-triggered source-targeted handoff with remote pre-positioning; no standby renew) — `src/room.controller.ts`, `src/main.ts`
+- Remote standby miner system (TTL-triggered source-targeted handoff with remote pre-positioning; pending container-site awareness; no standby renew) — `src/room.controller.ts`, `src/creep.jobRunner.ts`, `src/main.ts`
 - Body capability derivation — `src/creep.capabilities.ts`
 - Body planning by archetype — `src/creep.capabilities.ts`
 - Remote hauler capacity cap (per source) — `src/room.controller.ts`

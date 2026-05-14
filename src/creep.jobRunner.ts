@@ -697,12 +697,51 @@ function nearestExitTileToRoom(creep: Creep, roomName: string): RoomPosition | n
     const exitDir = Game.map.findExit(creep.room, roomName);
     if (typeof exitDir !== 'number' || exitDir < TOP || exitDir > LEFT) { return null; }
 
+    const stationExit = exitTileClosestToRemoteStation(creep, roomName, exitDir as ExitConstant);
+    if (stationExit) { return stationExit; }
+
     const byPath = creep.pos.findClosestByPath(exitDir as ExitConstant, {
         ignoreCreeps: false
     }) as RoomPosition | null;
     if (byPath) { return byPath; }
 
     return creep.pos.findClosestByRange(exitDir as ExitConstant) as RoomPosition | null;
+}
+
+function exitTileClosestToRemoteStation(
+    creep: Creep,
+    roomName: string,
+    exitDir: ExitConstant
+): RoomPosition | null {
+    if (creep.memory.remoteRoom !== roomName) { return null; }
+    const stationX = creep.memory.stationX;
+    const stationY = creep.memory.stationY;
+    if (stationX == null || stationY == null) { return null; }
+
+    const exits = creep.room.find(exitDir) as RoomPosition[];
+    if (exits.length === 0) { return null; }
+
+    const station = new RoomPosition(stationX, stationY, roomName);
+    let best: RoomPosition | null = null;
+    let bestScore = Infinity;
+    for (const exit of exits) {
+        const entry = mirrorExitPositionIntoRoom(exit, roomName);
+        if (!entry) { continue; }
+        const score = creep.pos.getRangeTo(exit) + entry.getRangeTo(station);
+        if (score < bestScore) {
+            bestScore = score;
+            best = exit;
+        }
+    }
+    return best;
+}
+
+function mirrorExitPositionIntoRoom(exit: RoomPosition, roomName: string): RoomPosition | null {
+    if (exit.x === 0) { return new RoomPosition(49, exit.y, roomName); }
+    if (exit.x === 49) { return new RoomPosition(0, exit.y, roomName); }
+    if (exit.y === 0) { return new RoomPosition(exit.x, 49, roomName); }
+    if (exit.y === 49) { return new RoomPosition(exit.x, 0, roomName); }
+    return null;
 }
 
 function forceStepTowardsRoomExit(

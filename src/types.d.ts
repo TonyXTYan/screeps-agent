@@ -56,6 +56,7 @@ interface RemoteSourcePlan {
     stationX?: number;
     stationY?: number;
     containerId?: string;
+    containerSiteId?: string;
     pathSerialized?: string;
     pathDistance?: number;
     pathUpdatedAt?: number;
@@ -208,6 +209,9 @@ interface CreepMemory {
     travelLastY?: number;
     travelLastRoom?: string;
     travelStuckTicks?: number;
+    remoteStationStuckSourceId?: string;
+    remoteStationLastRange?: number;
+    remoteStationStuckTicks?: number;
     trafficYieldX?: number;
     trafficYieldY?: number;
     trafficYieldRoom?: string;

@@ -136,7 +136,7 @@ function remoteNavLabel(creep: Creep): string {
 }
 
 function remoteSourceMinerCap(sourceId: string, sourcePlan: RemoteSourcePlan): number {
-    if (sourcePlan.containerId) { return 1; }
+    if (sourcePlan.containerId || sourcePlan.containerSiteId) { return 1; }
     if (sourcePlan.stationX != null && sourcePlan.stationY != null) { return 1; }
 
     const source = Game.getObjectById(sourceId as Id<Source>);
@@ -340,6 +340,17 @@ function printRemoteCreepStatus(filterHome?: string, filterRemote?: string): voi
                         );
                     } else {
                         sourceLines.push(`    container=${sourcePlan.containerId.slice(-8)}  (not visible)`);
+                    }
+                }
+                if (sourcePlan.containerSiteId && !sourcePlan.containerId) {
+                    const site = Game.getObjectById(sourcePlan.containerSiteId as Id<ConstructionSite>);
+                    if (site) {
+                        sourceLines.push(
+                            `    containerSite=${sourcePlan.containerSiteId.slice(-8)} at [${site.pos.x},${site.pos.y}]` +
+                            `  progress=${site.progress}/${site.progressTotal}`
+                        );
+                    } else {
+                        sourceLines.push(`    containerSite=${sourcePlan.containerSiteId.slice(-8)}  (not visible)`);
                     }
                 }
 

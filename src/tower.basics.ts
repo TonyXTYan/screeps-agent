@@ -1,6 +1,9 @@
 import { repairStructureFilter } from './role.doctor';
 import { isHostile } from './hostileUtils';
 
+const DEFENSE_CRITICAL_HITS = 1000;
+const DEFENSE_CRITICAL_MIN_ENERGY = 0.5;
+
 export function run(room: Room): void {
     const towers = room.find(FIND_STRUCTURES, {
         filter: (s) => s.structureType === STRUCTURE_TOWER
@@ -27,7 +30,8 @@ export function run(room: Room): void {
             s.structureType !== STRUCTURE_WALL &&
             s.structureType !== STRUCTURE_RAMPART
     }).sort((a, b) => a.hits - b.hits);
-    // Non-defense structures only: walls/ramparts handled at the ≥90% gate below
+    // Non-defense structures: < 500 (veryUrgent), < 10K (urgent), or < 10% HP (criticalNormal) caught by absolute/percent thresholds;
+    // walls/ramparts below DEFENSE_CRITICAL_HITS handled at DEFENSE_CRITICAL_MIN_ENERGY gate in a separate branch
     const normal = room.find(FIND_STRUCTURES, {
         filter: (s) => repairStructureFilter(s, rcl) &&
             s.structureType !== STRUCTURE_WALL && s.structureType !== STRUCTURE_RAMPART
@@ -35,6 +39,15 @@ export function run(room: Room): void {
     const defense = room.find(FIND_STRUCTURES, {
         filter: (s) => repairStructureFilter(s, rcl) &&
             (s.structureType === STRUCTURE_WALL || s.structureType === STRUCTURE_RAMPART)
+    }).sort((a, b) => a.hits - b.hits);
+    const criticalNormal = room.find(FIND_STRUCTURES, {
+        filter: (s) => s.structureType !== STRUCTURE_WALL &&
+            s.structureType !== STRUCTURE_RAMPART &&
+            s.hits < s.hitsMax * 0.1
+    }).sort((a, b) => a.hits - b.hits);
+    const criticalDefense = room.find(FIND_STRUCTURES, {
+        filter: (s) => (s.structureType === STRUCTURE_WALL || s.structureType === STRUCTURE_RAMPART) &&
+            s.hits < DEFENSE_CRITICAL_HITS
     }).sort((a, b) => a.hits - b.hits);
 
     const claimedIds = new Set<string>();
@@ -59,7 +72,9 @@ export function run(room: Room): void {
             } else {
                 const target = veryUrgent.find(s => !claimedIds.has(s.id))
                     ?? urgent.find(s => !claimedIds.has(s.id))
+                    ?? criticalNormal.find(s => !claimedIds.has(s.id))
                     ?? normal.find(s => !claimedIds.has(s.id))
+                    ?? criticalDefense.find(s => !claimedIds.has(s.id))
                     ?? (energyRatio >= minEnergyForDefense ? defense.find(s => !claimedIds.has(s.id)) : null);
 
                 if (target) {
@@ -70,6 +85,14 @@ export function run(room: Room): void {
                         console.log('tower.basics: ' + tower + ' is idle');
                     }
                 }
+            }
+        } else if (energyRatio >= DEFENSE_CRITICAL_MIN_ENERGY) {
+            // Critical structures: repair non-wall < 10% HP or wall/rampart < 1K hits at 50% energy, even during peace
+            const critTarget = criticalNormal.find(s => !claimedIds.has(s.id))
+                ?? criticalDefense.find(s => !claimedIds.has(s.id));
+            if (critTarget) {
+                tower.repair(critTarget);
+                claimedIds.add(critTarget.id);
             }
         }
     }

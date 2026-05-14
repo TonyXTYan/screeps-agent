@@ -1603,8 +1603,8 @@ function chooseSpawnRequest(context: RoomControllerContext, pending: SpawnReques
     }
 
     if (mineralReadyToMine(context) && context.mineralPlan &&
-        capacities.mineralMinerWork < context.mineralPlan.requiredWork &&
-        !pending.some(r => r.archetype === 'mineralMiner')) {
+        !pending.some(r => r.archetype === 'mineralMiner') &&
+        capacities.mineralMinerWork === 0) {
         return {
             archetype: 'mineralMiner',
             reason: 'passive mineral extraction',
@@ -1648,8 +1648,8 @@ function remoteSpawnRequest(
         if (remote.mode === 'harvest' && remote.reserve !== false) {
             const reservation = Game.rooms[roomName]?.controller?.reservation;
             if ((!reservation || reservation.ticksToEnd < 4000) &&
-                remoteClaimerCount(homeFleet, roomName, 'reserve', 2) === 0 &&
-                !pending.some(r => r.archetype === 'claimer' && r.remoteRoom === roomName)) {
+                !pending.some(r => r.archetype === 'claimer' && r.remoteRoom === roomName) &&
+                remoteClaimerCount(homeFleet, roomName, 'reserve', 2) === 0) {
                 const maxClaimParts = (reservation && reservation.ticksToEnd < 500) ? 5 : 2;
                 return {
                     archetype: 'claimer',
@@ -1736,8 +1736,8 @@ function remoteSpawnRequest(
             }
         }
         if ((remote.mode === 'reserve' || remote.mode === 'claim') &&
-            remoteClaimerCount(homeFleet, roomName, remote.mode, remote.mode === 'reserve' ? 2 : 1) === 0 &&
-            !pending.some(r => r.archetype === 'claimer' && r.remoteRoom === roomName)) {
+            !pending.some(r => r.archetype === 'claimer' && r.remoteRoom === roomName) &&
+            remoteClaimerCount(homeFleet, roomName, remote.mode, remote.mode === 'reserve' ? 2 : 1) === 0) {
             let maxClaimParts: number | undefined;
             if (remote.mode === 'reserve') {
                 const reservation = Game.rooms[roomName]?.controller?.reservation;

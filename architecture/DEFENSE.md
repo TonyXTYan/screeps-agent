@@ -34,14 +34,18 @@ Executed every tick per room in `towerBasics.run(room)`.
 ### Priority per tower (in order):
 
 ```
-1. Attack closest armed hostile creep         (always, any energy)
-2. Heal/Repair phase (only if energy ≥ minEnergyForRepair):
-   a. Heal closest injured friendly creep     (if any damaged creeps exist)
+1. Attack closest armed hostile creep                        (always, any energy)
+2. Heal/Repair phase (energy ≥ minEnergyForRepair: 70% peace / 50% combat)
+   a. Heal closest injured friendly creep                    (if any damaged creeps exist)
    b. Repair (else):
-      i.   Very urgent  (< 500 hits, non-wall)     [hits ascending]
-      ii.  Urgent       (< 10K hits, non-wall)     [hits ascending]
-      iii. Normal       (repairStructureFilter)     [hits ascending]
-      iv.  Walls/ramparts                          (only if energy ≥ minEnergyForDefense)
+      i.    Very urgent     (< 500 hits, non-wall)          [hits ascending]
+      ii.   Urgent          (< 10K hits, non-wall)          [hits ascending]
+      iii.  Critical        (non-wall, < 10% HP)            [hits ascending]
+      iv.   Normal          (repairStructureFilter, non-wall) [hits ascending]
+      v.    Crit defense    (wall/rampart < 1K hits)        [hits ascending]
+      vi.   Walls/ramparts  (full defense list)             (only if energy ≥ minEnergyForDefense)
+3. Critical-only phase (energy ≥ 50%, peace only; < 70%):
+   - non-wall < 10% HP  OR  wall/rampart < 1K hits         [hits ascending]
 ```
 
 **Claim distribution**: Towers track claimed repair IDs per tick so multiple towers don't all
@@ -54,10 +58,18 @@ repair the same target. Each tower picks the next-most-urgent unclaimed structur
 **During peace** (no armed hostiles): ≥ 70% energy
 **During combat** (armed hostiles present): ≥ 50% energy
 
-`minEnergyForDefense` — gates wall/rampart repair specifically:
+`minEnergyForDefense` — gates wall/rampart repair specifically (tier 2b-v):
 
 **During peace**: ≥ 75% energy
 **During combat**: ≥ 40% energy
+
+`DEFENSE_CRITICAL_MIN_ENERGY` — gates critical defense tier (tier 3):
+
+**Always**: ≥ 50% energy (no dynamic change based on combat state)
+
+This tier activates only during peace when `energyRatio < minEnergyForRepair` (70%), filling
+the 50–70% energy gap. During combat, `minEnergyForRepair` is already 0.5, so critical defense
+is handled within the main branch (tier 2b-iv).
 
 Attack always proceeds regardless of energy level.
 

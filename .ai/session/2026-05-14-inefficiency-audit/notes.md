@@ -437,6 +437,36 @@ This explains why the mineral container is always empty - the mineral miner cann
 
 ---
 
+## Code Change History (Detected from Logs)
+
+| Tick | Time | Commit | Description |
+|------|------|--------|-------------|
+| 70921436 | 3:31 AM | f3b60247 -> b713d59f | Initial code change |
+| 70921474 | 3:33 AM | b713d59f -> eb9d399f | Remote hauler cycle |
+| 70921491 | 3:34 AM | eb9d399f -> 983c8445 | Remote hauler tweaks |
+| 70921506 | 3:35 AM | 983c8445 -> f0a09b0d | More tweaks |
+| 70921517 | 3:36 AM | f0a09b0d -> 42e06698 | Detect code change |
+| 70921727 | 3:49 AM | 42e06698 -> 0c6b96c7 | Docs align |
+| 70921779 | 3:52 AM | 0c6b96c7 -> c2ce28d0 | Wall rampart building |
+
+### Key Changes
+
+1. **Remote hauler cycle** (cab47a3) - Major changes to `creep.jobRunner.ts` and `room.controller.ts` (250 lines added)
+2. **Remote hauler tweaks** (97d6aad) - Changes to `role.doctor.ts`, `room.controller.ts`, `types.d.ts` (92 lines added)
+3. **More tweaks** (8da38b2) - Changes to `creep.capabilities.ts`, `debug.ts`, `role.manual.ts`, `room.controller.ts` (154 lines added)
+4. **Remote claimer fix** (7f0376b) - Fixed claimer spawning when reservation >4000
+5. **Multiple claimer bug** (bce8de1) - Fixed multiple claimers in remote room
+6. **Wall rampart building** (c2ce28d) - Added critical defense structure repair priority
+
+### Impact Assessment
+
+- **Hauler energy loading FIXED** - Haulers now returning with 100% capacity (1300-1500 energy)
+- **Claimer progress** - Now moving and reserving controller (stuck=1 instead of stuck=4)
+- **Remote maintainer improvements** - Now traveling/building instead of stuck
+- **Mineral container still empty** - Despite extractor working, container not filled with energy
+
+---
+
 ## Latest Status Update - Tick 70920880 (2:57 AM)
 - Energy: 2088/2300 (91%)
 - Storage: 0/2250 (0%)

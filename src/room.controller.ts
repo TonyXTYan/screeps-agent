@@ -1645,18 +1645,20 @@ function remoteSpawnRequest(
             }
             continue;
         }
-        if (remote.mode === 'harvest' && remote.reserve !== false && remoteClaimerCount(homeFleet, roomName, 'reserve', 2) === 0 &&
-            !pending.some(r => r.archetype === 'claimer' && r.remoteRoom === roomName)) {
+        if (remote.mode === 'harvest' && remote.reserve !== false) {
             const reservation = Game.rooms[roomName]?.controller?.reservation;
-            const maxClaimParts = (reservation && reservation.ticksToEnd < 500) ? 5 : 2;
-            return {
-                archetype: 'claimer',
-                reason: 'remote reserve ' + roomName,
-                remoteRoom: roomName,
-                remoteMode: 'reserve',
-                minClaimParts: 2,
-                maxClaimParts
-            };
+            if ((!reservation || reservation.ticksToEnd < 4000) &&
+                !pending.some(r => r.archetype === 'claimer' && r.remoteRoom === roomName)) {
+                const maxClaimParts = (reservation && reservation.ticksToEnd < 500) ? 5 : 2;
+                return {
+                    archetype: 'claimer',
+                    reason: 'remote reserve ' + roomName,
+                    remoteRoom: roomName,
+                    remoteMode: 'reserve',
+                    minClaimParts: 2,
+                    maxClaimParts
+                };
+            }
         }
         if (remote.mode === 'harvest' && remote.sources) {
             const numSources = Object.keys(remote.sources).length;

@@ -55,7 +55,7 @@ Body planning lives in `planBodyForArchetype()` in `creep.capabilities.ts`. Lega
 5. Hauler                    → minimum 2 at RCL4+ with storage
 6. Hauler capacity           → capacity deficit
 7. Worker work capacity      → work deficit
-8. Mineral miner             → if extractor + mineral + storage energy ≥ 3000
+8. Mineral miner             → if mineral ready (extractor exists, container exists, mineral.mineralAmount > 0)
 9. Claim target              → configured claimTargets
 10. Remote creeps            → via remoteSpawnRequest() (see REMOTES.md)
 ```
@@ -126,20 +126,17 @@ Each tick the runner:
 ### Local miners
 
 ```
-Target: sources + 1 miners per room (one standby)
+Target: 1 miner per source
           │
           ▼
-Active miner assigned to source ────→ TTL < 180? ──→ Swap standby in
-          │                                        │
-          │                                        ▼
-    Stay on source                  Active → standby (gets renewed)
-          │
-          ▼
-Standby miner parks near spawn ────→ Renewed at TTL < 1450
+Miner assigned to source ──→ TTL < 500? ──→ Renew at spawn
+          │                               │
+          │                               ▼
+    Stay on source                    Renew loop (TTL ≥ 1300 stop)
 ```
 
-The swap is seamless: the retiring miner's `sourceId` is transferred to the standby, the retiring
-miner is set to `standby`, and the new standby returns to spawn for renewal.
+The miner self-renews at spawn when TTL drops below 500 (`HOME_RENEW_START_TTL`) and stops renewing
+once TTL reaches 1300 (`HOME_RENEW_STOP_TTL`). The same miner stays assigned to its source throughout.
 
 ### Remote miners
 

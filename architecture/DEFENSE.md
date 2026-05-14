@@ -35,12 +35,13 @@ Executed every tick per room in `towerBasics.run(room)`.
 
 ```
 1. Attack closest armed hostile creep         (always, any energy)
-2. Heal closest injured friendly creep        (if energy ≥ 50% in combat, ≥ 70% in peace)
-3. Repair:
-   a. Very urgent  (< 500 hits, non-wall)     [hits ascending]
-   b. Urgent       (< 10K hits, non-wall)     [hits ascending]
-   c. Normal       (repairStructureFilter)     [hits ascending]
-   d. Walls/ramparts                          (≥ 40% in combat, ≥ 75% in peace)
+2. Heal/Repair phase (only if energy ≥ minEnergyForRepair):
+   a. Heal closest injured friendly creep     (if any damaged creeps exist)
+   b. Repair (else):
+      i.   Very urgent  (< 500 hits, non-wall)     [hits ascending]
+      ii.  Urgent       (< 10K hits, non-wall)     [hits ascending]
+      iii. Normal       (repairStructureFilter)     [hits ascending]
+      iv.  Walls/ramparts                          (only if energy ≥ minEnergyForDefense)
 ```
 
 **Claim distribution**: Towers track claimed repair IDs per tick so multiple towers don't all
@@ -48,14 +49,17 @@ repair the same target. Each tower picks the next-most-urgent unclaimed structur
 
 ### Energy thresholds (dynamic based on combat state)
 
-**During peace** (no armed hostiles):
-- Heal/repair normal structures: ≥ 70% energy
-- Repair walls/ramparts: ≥ 75% energy
+`minEnergyForRepair` — gates entry into heal/repair phase:
 
-**During combat** (armed hostiles present):
-- Heal/repair normal structures: ≥ 50% energy
-- Repair walls/ramparts: ≥ 40% energy
-- Attack: always (no energy minimum)
+**During peace** (no armed hostiles): ≥ 70% energy
+**During combat** (armed hostiles present): ≥ 50% energy
+
+`minEnergyForDefense` — gates wall/rampart repair specifically:
+
+**During peace**: ≥ 75% energy
+**During combat**: ≥ 40% energy
+
+Attack always proceeds regardless of energy level.
 
 ### Repair structure criteria
 
@@ -64,13 +68,15 @@ repair the same target. Each tower picks the next-most-urgent unclaimed structur
 
 ### Wall/rampart staged caps
 
-| RCL   | Max hits |
-|-------|----------|
-| ≤ 2   | 10,000   |
-| ≤ 4   | 30,000   |
-| ≤ 6   | 100,000  |
-| 7     | 300,000  |
-| 8     | ∞        |
+| RCL | Max hits  |
+|-----|-----------|
+| 2   | 20,000    |
+| 3   | 30,000    |
+| 4   | 50,000    |
+| 5   | 75,000    |
+| 6   | 100,000   |
+| 7   | 300,000   |
+| 8   | Infinity  |
 
 From `wallRampartRepairCap()` in `role.doctor.ts`.
 

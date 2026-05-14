@@ -423,6 +423,14 @@ This explains why the mineral container is always empty - the mineral miner cann
 
 **Update (Tick 70921351):** Home room energy at 245/2300. Storage at 3785-4675/2250. Now 3 mineral miners active (mineralMiner=3). Mineral container still empty (energy=0/2000). Mineral amount decreasing (22741 -> 22736).
 
+**Update (Tick 70921391):** Home room energy at 191/2300. Storage at 4497/2250. 3 mineral miners active. Mineral container still empty (energy=0/2000). Mineral amount decreasing (22736 -> 22730).
+
+**Update (Tick 70921421):** Home room energy recovered to 1096/2300 (47%). Storage at 3497/2250. 3 mineral miners active. Mineral container still empty (energy=0/2000). Mineral amount decreasing (22730 -> 22724).
+
+**Update (Tick 70921441):** Home room energy at 846/2300 (37%). Storage at 3237/2250. Mineral container still empty (energy=0/2000). Mineral amount decreasing (22724 -> 22716).
+
+**Update (Tick 70921471):** Home room energy at 441/2300 (19%). Storage at 1337/2250. Mineral container still empty (energy=0/2000). Mineral amount decreasing (22716 -> 22708).
+
 **Root Cause:** Home room energy dropped from 2088/2300 to insufficient levels. The mineral miner spawning logic checks for 600 energy but the room is depleted.
 
 **Recommendation:** Ensure home room maintains minimum energy threshold for mineral miner spawning, or reduce the energy requirement for passive mineral extraction.

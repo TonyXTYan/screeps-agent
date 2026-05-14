@@ -10,7 +10,7 @@ Quick reference for hard and soft limits on creep counts by archetype and RCL.
 | **Doctor** | 1 (soft) | Spawns only if `heal === 0` and energy ≥ 450 | `room.controller.ts:1410–1413` |
 | **Hauler** | Dynamic | `max(2, ceil(demand / maxCarryPerHauler) + 1)` — see formula below | `room.controller.ts:1277–1282, 1415–1425` |
 | **Worker** | RCL-dependent | `[0, 2, 2, 2, 3, 4, 4, 4, 4]` for RCL 0–8 | `room.controller.ts:1430` |
-| **Mineral Miner** | 1 (soft) | Spawns if mineral ready, extractor exists, storage ≥ 3000, and `mineralMinerWork === 0` | `room.controller.ts:1437–1447` |
+| **Mineral Miner** | 1 (soft) | Spawns if mineral ready (extractor exists, mineral.mineralAmount > 0, container exists), `mineralMinerWork < requiredWork`, and not pending | `room.controller.ts:1605–1615` |
 
 ### Hauler Max Count Formula
 

@@ -60,6 +60,7 @@
 | 70932095 | 1138e419 | Remote miner fix v5 (standby, stuck recovery) |
 | 70932626 | c080a728 | Remote miner fix v6 (station validation) |
 | 70936868 | 12f67739 | Remote miner fix v7 (force repath for station moves) |
+| 70937086 | 4a9944f9 | Terminal Energy Reserve Policy (RCL6=5k, RCL7=10k, RCL8=50k) |
 
 ---
 
@@ -75,3 +76,5 @@
 | 70936531 | 1911 | 0 | 80 | Mineral L peak |
 | 70936621 | 2300 | 0 | 0 | W6N9 miners=0/1, container empty |
 | 70936871 | 2300 | 0 | 30 | v7 deployed (force repath), W6N9 still miners=0/1 |
+| 70937091 | 50 | 0 | 25 | v8 deployed (terminal reserve), W8N9 both miners=1/1 |
+| 70937511 | 927 | 0 | 15 | All remote sources miners=1/1, W6N9 haulers=2 (1200C) |

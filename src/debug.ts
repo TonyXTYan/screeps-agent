@@ -603,7 +603,7 @@ export type DebugConsoleApi = {
 export function tickAutoDebug(): void {
     const tick = Game.time % 10;
     if (tick === 0){
-        console.log(`--- Tick ${Game.time} --- ${new Date().toLocaleTimeString()} --- ${Game.cpu.bucket} bucket --- ${Game.market.credits} credits ---`);
+        console.log(`--- Shard ${Game.shard.name} --- Tick ${Game.time} --- ${new Date().toLocaleTimeString()} --- ${Game.cpu.bucket} bucket --- ${Game.market.credits} credits ---`);
     } else if (tick === 1) {
         for (const room of ownedRooms()) {
             if (room.memory.debug_home) { printHomeCreepStatus(room.name); }

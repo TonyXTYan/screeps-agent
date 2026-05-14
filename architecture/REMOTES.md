@@ -56,6 +56,7 @@ sources?: {
 
 ```
 For each configured remote room:
+  ├─ Home economy gate?      → skip non-critical remote spawns
   ├─ No source data?          → spawn remoteScout
   ├─ Mode: harvest, needs reserve? → spawn claimer (min 2 CLAIM)
   ├─ Active miner TTL <= 200? → spawn remoteMiner (remoteStandby=true, source-targeted)
@@ -65,6 +66,11 @@ For each configured remote room:
   ├─ Needs maintenance?       → spawn remoteMaintainer
   └─ Mode: reserve/claim?     → spawn claimer
 ```
+
+Remote spawning is conservative when the home room is under pressure:
+- If stored energy is below 2k, or available spawn/extension energy is below 50%, only scouts and zero-coverage emergency remote miners are allowed.
+- If stored energy is below 5k, new income-consuming remote spawns are limited to the first enabled harvest remote.
+- Remote haulers are also suppressed while existing haulers for that remote show route congestion.
 
 ## Hauler Capacity Model
 
@@ -80,6 +86,9 @@ haulerCapacityDemand = min(
 - The **2500 cap** bounds distance-weighted demand for far remotes
 - **Max 2 haulers per source** regardless of distance
 - Body uses CARRY+MOVE as the core, with optional trailing WORK when budget allows
+- Scaled hauler bodies must still be useful: at least 600 energy, and up to 900 energy when needed to cover 40% of source demand.
+
+Remote miners normally wait for a body that meets the source work demand. If a source has zero active miner coverage, an emergency minimum miner is allowed so the source can restart.
 
 ## Remote Miner Slot Caps
 

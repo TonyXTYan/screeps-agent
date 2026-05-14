@@ -115,6 +115,13 @@ const REMOTE_HAULER_WANDER_MAX_RANGE = 8;
 const REMOTE_HAULER_RETARGET_STUCK_TICKS = 4;
 const REMOTE_TARGET_MAX_HAULER_CLAIMS = 2;
 const REMOTE_MINER_STUCK_REPLAN_TICKS = 8;
+const REMOTE_HOME_RECOVERY_STORED_ENERGY = 2000;
+const REMOTE_THROTTLE_STORED_ENERGY = 5000;
+const REMOTE_SPAWN_MIN_ENERGY_RATIO = 0.5;
+const REMOTE_HAULER_ABSOLUTE_MIN_COST = 600;
+const REMOTE_HAULER_USEFUL_MIN_COST = 900;
+const REMOTE_HAULER_MIN_DEMAND_RATIO = 0.4;
+const REMOTE_MAINTAINER_MIN_COST = 450;
 
 export function run(room: Room): void {
     const context = buildContext(room);
@@ -1646,6 +1653,115 @@ function meetsMinimumBody(body: BodyPartConstant[], archetype: CreepArchetype, r
     return true;
 }
 
+function isRemoteSpawnRequest(request: SpawnRequest): boolean {
+    return request.archetype === 'remoteMiner' ||
+        request.archetype === 'remoteHauler' ||
+        request.archetype === 'remoteMaintainer' ||
+        request.archetype === 'remoteScout' ||
+        (request.archetype === 'claimer' && request.remoteMode === 'reserve');
+}
+
+function isEmergencyRemoteRequest(homeFleet: Creep[], request: SpawnRequest): boolean {
+    if (request.archetype === 'remoteScout') { return true; }
+    if (request.archetype !== 'remoteMiner' || !request.remoteRoom || !request.sourceId) { return false; }
+    return countRemoteMinersForSource(homeFleet, request.remoteRoom, request.sourceId) === 0 &&
+        projectedRemoteMinerWork(homeFleet, request.remoteRoom, request.sourceId, 0) === 0;
+}
+
+function remoteSpawnRecoveryBlockReason(
+    context: RoomControllerContext,
+    homeFleet: Creep[],
+    request: SpawnRequest,
+    availableEnergy: number = context.room.energyAvailable
+): string | null {
+    if (!isRemoteSpawnRequest(request)) { return null; }
+    if (isEmergencyRemoteRequest(homeFleet, request)) { return null; }
+
+    const energyCapacity = context.room.energyCapacityAvailable;
+    if (storedEnergy(context) < REMOTE_HOME_RECOVERY_STORED_ENERGY) {
+        return 'home recovery stored<' + REMOTE_HOME_RECOVERY_STORED_ENERGY;
+    }
+    if (energyCapacity > 0 && availableEnergy < energyCapacity * REMOTE_SPAWN_MIN_ENERGY_RATIO) {
+        return 'home recovery energy<' + Math.ceil(REMOTE_SPAWN_MIN_ENERGY_RATIO * 100) + '% remaining=' + availableEnergy;
+    }
+    return null;
+}
+
+function remoteSpawnMinimumCost(
+    context: RoomControllerContext,
+    request: SpawnRequest,
+    plannedCost: number
+): number {
+    if (!isRemoteSpawnRequest(request)) { return 0; }
+
+    if (request.archetype === 'remoteHauler') {
+        const demand = remoteSourcePlanForRequest(context, request)?.haulerCapacityDemand ?? 150;
+        const capacityCost = remoteHaulerCostForCapacity(Math.ceil(demand * REMOTE_HAULER_MIN_DEMAND_RATIO));
+        return Math.max(REMOTE_HAULER_ABSOLUTE_MIN_COST, Math.min(REMOTE_HAULER_USEFUL_MIN_COST, capacityCost));
+    }
+
+    if (request.archetype === 'remoteMiner') {
+        const homeFleet = creepsForHomeRoom(context.room.name);
+        if (isEmergencyRemoteRequest(homeFleet, request)) {
+            return bodyCost([WORK, CARRY, MOVE]);
+        }
+        const sourcePlan = remoteSourcePlanForRequest(context, request);
+        const workDemand = sourcePlan?.workDemand ?? 3;
+        return remoteMinerCostForWorkDemand(context, request, workDemand, plannedCost);
+    }
+
+    if (request.archetype === 'remoteMaintainer') {
+        return REMOTE_MAINTAINER_MIN_COST;
+    }
+
+    if (request.archetype === 'claimer' && request.remoteMode === 'reserve') {
+        return (request.minClaimParts ?? 1) * bodyCost([CLAIM, MOVE]);
+    }
+
+    return 0;
+}
+
+function remoteSourcePlanForRequest(
+    context: RoomControllerContext,
+    request: SpawnRequest
+): RemoteSourcePlan | undefined {
+    if (!request.remoteRoom || !request.sourceId) { return undefined; }
+    return context.room.memory.plan?.remoteRooms?.[request.remoteRoom]?.sources?.[request.sourceId];
+}
+
+function remoteHaulerCostForCapacity(capacity: number): number {
+    const segments = Math.max(1, Math.ceil(capacity / (2 * CARRY_CAPACITY)));
+    return segments * bodyCost([CARRY, CARRY, MOVE]);
+}
+
+function remoteMinerCostForWorkDemand(
+    context: RoomControllerContext,
+    request: SpawnRequest,
+    workDemand: number,
+    plannedCost: number
+): number {
+    for (let budget = bodyCost([WORK, CARRY, MOVE]); budget <= context.room.energyCapacityAvailable; budget += 50) {
+        const body = planBodyForArchetype('remoteMiner', budget, {
+            staticMining: request.staticMining,
+            hasContainer: request.hasContainer
+        });
+        if (body.length === 0) { continue; }
+        if (getBodyCapabilities(body).harvest >= workDemand) {
+            return bodyCost(body);
+        }
+    }
+    return plannedCost;
+}
+
+function logRemoteSpawnSkip(context: RoomControllerContext, request: SpawnRequest, reason: string): void {
+    if (Game.time % 25 !== 0) { return; }
+    console.log('room.controller: skipping ' + request.archetype +
+        ' for ' + request.reason +
+        ' reason=' + reason +
+        ' stored=' + storedEnergy(context) +
+        ' energy=' + context.room.energyAvailable + '/' + context.room.energyCapacityAvailable);
+}
+
 function runSpawnPlanner(context: RoomControllerContext): void {
     const freeSpawns = context.structures.spawns.filter((s) => !s.spawning);
     if (freeSpawns.length === 0) { return; }
@@ -1673,6 +1789,13 @@ function runSpawnPlanner(context: RoomControllerContext): void {
         while (!spawned) {
             const request = chooseSpawnRequest(context, pending);
             if (!request) { break; }
+            const homeFleet = creepsForHomeRoom(context.room.name);
+            const recoveryReason = remoteSpawnRecoveryBlockReason(context, homeFleet, request, remainingEnergy);
+            if (recoveryReason) {
+                logRemoteSpawnSkip(context, request, recoveryReason);
+                pending.push(request);
+                continue;
+            }
 
             const maxBudget = context.room.energyCapacityAvailable;
             const body = planBodyForArchetype(request.archetype, maxBudget, {
@@ -1692,6 +1815,12 @@ function runSpawnPlanner(context: RoomControllerContext): void {
             }
 
             const cost = bodyCost(body);
+            const remoteMinimumCost = remoteSpawnMinimumCost(context, request, cost);
+            if (remoteMinimumCost > 0 && cost < remoteMinimumCost) {
+                logRemoteSpawnSkip(context, request, 'body below minimum need=' + remoteMinimumCost + ' planned=' + cost);
+                pending.push(request);
+                continue;
+            }
 
             if (cost > remainingEnergy) {
                 const affordableBody = planBodyForArchetype(request.archetype, remainingEnergy, {
@@ -1704,6 +1833,11 @@ function runSpawnPlanner(context: RoomControllerContext): void {
                 if (affordableBody.length > 0) {
                     const affordableCost = bodyCost(affordableBody);
                     const fleetCount = countFleetForArchetype(context.creeps, request.archetype);
+                    if (remoteMinimumCost > 0 && affordableCost < remoteMinimumCost) {
+                        logRemoteSpawnSkip(context, request, 'body below minimum need=' + remoteMinimumCost + ' have=' + affordableCost + ' planned=' + cost);
+                        pending.push(request);
+                        continue;
+                    }
                     if (meetsMinimumBody(affordableBody, request.archetype, rcl, fleetCount) && affordableCost <= remainingEnergy) {
                         const aName = request.archetype + '-' + spawn.name + '-' + Game.time + (pending.length > 0 ? '-' + pending.length : '');
                         const aRole = legacyRoleForArchetype(request.archetype);
@@ -1881,7 +2015,13 @@ function remoteSpawnRequest(
                 !pending.some(r => r.archetype === 'remoteScout' && r.remoteRoom === roomName) &&
                 !hasAssignedNonScoutRemoteCreep(homeFleet, roomName) &&
                 !pending.some(r => r.remoteRoom === roomName && r.archetype !== 'remoteScout')) {
-                return { archetype: 'remoteScout', reason: 'remote scout ' + roomName, remoteRoom: roomName, remoteMode: remote.mode };
+                const request: SpawnRequest = { archetype: 'remoteScout', reason: 'remote scout ' + roomName, remoteRoom: roomName, remoteMode: remote.mode };
+                const blockReason = remoteRequestBlockReason(context, homeFleet, remoteRooms, roomName, request);
+                if (blockReason) {
+                    logRemoteSpawnSkip(context, request, blockReason);
+                    continue;
+                }
+                return request;
             }
             continue;
         }
@@ -1891,7 +2031,7 @@ function remoteSpawnRequest(
                 !pending.some(r => r.archetype === 'claimer' && r.remoteRoom === roomName) &&
                 remoteClaimerCount(homeFleet, roomName, 'reserve', 2) === 0) {
                 const maxClaimParts = (reservation && reservation.ticksToEnd < 500) ? 5 : 2;
-                return {
+                const request: SpawnRequest = {
                     archetype: 'claimer',
                     reason: 'remote reserve ' + roomName,
                     remoteRoom: roomName,
@@ -1899,6 +2039,9 @@ function remoteSpawnRequest(
                     minClaimParts: 2,
                     maxClaimParts
                 };
+                const blockReason = remoteRequestBlockReason(context, homeFleet, remoteRooms, roomName, request);
+                if (!blockReason) { return request; }
+                logRemoteSpawnSkip(context, request, blockReason);
             }
         }
         if (remote.mode === 'harvest' && remote.sources) {
@@ -1912,7 +2055,7 @@ function remoteSpawnRequest(
                     r.remoteRoom === roomName &&
                     r.remoteStandby &&
                     r.sourceId === standbySourceId)) {
-                return {
+                const request: SpawnRequest = {
                     archetype: 'remoteMiner',
                     reason: 'remote standby replacement ' + roomName + ':' + standbySourceId,
                     remoteRoom: roomName,
@@ -1922,6 +2065,9 @@ function remoteSpawnRequest(
                     staticMining: true,
                     hasContainer: remoteSourceHasContainerStation(remote.sources[standbySourceId])
                 };
+                const blockReason = remoteRequestBlockReason(context, homeFleet, remoteRooms, roomName, request);
+                if (!blockReason) { return request; }
+                logRemoteSpawnSkip(context, request, blockReason);
             }
 
             for (const sourceId in remote.sources) {
@@ -1942,7 +2088,7 @@ function remoteSpawnRequest(
                     totalRoomMiners <= numSources &&
                     !sourceHasStandby &&
                     !pending.some(r => r.archetype === 'remoteMiner' && r.remoteRoom === roomName && r.sourceId === sourceId)) {
-                    return {
+                    const request: SpawnRequest = {
                         archetype: 'remoteMiner',
                         reason: 'remote source handoff deficit ' + roomName + ':' + sourceId +
                             ' projected=' + minerProjectedWork + '/' + targetMinerWork,
@@ -1952,6 +2098,9 @@ function remoteSpawnRequest(
                         staticMining: true,
                         hasContainer: remoteSourceHasContainerStation(sourcePlan)
                     };
+                    const blockReason = remoteRequestBlockReason(context, homeFleet, remoteRooms, roomName, request);
+                    if (!blockReason) { return request; }
+                    logRemoteSpawnSkip(context, request, blockReason);
                 }
 
                 const targetHaulerCapacity = sourcePlan.haulerCapacityDemand ?? 150;
@@ -1962,7 +2111,7 @@ function remoteSpawnRequest(
                     countRemoteHaulersForSource(homeFleet, roomName, sourceId) < MAX_REMOTE_HAULERS_PER_SOURCE &&
                     !hasIdleRemoteHauler(homeFleet, roomName) &&
                     !pending.some(r => r.archetype === 'remoteHauler' && r.remoteRoom === roomName && r.sourceId === sourceId)) {
-                    return {
+                    const request: SpawnRequest = {
                         archetype: 'remoteHauler',
                         reason: 'remote haul handoff deficit ' + roomName + ':' + sourceId +
                             ' projected=' + haulerProjectedCapacity + '/' + targetHaulerCapacity,
@@ -1970,13 +2119,19 @@ function remoteSpawnRequest(
                         remoteMode: remote.mode,
                         sourceId
                     };
+                    const blockReason = remoteRequestBlockReason(context, homeFleet, remoteRooms, roomName, request);
+                    if (!blockReason) { return request; }
+                    logRemoteSpawnSkip(context, request, blockReason);
                 }
             }
 
             if (remote.maintainRoads !== false && remoteNeedsMaintainer(roomName) &&
                 !hasRemoteMaintainer(homeFleet, roomName) &&
                 !pending.some(r => r.archetype === 'remoteMaintainer' && r.remoteRoom === roomName)) {
-                return { archetype: 'remoteMaintainer', reason: 'remote maintenance ' + roomName, remoteRoom: roomName, remoteMode: remote.mode };
+                const request: SpawnRequest = { archetype: 'remoteMaintainer', reason: 'remote maintenance ' + roomName, remoteRoom: roomName, remoteMode: remote.mode };
+                const blockReason = remoteRequestBlockReason(context, homeFleet, remoteRooms, roomName, request);
+                if (!blockReason) { return request; }
+                logRemoteSpawnSkip(context, request, blockReason);
             }
         }
         if ((remote.mode === 'reserve' || remote.mode === 'claim') &&
@@ -1987,7 +2142,7 @@ function remoteSpawnRequest(
                 const reservation = Game.rooms[roomName]?.controller?.reservation;
                 maxClaimParts = (reservation && reservation.ticksToEnd < 500) ? 5 : 2;
             }
-            return {
+            const request: SpawnRequest = {
                 archetype: 'claimer',
                 reason: 'configured remote ' + remote.mode + ' ' + roomName,
                 remoteRoom: roomName,
@@ -1995,10 +2150,61 @@ function remoteSpawnRequest(
                 minClaimParts: remote.mode === 'reserve' ? 2 : undefined,
                 maxClaimParts
             };
+            const blockReason = remoteRequestBlockReason(context, homeFleet, remoteRooms, roomName, request);
+            if (!blockReason) { return request; }
+            logRemoteSpawnSkip(context, request, blockReason);
         }
     }
 
     return null;
+}
+
+function remoteRequestBlockReason(
+    context: RoomControllerContext,
+    homeFleet: Creep[],
+    remoteRooms: { [roomName: string]: RemoteRoomPlan },
+    roomName: string,
+    request: SpawnRequest
+): string | null {
+    const recoveryReason = remoteSpawnRecoveryBlockReason(context, homeFleet, request);
+    if (recoveryReason) { return recoveryReason; }
+
+    if (storedEnergy(context) < REMOTE_THROTTLE_STORED_ENERGY && remoteRequestUsesRemoteIncome(request)) {
+        const primaryRemote = firstEnabledHarvestRemoteName(remoteRooms);
+        if (primaryRemote && roomName !== primaryRemote) {
+            return 'remote throttle primary=' + primaryRemote + ' stored<' + REMOTE_THROTTLE_STORED_ENERGY;
+        }
+    }
+
+    if (request.archetype === 'remoteHauler' && hasRemoteRouteCongestion(homeFleet, roomName)) {
+        return 'route congestion';
+    }
+
+    return null;
+}
+
+function remoteRequestUsesRemoteIncome(request: SpawnRequest): boolean {
+    return request.archetype === 'remoteHauler' ||
+        request.archetype === 'remoteMaintainer' ||
+        (request.archetype === 'claimer' && request.remoteMode === 'reserve');
+}
+
+function firstEnabledHarvestRemoteName(remoteRooms: { [roomName: string]: RemoteRoomPlan }): string | null {
+    for (const roomName in remoteRooms) {
+        const remote = remoteRooms[roomName];
+        if (remote.enabled && remote.mode === 'harvest') { return roomName; }
+    }
+    return null;
+}
+
+function hasRemoteRouteCongestion(creeps: Creep[], remoteRoom: string): boolean {
+    for (const creep of creeps) {
+        if (ensureArchetype(creep) !== 'remoteHauler') { continue; }
+        if (creep.memory.remoteRoom !== remoteRoom) { continue; }
+        if (creep.memory.jobType !== 'travelRoom') { continue; }
+        if ((creep.memory.travelStuckTicks ?? 0) >= REMOTE_HAULER_RETARGET_STUCK_TICKS) { return true; }
+    }
+    return false;
 }
 
 function creepsForHomeRoom(homeRoomName: string): Creep[] {

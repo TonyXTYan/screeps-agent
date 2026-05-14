@@ -1648,6 +1648,7 @@ function remoteSpawnRequest(
         if (remote.mode === 'harvest' && remote.reserve !== false) {
             const reservation = Game.rooms[roomName]?.controller?.reservation;
             if ((!reservation || reservation.ticksToEnd < 4000) &&
+                remoteClaimerCount(homeFleet, roomName, 'reserve', 2) === 0 &&
                 !pending.some(r => r.archetype === 'claimer' && r.remoteRoom === roomName)) {
                 const maxClaimParts = (reservation && reservation.ticksToEnd < 500) ? 5 : 2;
                 return {

@@ -779,7 +779,7 @@ function updateRemoteRoomPlans(homeRoom: Room): void {
             const cachedPath = deserializeRemotePath(existing.pathSerialized);
             const hasCachedPath = cachedPath.length > 0;
             if (anchor && station && (!existing.pathDistance || !hasCachedPath || pathStale)) {
-                const route = PathFinder.search(anchor.pos, { pos: station, range: 1 }, { maxRooms: 8 });
+                const route = PathFinder.search(anchor.pos, { pos: station, range: 0 }, { maxRooms: 8 });
                 if (!route.incomplete) {
                     latestPath = route.path;
                     existing.pathDistance = route.path.length;
@@ -1016,14 +1016,35 @@ function closestRemoteInfrastructureSite(creep: Creep, allowLongRange: boolean):
     return closest(creep, pool);
 }
 
+function countOpenTilesAround(terrain: RoomTerrain, x: number, y: number): number {
+    let count = 0;
+    for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+            if (dx === 0 && dy === 0) { continue; }
+            const nx = x + dx;
+            const ny = y + dy;
+            if (nx < 1 || nx > 48 || ny < 1 || ny > 48) { continue; }
+            if (terrain.get(nx, ny) !== TERRAIN_MASK_WALL) { count++; }
+        }
+    }
+    return count;
+}
+
 function findStationForSource(room: Room, source: Source): RoomPosition | null {
+    const terrain = room.getTerrain();
     const around = room.lookForAtArea(LOOK_TERRAIN, source.pos.y - 1, source.pos.x - 1, source.pos.y + 1, source.pos.x + 1, true);
+    let best: RoomPosition | null = null;
+    let bestScore = -1;
     for (const tile of around) {
         if (tile.x === source.pos.x && tile.y === source.pos.y) { continue; }
         if (tile.terrain === 'wall') { continue; }
-        return new RoomPosition(tile.x, tile.y, room.name);
+        const score = countOpenTilesAround(terrain, tile.x, tile.y);
+        if (score > bestScore) {
+            bestScore = score;
+            best = new RoomPosition(tile.x, tile.y, room.name);
+        }
     }
-    return null;
+    return best;
 }
 
 function canPlaceContainerSite(position: RoomPosition): boolean {

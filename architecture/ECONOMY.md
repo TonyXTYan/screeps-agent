@@ -71,6 +71,7 @@ When an empty (or partially-loaded) creep decides what to collect:
 For haulers/workers with free capacity:
   1. Pick up dropped resources       (any type, any amount — decays fastest)
   2. Salvage tombstones / ruins      (non-decaying or slow-decaying)
+  2.5 Withdraw non-energy resources from the planned mineral-site container
   3. Withdraw from storage / structures in tier order:
      - Source containers (at miner/mineral sites, highest priority)
      - Source links (at source sites)

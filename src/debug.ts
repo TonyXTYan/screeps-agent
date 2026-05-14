@@ -506,8 +506,38 @@ function printHomeCreepStatus(homeRoom: string): void {
         );
     }
 
+    let enStr = room ? `en=${room.energyAvailable}/${room.energyCapacityAvailable}` : '';
+    if (room) {
+        const parts: string[] = [];
+        const storage = room.storage;
+        if (storage) {
+            parts.push(`storage=${storage.store.getUsedCapacity(RESOURCE_ENERGY)}`);
+        }
+        const containers = room.find(FIND_STRUCTURES).filter(
+            s => s.structureType === STRUCTURE_CONTAINER
+        ) as StructureContainer[];
+        if (containers.length > 0) {
+            const containerEnergy = containers
+                .map(c => `${c.store.getUsedCapacity(RESOURCE_ENERGY)}`)
+                .join('+');
+            parts.push(`containers=${containerEnergy}`);
+        }
+        const links = room.find(FIND_STRUCTURES).filter(
+            s => s.structureType === STRUCTURE_LINK
+        ) as StructureLink[];
+        if (links.length > 0) {
+            const linkEnergy = links
+                .map(l => `${l.store.getUsedCapacity(RESOURCE_ENERGY)}`)
+                .join('+');
+            parts.push(`links=${linkEnergy}`);
+        }
+        if (parts.length > 0) {
+            enStr += '  ' + parts.join('  ');
+        }
+    }
+
     if (lines.length === 0) {
-        console.log(`[HOME] t=${Game.time} ${homeRoom}: no creeps`);
+        console.log(`[HOME] t=${Game.time} ${homeRoom}:  ${enStr}`);
         return;
     }
 
@@ -517,7 +547,8 @@ function printHomeCreepStatus(homeRoom: string): void {
         .join('  ');
     const total = Object.values(counts).reduce((a, b) => a + b, 0);
 
-    console.log(`[HOME] t=${Game.time} ${homeRoom}:  ${fleetSummary}  total=${total}`);
+    console.log(`[HOME] t=${Game.time} ${homeRoom}:  ${enStr}`);
+    console.log(`  ${fleetSummary}  total=${total}`);
     for (const line of lines) {
         console.log(`  ${line}`);
     }
@@ -531,14 +562,18 @@ export type DebugConsoleApi = {
 
 export function tickAutoDebug(): void {
     const tick = Game.time % 10;
-    if (tick === 0) {
+    if (tick === 0){
+        console.log(`--- Tick ${Game.time} --- ${new Date().toLocaleTimeString()} --- ${Game.cpu.bucket} bucket ---`);
+    } else if (tick === 1) {
         for (const room of ownedRooms()) {
             if (room.memory.debug_home) { printHomeCreepStatus(room.name); }
         }
-    } else if (tick === 1) {
+    } else if (tick === 2) {
         for (const room of ownedRooms()) {
             if (room.memory.debug_remotes) { printRemoteCreepStatus(room.name); }
         }
+    } else if (tick === 3) {
+        runMemoryAudit();
     }
 }
 

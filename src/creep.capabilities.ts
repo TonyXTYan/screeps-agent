@@ -111,7 +111,7 @@ export function ensureArchetype(creep: Creep): CreepArchetype {
 export function planBodyForArchetype(
     archetype: CreepArchetype,
     energyBudget: number,
-    opts?: { staticMining?: boolean; hasContainer?: boolean; workRatio?: number; minClaimParts?: number }
+    opts?: { staticMining?: boolean; hasContainer?: boolean; workRatio?: number; minClaimParts?: number; maxClaimParts?: number }
 ): BodyPartConstant[] {
     if (archetype === 'remoteMiner' && opts?.staticMining) {
         if (opts?.hasContainer) {
@@ -132,11 +132,22 @@ export function planBodyForArchetype(
         ], energyBudget);
     }
 
-    if (archetype === 'miner' || archetype === 'remoteMiner' || archetype === 'mineralMiner') {
+    if (archetype === 'mineralMiner') {
+        return selectLargestWithinBudget([
+            [WORK, WORK, WORK, WORK, WORK, CARRY, MOVE],
+            [WORK, WORK, WORK, WORK, CARRY, MOVE],
+            [WORK, WORK, WORK, CARRY, MOVE],
+            [WORK, WORK, CARRY, MOVE],
+            [WORK, CARRY, MOVE]
+        ], energyBudget);
+    }
+
+    if (archetype === 'miner' || archetype === 'remoteMiner') {
         if (opts?.staticMining) {
             return selectLargestWithinBudget([
-                [WORK, WORK, WORK, WORK, WORK, CARRY, MOVE],
-                [WORK, WORK, WORK, WORK, CARRY, MOVE],
+                [WORK, WORK, WORK, WORK, WORK, WORK, WORK, WORK, CARRY, MOVE, MOVE, MOVE, MOVE],
+                [WORK, WORK, WORK, WORK, WORK, CARRY, MOVE, MOVE, MOVE],
+                [WORK, WORK, WORK, WORK, CARRY, MOVE, MOVE],
                 [WORK, WORK, WORK, CARRY, MOVE],
                 [WORK, WORK, CARRY, MOVE],
                 [WORK, CARRY, MOVE]
@@ -189,23 +200,24 @@ export function planBodyForArchetype(
     }
 
     if (archetype === 'claimer') {
-        return buildClaimerBody(energyBudget, opts?.minClaimParts ?? 1);
+        return buildClaimerBody(energyBudget, opts?.minClaimParts ?? 1, opts?.maxClaimParts);
     }
 
     return buildWorkerBody(energyBudget, opts?.workRatio ?? 1);
 }
 
-function buildClaimerBody(energyBudget: number, minClaimParts: number): BodyPartConstant[] {
+function buildClaimerBody(energyBudget: number, minClaimParts: number, maxClaimParts: number = 5): BodyPartConstant[] {
     const claimSegmentCost = bodyCost([CLAIM, MOVE]);
     const body: BodyPartConstant[] = [];
+    const maxPairs = Math.min(maxClaimParts, 25);
 
-    for (let i = 0; i < minClaimParts; i++) {
+    for (let i = 0; i < Math.min(minClaimParts, maxPairs); i++) {
         body.push(CLAIM, MOVE);
     }
 
     if (bodyCost(body) > energyBudget) { return []; }
 
-    while (body.length + 2 <= 50 && bodyCost(body) + claimSegmentCost <= energyBudget) {
+    while (body.length / 2 < maxPairs && body.length + 2 <= 50 && bodyCost(body) + claimSegmentCost <= energyBudget) {
         body.push(CLAIM, MOVE);
     }
 

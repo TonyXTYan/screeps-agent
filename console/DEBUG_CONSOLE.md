@@ -92,7 +92,8 @@ debug.dumpHome('W7N9')
 Output:
 
 ```
-[HOME] W7N9:  builder=1  hauler=2  miner=2  upgrader=1  worker=1  total=7
+[HOME] t=12345 W7N9:  en=5000/10000
+  builder=1  hauler=2  miner=2  upgrader=1  worker=1  total=7
   miner            miner-Spawn1-1     ttl= 450  harvestSrc  en=0/50      cont W5C1M2 src=4adbfc69
   miner            miner-Spawn1-2     ttl= 400  harvestSrc  en=50/50     cont W5C1M2 src=4adbfc6b
   hauler           hauler-Spawn1-1    ttl= 378  deposit     en=50/600    term W0C8M4

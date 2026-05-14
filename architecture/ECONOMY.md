@@ -73,18 +73,16 @@ For haulers/workers with free capacity:
   2. Salvage tombstones / ruins      (non-decaying or slow-decaying)
   2.5 Withdraw non-energy resources from the planned mineral-site container
      - Local haulers require at least 50% of their total carry capacity at the mineral site
-  3. Withdraw from storage / structures in tier order:
-     - Source containers (at miner/mineral sites, highest priority)
-     - Source links (at source sites)
-     - Hub/controller/sink links (central demand)
-     - Terminal
+  3. Withdraw from storage / structures:
+     - Workers: storage-first whenever room storage has energy
+     - Haulers: source containers (at miner/mineral sites), then source links, then hub/controller/sink links
      - For local haulers only, mining-site source containers/links are considered only if they hold at least 50% of hauler carry capacity
 
 For haulers carrying energy but with free capacity & available drops:
   → Continue gathering dropped resources (skip spending phase)
 
 Exclusive for workers (fallback if nothing above):
-  4. Harvest from source
+  4. Harvest from source (temporary fallback; reassigned once energy is loaded)
 ```
 
 Dropped resources are prioritized above all other sources because they decay

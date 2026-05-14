@@ -412,9 +412,9 @@ function printMineralStatus(room: Room): void {
     let containerStr = 'none adjacent';
     if (adjacentContainers.length > 0) {
         const c = adjacentContainers[0];
-        const energy = c.store.getUsedCapacity(RESOURCE_ENERGY);
+        const mineralAmount = c.store.getUsedCapacity(mineral.mineralType);
         const cap = c.store.getCapacity();
-        containerStr = `${c.id.slice(-8)} at [${c.pos.x},${c.pos.y}] energy=${energy}/${cap}`;
+        containerStr = `${c.id.slice(-8)} at [${c.pos.x},${c.pos.y}] ${mineral.mineralType}=${mineralAmount}/${cap}`;
     } else if (containers.length > 0) {
         const nearby = containers.filter((c) => c.pos.getRangeTo(mineral) <= 3);
         if (nearby.length > 0) {

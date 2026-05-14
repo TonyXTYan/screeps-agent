@@ -2628,7 +2628,28 @@ function currentJobStillValid(
 
     if (jobType === 'harvestSource') {
         const source = target as Source;
-        return capabilities.harvest > 0 && source.energyCapacity > 0;
+        if (capabilities.harvest <= 0 || source.energyCapacity <= 0) { return false; }
+
+        const archetype = ensureArchetype(creep);
+        const isDedicatedMiner =
+            archetype === 'miner' ||
+            archetype === 'remoteMiner' ||
+            archetype === 'mineralMiner';
+        if (isDedicatedMiner) { return true; }
+
+        // Fallback harvest for non-miners should be temporary: once any energy is
+        // loaded, re-run assignment so the creep spends or tops up via structured sources.
+        if (creep.store.getUsedCapacity(RESOURCE_ENERGY) > 0) { return false; }
+
+        if (archetype === 'worker' &&
+            capabilities.haul > 0 &&
+            context.structures.storage &&
+            context.structures.storage.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
+            // Workers should use storage when available instead of direct source mining.
+            return false;
+        }
+
+        return true;
     }
     if (jobType === 'mineMineral') {
         const mineral = target as Mineral;
@@ -2636,10 +2657,19 @@ function currentJobStillValid(
     }
     if (jobType === 'withdrawEnergy') {
         const storeTarget = target as StructureContainer | StructureStorage | StructureTerminal | StructureLink;
+        const archetype = ensureArchetype(creep);
+        const storage = context.structures.storage;
+        if (archetype === 'worker' &&
+            storage &&
+            storage.store.getUsedCapacity(RESOURCE_ENERGY) > 0 &&
+            storeTarget.id !== storage.id) {
+            // Re-target workers to storage as the primary refill source when stocked.
+            return false;
+        }
+
         const reserved = reservations.resources[storeTarget.id] ?? 0;
         const available = storeTarget.store.getUsedCapacity(RESOURCE_ENERGY) - reserved;
         if (creep.store.getFreeCapacity(RESOURCE_ENERGY) <= 0 || available <= 0) { return false; }
-        const archetype = ensureArchetype(creep);
         if ((archetype === 'hauler' || archetype === 'remoteHauler') &&
             isMiningSiteEnergyTarget(context, storeTarget)) {
             return available >= haulerMiningSiteMinPickup(creep);
@@ -2857,6 +2887,12 @@ function energyWithdrawalTarget(
     archetype: CreepArchetype,
     reservations: JobReservations
 ): StructureContainer | StructureStorage | StructureTerminal | StructureLink | null {
+    if (archetype === 'worker' &&
+        context.structures.storage &&
+        context.structures.storage.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
+        return context.structures.storage;
+    }
+
     const haulerMinPickup = haulerMiningSiteMinPickup(creep);
     const isHauler = archetype === 'hauler' || archetype === 'remoteHauler';
     const miningSiteContainerIds: { [id: string]: boolean } = {};

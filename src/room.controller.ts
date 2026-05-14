@@ -2795,7 +2795,7 @@ function currentJobStillValid(
         const archetype = ensureArchetype(creep);
         if (archetype === 'hauler' &&
             resource !== RESOURCE_ENERGY &&
-            context.mineralPlan?.container?.id === storeTarget.id) {
+            target instanceof StructureContainer) {
             return remaining >= haulerMiningSiteMinPickup(creep);
         }
         return true;

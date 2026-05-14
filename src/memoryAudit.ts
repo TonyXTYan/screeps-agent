@@ -99,6 +99,17 @@ function cleanupStaleRemotePlans(activeRooms: Set<string>): number {
                     }
                 }
             }
+
+            if (remote.sources) {
+                for (const sourceId in remote.sources) {
+                    const sourcePlan = remote.sources[sourceId];
+                    if (sourcePlan.routeAccessible === undefined && sourcePlan.pathUpdatedAt !== undefined) {
+                        sourcePlan.pathUpdatedAt = undefined;
+                        console.log(`[memoryAudit] Cleared path cache for unverified source ${sourceId} in ${roomName}->${remoteName}`);
+                        count++;
+                    }
+                }
+            }
         }
     }
 

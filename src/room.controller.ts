@@ -779,7 +779,7 @@ function updateRemoteRoomPlans(homeRoom: Room): void {
             const pathStale = !existing.pathUpdatedAt || Game.time - existing.pathUpdatedAt > REMOTE_PATH_REFRESH_INTERVAL;
             const cachedPath = deserializeRemotePath(existing.pathSerialized);
             const hasCachedPath = cachedPath.length > 0;
-            if (anchor && station && (!existing.pathDistance || !hasCachedPath || pathStale)) {
+            if (anchor && station && (!existing.pathDistance || !hasCachedPath || pathStale || existing.routeAccessible === undefined)) {
                 const route = PathFinder.search(anchor.pos, { pos: station, range: 0 }, { maxRooms: 8 });
                 if (!route.incomplete) {
                     const directRoute = !route.path.some(pos =>

@@ -531,3 +531,136 @@ This explains why the mineral container is always empty - the mineral miner cann
 - Container: 68/2000 (3%)
 - 2 haulers (1 with 1000 energy returning home, 1 dying empty)
 - 1 miner mining, 1 stuck in standby
+
+---
+
+## Root Cause Investigation - remoteHauler-Spawn1-70917525 Stuck
+
+**Investigated:** 2026-05-14 (post-session)
+**Creep:** remoteHauler-Spawn1-70917525
+**Symptom:** Stuck at W6N9 [5,39] from ttl=1461 to ttl=41. Always showed `res=0, no job=, no stuck=`.
+
+### Confirmed Root Cause
+
+Code between commits `861f7df` (May 10) and `cab47a3` (May 14) had a bug in `assignRemoteCreep` for the "remoteHauler in remote room, no energy source" fallback:
+
+```typescript
+// BUGGY CODE (pre-cab47a3):
+if (creep.room.name === remoteRoom) {
+    setJob(creep, 'idle', creep.room.controller);  // ← BUG
+} else {
+    setTravelJob(creep, homeRoom);
+}
+```
+
+When the hauler arrived in W6N9 before any container was built:
+1. `setJob(creep, 'idle', creep.room.controller)` assigned idle at the W6N9 controller
+2. Controller was at ~[7,37] (where the claimer was reserving it)
+3. Hauler was at [5,39] — Chebyshev range = max(|7-5|, |37-39|) = **2 ≤ 3** (idle's movement threshold)
+4. `idle()` returned `OK` without moving → `shouldClearJob` DEFAULT: OK → job cleared
+5. `lastJobResult = 0` → `res=0, no job=` persisted forever
+
+Every tick repeated this loop. Creep wasted entire TTL at [5,39] idling near the controller.
+
+### Fix
+
+Commit `cab47a3 remote hauler cycle` (May 14) introduced `assignRemoteHaulerCycle` which correctly calls `setTravelJob(creep, homeRoom)` when in remote room with no source — sending the hauler back to W7N9 to wait.
+
+### Observable Pattern Explained
+
+- `res=0`: `idle()` always returns `OK`; since the DEFAULT `shouldClearJob` clears on OK, every tick ends with `lastJobResult=0`
+- `no job=`: `idle` job is cleared by `shouldClearJob` every tick before `debug.tickRemoteCreepLog()` reads it
+- `no stuck=`: `travelStuckTicks` is never incremented because `travelRoom` is never called (job is `idle`, not `travelRoom`)
+|- Position unchanged: `idle` doesn't call `moveTo` when target is within range 3
+
+---
+
+## Remote Room Profitability Analysis (Tick 70922991)
+
+### Spawning Costs
+- remoteMiner: 9,350 energy (16 spawns, avg 584/spawn)
+- remoteHauler: 35,150 energy (34 spawns, avg 1,034/spawn)
+- remoteMaintainer: 3,150 energy (7 spawns, avg 450/spawn)
+- **Total spawning cost: 47,650 energy**
+
+### Per-Room Breakdown
+
+| Room | Harvested | Transported | Spawning Cost | Net Energy | ROI |
+|------|-----------|-------------|---------------|------------|-----|
+| W6N9 | 22,100 | 60,561 | 14,950 | +67,711 | 553% |
+| W7N9 | 350 | 504,072 | 0 | +504,422 | N/A |
+| W8N9 | 66,650 | 97,988 | 62,050 | +102,588 | 265% |
+
+**Total net energy gain from remote operations: +674,721 energy**
+
+### Key Findings
+- Remote mining is HIGHLY profitable across all rooms
+- W7N9 shows massive transport numbers (504,072) but zero spawning costs - likely counting home room haulers
+- W8N9 (primary target) has 265% ROI despite highest spawning costs
+- W6N9 has 553% ROI - most efficient per-unit investment
+- 305 maintenance ticks in W6N9, 423 in W8N9 - significant upkeep costs
+- 502 construction entries in remote rooms - infrastructure investment ongoing
+- Zero creep deaths recorded in remote rooms during this period
+
+### Efficiency Metrics
+- Remote miners: 61% mining, 36% standby (39% idle time)
+- Remote haulers: 66% hauling, 34% traveling
+- Average hauler energy: 287/1400 (20.5% capacity utilization)
+- 63% of hauler entries show empty (en=0) - significant inefficiency
+
+### Recommendations
+
+1. **Fix mineral container fill rate** - Investigate why container at [12,6] stays empty despite active extractor
+2. **Optimize energy threshold for mineral miners** - Consider lowering the 600 energy requirement
+3. **Reduce hauler empty returns** - 63% empty rate suggests pathing or timing issues
+4. **Monitor remote room operations** - Track if recent code changes improve remote miner/hauler efficiency
+5. **Consider scaling back W7N9 operations** - Minimal harvesting (350) vs massive transport overhead
+
+---
+
+## Bug Investigation: remoteMiner-Spawn1-70920932 (and 70928567) Stuck at [46-47, 12] in W8N9
+
+**Date:** 2026-05-14 (second investigation in this session)
+**Status:** ROOT CAUSE IDENTIFIED AND FIXED
+
+### Observed Symptom
+
+`remoteMiner-Spawn1-70920932` was assigned to source `4adbfc69` at [42,7] in W8N9 with station `stn=[42,6]`. The miner:
+- Entered W8N9 at [47,26]
+- Moved north to [48,18] → [48,13] → [47,12]
+- Oscillated at [46-47, 12] with `res=-9 stuck=1-3` for 300+ ticks until the log ended
+
+Source `4adbfc69` energy was 3000/3000 (never mined) throughout the entire log period.
+
+### Same miner's prior life
+The creep was previously mining `4adbfc6b` at [18,27] successfully. After expiry/renewal, it got reassigned to the problematic `4adbfc69` source.
+
+### Root Cause (Three Contributing Bugs)
+
+**Bug 1 — `findStationForSource` picks inaccessible tile** (`src/room.controller.ts:1019`)
+
+The function iterates `lookForAtArea` in row-major order (top-left first) and returns the FIRST non-wall adjacent tile. For source at [42,7], the scan order is: [41,6], [42,6], [43,6], [41,7], [43,7], [41,8], [42,8], [43,8]. Since [41,6] is a wall, [42,6] gets selected — a tile near the top wall of W8N9 that is blocked from the east entrance by terrain obstacles near y≈11.
+
+**Bug 2 — Path planner gives false positive** (`src/room.controller.ts:782`)
+
+The path distance check used `range: 1` to the station:
+```typescript
+PathFinder.search(anchor.pos, { pos: station, range: 1 }, { maxRooms: 8 })
+```
+"Range 1 from [42,6]" includes the source [42,7] itself (always reachable), so `route.incomplete = false` even though [42,6] is genuinely unreachable. The system thought the station was fine.
+
+**Bug 3 — `stuckFallback` doesn't recover** (`src/creep.jobRunner.ts:71`)
+
+When `stuckTicks >= 2`, `harvestSource` switches to target the source with `range: 1`. PathFinder finds a path to some adjacent tile, miner moves slightly, `stuckTicks` resets. Next tick: back to station [42,6] with `range: 0`. Oscillates forever between stuck=1 and stuck=3.
+
+### The Fix
+
+Two changes in `src/room.controller.ts`:
+
+1. **`findStationForSource`** now picks the adjacent non-wall tile with the **most open neighbors** (using `room.getTerrain()`). Tiles with more open neighbors are in less-hemmed-in areas and more accessible from any direction. A new `countOpenTilesAround` helper computes this score.
+
+2. **Path check** changed from `range: 1` to `range: 0`, so it accurately verifies whether the station tile itself is reachable rather than falsely succeeding via the adjacent source.
+
+### Why the fix propagates to stuck miners immediately
+
+`findStationForSource` is called every tick the remote room is visible, and `stationX/Y` in the remote plan is updated each call. `assignRemoteCreep` then copies `sourceCfg.stationX/Y` into creep memory each tick. So on the next visible tick, stuck miners get the new station position automatically — no reassignment required.

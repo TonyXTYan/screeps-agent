@@ -13,6 +13,7 @@ import * as memoryAudit from './memoryAudit';
 import * as debug from './debug';
 import { findHostiles, isHostile } from './hostileUtils';
 import { bodyCost } from './creep.capabilities';
+import { BUILD_COMMIT } from './env';
 
 const DOCTOR_EMERGENCY_HITS_RATIO = 0.35;
 const DOCTOR_THREAT_RADIUS = 4;
@@ -65,6 +66,17 @@ let debugPathsEnabled = false;
 let debugPathsLastScannedAt: number | undefined;
 let moveDebugHookInstalled = false;
 
+function detectCodeChange(): boolean {
+    const lastCommit = (Memory as { lastBuildCommit?: string }).lastBuildCommit;
+    const changed = lastCommit !== BUILD_COMMIT;
+    if (changed) {
+        const now = new Date().toISOString();
+        console.log(`[main] ====== Code change ====== Game.time=${Game.time} (${now}): Last:${lastCommit ?? 'none'} → New:${BUILD_COMMIT}`);
+        (Memory as { lastBuildCommit?: string }).lastBuildCommit = BUILD_COMMIT;
+    }
+    return changed;
+}
+
 export function loop(): void {
     if (debugPathsLastScannedAt !== undefined && Game.time < debugPathsLastScannedAt) {
         debugPathsLastScannedAt = undefined;
@@ -84,7 +96,9 @@ export function loop(): void {
     
 
     creepMemoryManagement.run();
-    memoryAudit.runIfBuildChanged();
+    if (detectCodeChange() && Game.cpu.bucket >= 500) {
+        memoryAudit.runFullAudit();
+    }
 
     const controlledRooms = debug.ownedRooms();
     for (const room of controlledRooms) {

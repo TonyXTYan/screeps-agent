@@ -1,16 +1,4 @@
-import { BUILD_COMMIT } from './env';
 import { ensureArchetype } from './creep.capabilities';
-
-export function runIfBuildChanged(): void {
-    const lastCommit = (Memory as { lastBuildCommit?: string }).lastBuildCommit;
-    if (lastCommit === BUILD_COMMIT) { return; }
-
-    if (Game.cpu.bucket < 500) { return; }
-
-    console.log(`[memoryAudit] Build changed: ${lastCommit ?? 'none'} -> ${BUILD_COMMIT}`);
-    runFullAudit();
-    (Memory as { lastBuildCommit?: string }).lastBuildCommit = BUILD_COMMIT;
-}
 
 export function runFullAudit(): number {
     let fixed = 0;

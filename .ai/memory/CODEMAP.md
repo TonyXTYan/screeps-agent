@@ -41,6 +41,7 @@ Use this as the first stop before editing code.
 - Spawn demand selection — `src/room.controller.ts`
 - Home room priority gate (blocks remote spawns when home requests pending, throttles remotes under low stored/spawn energy, and rejects uneconomic scaled remote bodies) — `src/room.controller.ts`
 - Remote standby miner system (TTL-triggered source-targeted handoff with remote pre-positioning; blank standby reassignment; pending container-site awareness; no standby renew) — `src/room.controller.ts`, `src/creep.jobRunner.ts`, `src/main.ts`
+- Remote route health and road placement (degraded-route memory, prioritized road sites, route-health maintainer recovery bypass) — `src/room.controller.ts`
 - Body capability derivation — `src/creep.capabilities.ts`
 - Body planning by archetype — `src/creep.capabilities.ts`
 - Remote hauler capacity cap (per source) — `src/room.controller.ts`

@@ -61,6 +61,7 @@
 | 70932626 | c080a728 | Remote miner fix v6 (station validation) |
 | 70936868 | 12f67739 | Remote miner fix v7 (force repath for station moves) |
 | 70937086 | 4a9944f9 | Terminal Energy Reserve Policy (RCL6=5k, RCL7=10k, RCL8=50k) |
+| 70939216 | 2e96d813 | Remote mining fix v9 (home economy gates, spawn throttling, min body rules) |
 
 ---
 

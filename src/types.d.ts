@@ -50,6 +50,7 @@ type CreepJobType =
     'idle';
 
 type RemoteRoomMode = 'harvest' | 'reserve' | 'claim';
+type RemoteRouteHealth = 'healthy' | 'degraded';
 
 interface RemoteSourcePlan {
     sourceId: string;
@@ -66,6 +67,15 @@ interface RemoteSourcePlan {
     assignedHaulerCapacity?: number;
     lastSeen?: number;
     routeAccessible?: boolean;
+    routeHealth?: RemoteRouteHealth;
+    lastStallAt?: number;
+    stallCount?: number;
+    lastStallX?: number;
+    lastStallY?: number;
+    lastStallRoom?: string;
+    roadCursor?: number;
+    lastRoadPlanAt?: number;
+    lastHarvestedAt?: number;
 }
 
 interface RoomStructureMemory {
@@ -210,7 +220,9 @@ interface CreepMemory {
     travelLastRoom?: string;
     travelStuckTicks?: number;
     remoteStationStuckSourceId?: string;
-    remoteStationLastRange?: number;
+    remoteStationLastX?: number;
+    remoteStationLastY?: number;
+    remoteStationLastRoom?: string;
     remoteStationStuckTicks?: number;
     trafficYieldX?: number;
     trafficYieldY?: number;

@@ -88,6 +88,7 @@ const REMOTE_PATH_REFRESH_INTERVAL = 5000;
 const REMOTE_PATH_INCOMPLETE_RETRY_TICKS = 100;
 const REMOTE_ROAD_SITES_PER_TICK = 4;
 const REMOTE_MAX_UNFINISHED_ROAD_SITES = 3;
+const REMOTE_DEGRADED_MAX_UNFINISHED_ROAD_SITES = 8;
 const REMOTE_CONTAINER_BUILD_DISTANCE = 1;
 const REMOTE_SCOUT_KEEP_COUNT = 2;
 const REMOTE_SCOUT_WANDER_TICKS = 120;
@@ -298,18 +299,8 @@ export function assignRemoteCreep(creep: Creep): boolean {
 
         const sourceCfg = remotePlan.sources?.[assignedSourceId];
         if (sourceCfg && remoteMinerStationRouteStalled(creep, selectedSource, sourceCfg)) {
-            invalidateRemoteSourcePath(sourceCfg);
-            clearRemoteMinerStationMemory(creep);
-            creep.memory.remoteStandby = true;
-            creep.memory.sourceId = undefined;
-            creep.memory.assignedSourceId = undefined;
-            if (creep.room.name !== homeRoom) {
-                setTravelJob(creep, homeRoom);
-            } else {
-                setJob(creep, 'idle', Game.rooms[homeRoom]?.storage
-                    ?? creep.pos.findClosestByRange(FIND_MY_SPAWNS));
-            }
-            return true;
+            markRemoteSourceRouteDegraded(sourceCfg, creep.pos);
+            resetRemoteMinerStationProgress(creep);
         }
 
         let stationaryTargetId: string | undefined;
@@ -336,7 +327,8 @@ export function assignRemoteCreep(creep: Creep): boolean {
     }
 
     if (archetype === 'remoteMaintainer') {
-        const site = closest(creep, creep.room.find(FIND_CONSTRUCTION_SITES));
+        const site = closestRemoteInfrastructureSite(creep, true) ??
+            closest(creep, creep.room.find(FIND_CONSTRUCTION_SITES));
         if (site && creep.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
             setJob(creep, 'build', site);
             return true;
@@ -432,24 +424,35 @@ function remoteMinerStationRouteStalled(
         resetRemoteMinerStationProgress(creep);
         return false;
     }
-    if (creep.memory.jobType !== 'harvestSource' ||
-        creep.memory.jobTargetId !== source.id ||
-        creep.memory.lastJobResult !== ERR_NOT_IN_RANGE) {
+    const sameHarvestJob = creep.memory.jobType === 'harvestSource' && creep.memory.jobTargetId === source.id;
+    if ((sameHarvestJob && creep.memory.lastJobResult === OK) || creep.pos.getRangeTo(source) <= 1) {
+        markRemoteSourceRouteHealthy(sourcePlan);
+        resetRemoteMinerStationProgress(creep);
+        return false;
+    }
+    if (!sameHarvestJob || creep.memory.lastJobResult !== ERR_NOT_IN_RANGE) {
         resetRemoteMinerStationProgress(creep);
         return false;
     }
 
-    const range = creep.pos.getRangeTo(source);
-    if (range <= 1) {
+    if (creep.fatigue > 0) {
         resetRemoteMinerStationProgress(creep);
         return false;
     }
 
+    const positionKey = creep.pos.x + ',' + creep.pos.y + ',' + creep.pos.roomName;
+    const lastPositionKey = creep.memory.remoteStationLastX + ',' +
+        creep.memory.remoteStationLastY + ',' +
+        creep.memory.remoteStationLastRoom;
     const sameSource = creep.memory.remoteStationStuckSourceId === source.id;
-    const lastRange = sameSource ? creep.memory.remoteStationLastRange : undefined;
-    const stalled = lastRange !== undefined && range >= lastRange;
+    const stalled = sameSource &&
+        creep.memory.remoteStationLastX !== undefined &&
+        positionKey === lastPositionKey;
+
     creep.memory.remoteStationStuckSourceId = source.id;
-    creep.memory.remoteStationLastRange = range;
+    creep.memory.remoteStationLastX = creep.pos.x;
+    creep.memory.remoteStationLastY = creep.pos.y;
+    creep.memory.remoteStationLastRoom = creep.pos.roomName;
     creep.memory.remoteStationStuckTicks = stalled ? (creep.memory.remoteStationStuckTicks ?? 0) + 1 : 0;
 
     return (creep.memory.remoteStationStuckTicks ?? 0) >= REMOTE_MINER_STUCK_REPLAN_TICKS;
@@ -457,7 +460,9 @@ function remoteMinerStationRouteStalled(
 
 function resetRemoteMinerStationProgress(creep: Creep): void {
     creep.memory.remoteStationStuckSourceId = undefined;
-    creep.memory.remoteStationLastRange = undefined;
+    creep.memory.remoteStationLastX = undefined;
+    creep.memory.remoteStationLastY = undefined;
+    creep.memory.remoteStationLastRoom = undefined;
     creep.memory.remoteStationStuckTicks = undefined;
 }
 
@@ -468,12 +473,21 @@ function clearRemoteMinerStationMemory(creep: Creep): void {
     resetRemoteMinerStationProgress(creep);
 }
 
-function invalidateRemoteSourcePath(sourcePlan: RemoteSourcePlan): void {
-    sourcePlan.routeAccessible = false;
-    sourcePlan.pathSerialized = undefined;
-    const retryOffset = Math.max(0, REMOTE_PATH_REFRESH_INTERVAL - REMOTE_PATH_INCOMPLETE_RETRY_TICKS);
-    sourcePlan.pathUpdatedAt = Game.time - retryOffset;
-    console.log('room.controller: invalidated remote source station path source=' + sourcePlan.sourceId + ' after miner stall');
+function markRemoteSourceRouteHealthy(sourcePlan: RemoteSourcePlan): void {
+    sourcePlan.routeHealth = 'healthy';
+    sourcePlan.stallCount = 0;
+    sourcePlan.lastHarvestedAt = Game.time;
+}
+
+function markRemoteSourceRouteDegraded(sourcePlan: RemoteSourcePlan, pos: RoomPosition): void {
+    sourcePlan.routeHealth = 'degraded';
+    sourcePlan.lastStallAt = Game.time;
+    sourcePlan.stallCount = (sourcePlan.stallCount ?? 0) + 1;
+    sourcePlan.lastStallX = pos.x;
+    sourcePlan.lastStallY = pos.y;
+    sourcePlan.lastStallRoom = pos.roomName;
+    sourcePlan.pathUpdatedAt = undefined;
+    console.log('room.controller: degraded remote source route source=' + sourcePlan.sourceId + ' after miner stall at ' + pos.roomName + ':' + pos.x + ',' + pos.y);
 }
 
 function assignStandbyRemoteMiner(creep: Creep, homeRoom: string, remoteRoom: string, remotePlan: RemoteRoomPlan): boolean {
@@ -955,39 +969,129 @@ function updateRemoteRoomPlans(homeRoom: Room): void {
                     console.log('room.controller: failed to place remote container in ' + visible.name + ' at ' + station.x + ',' + station.y + ' code=' + code);
                 }
             }
-            if (remote.buildRoads &&
-                latestPath.length > 0 &&
-                roadsPlaced < REMOTE_ROAD_SITES_PER_TICK &&
-                unfinishedRoadSites < REMOTE_MAX_UNFINISHED_ROAD_SITES) {
-                for (const step of latestPath) {
-                    if (roadsPlaced >= REMOTE_ROAD_SITES_PER_TICK || unfinishedRoadSites >= REMOTE_MAX_UNFINISHED_ROAD_SITES) { break; }
-                    if (step.x <= 1 || step.y <= 1 || step.x >= 48 || step.y >= 48) { continue; }
-                    if (step.roomName !== visible.name && step.roomName !== homeRoom.name) { continue; }
-                    const room = Game.rooms[step.roomName];
-                    if (!room) { continue; }
-                    if (isOwnedByMe(room, myUsername)) { continue; }
-                    const terrain = room.getTerrain();
-                    if (terrain.get(step.x, step.y) === TERRAIN_MASK_WALL) { continue; }
-                    const pos = new RoomPosition(step.x, step.y, step.roomName);
-                    const blocked = pos.lookFor(LOOK_STRUCTURES).some((s) =>
-                        s.structureType !== STRUCTURE_ROAD &&
-                        s.structureType !== STRUCTURE_CONTAINER &&
-                        s.structureType !== STRUCTURE_RAMPART);
-                    if (blocked) { continue; }
-                    if (pos.lookFor(LOOK_CONSTRUCTION_SITES).length > 0) { continue; }
-                    const code = pos.createConstructionSite(STRUCTURE_ROAD);
-                    if (code === OK) {
-                        roadsPlaced++;
-                        unfinishedRoadSites++;
-                    } else if (code === ERR_FULL) {
-                        break;
-                    } else if (Game.time % REMOTE_PLANNING_LOG_INTERVAL === 0) {
-                        console.log('room.controller: failed to place remote road in ' + step.roomName + ' at ' + step.x + ',' + step.y + ' code=' + code);
-                    }
+            if (remote.buildRoads && latestPath.length > 0 && roadsPlaced < REMOTE_ROAD_SITES_PER_TICK) {
+                const roadSiteLimit = remoteSourceRouteDegraded(existing)
+                    ? REMOTE_DEGRADED_MAX_UNFINISHED_ROAD_SITES
+                    : REMOTE_MAX_UNFINISHED_ROAD_SITES;
+                if (unfinishedRoadSites < roadSiteLimit) {
+                    const placed = placeRemoteRoadSites(
+                        homeRoom,
+                        visible,
+                        existing,
+                        latestPath,
+                        myUsername,
+                        roadSiteLimit,
+                        REMOTE_ROAD_SITES_PER_TICK - roadsPlaced,
+                        unfinishedRoadSites
+                    );
+                    roadsPlaced += placed;
+                    unfinishedRoadSites += placed;
                 }
             }
         }
     }
+}
+
+function placeRemoteRoadSites(
+    homeRoom: Room,
+    visibleRemote: Room,
+    sourcePlan: RemoteSourcePlan,
+    latestPath: RoomPosition[],
+    myUsername: string | undefined,
+    siteLimit: number,
+    maxToPlace: number,
+    unfinishedRoadSites: number
+): number {
+    let placed = 0;
+    const steps = prioritizedRemoteRoadSteps(sourcePlan, latestPath);
+    for (const step of steps) {
+        if (placed >= maxToPlace || unfinishedRoadSites + placed >= siteLimit) { break; }
+        if (!canPlaceRemoteRoadSite(homeRoom, visibleRemote, step, myUsername)) { continue; }
+
+        const code = step.createConstructionSite(STRUCTURE_ROAD);
+        if (code === OK) {
+            placed++;
+            sourcePlan.lastRoadPlanAt = Game.time;
+            advanceRemoteRoadCursor(sourcePlan, latestPath, step);
+        } else if (code === ERR_FULL) {
+            break;
+        } else if (Game.time % REMOTE_PLANNING_LOG_INTERVAL === 0) {
+            console.log('room.controller: failed to place remote road in ' + step.roomName + ' at ' + step.x + ',' + step.y + ' code=' + code);
+        }
+    }
+    return placed;
+}
+
+function prioritizedRemoteRoadSteps(sourcePlan: RemoteSourcePlan, latestPath: RoomPosition[]): RoomPosition[] {
+    const steps: RoomPosition[] = [];
+    const addUnique = (pos: RoomPosition | undefined): void => {
+        if (!pos) { return; }
+        if (steps.some((step) => sameRoomPosition(step, pos))) { return; }
+        steps.push(pos);
+    };
+
+    for (const step of latestPath) {
+        if (isRemoteExitApproach(step)) { addUnique(step); }
+    }
+    for (const step of latestPath) {
+        if (isSwampPathStep(step)) { addUnique(step); }
+    }
+    if (sourcePlan.lastStallX !== undefined &&
+        sourcePlan.lastStallY !== undefined &&
+        sourcePlan.lastStallRoom) {
+        addUnique(new RoomPosition(sourcePlan.lastStallX, sourcePlan.lastStallY, sourcePlan.lastStallRoom));
+    }
+
+    const start = Math.max(0, sourcePlan.roadCursor ?? 0) % Math.max(1, latestPath.length);
+    for (let offset = 0; offset < latestPath.length; offset++) {
+        addUnique(latestPath[(start + offset) % latestPath.length]);
+    }
+
+    return steps;
+}
+
+function canPlaceRemoteRoadSite(
+    homeRoom: Room,
+    visibleRemote: Room,
+    pos: RoomPosition,
+    myUsername: string | undefined
+): boolean {
+    if (pos.x <= 0 || pos.y <= 0 || pos.x >= 49 || pos.y >= 49) { return false; }
+    if (pos.roomName !== visibleRemote.name && pos.roomName !== homeRoom.name) { return false; }
+    const room = Game.rooms[pos.roomName];
+    if (!room) { return false; }
+    if (isOwnedByMe(room, myUsername)) { return false; }
+    if (room.getTerrain().get(pos.x, pos.y) === TERRAIN_MASK_WALL) { return false; }
+
+    const structures = pos.lookFor(LOOK_STRUCTURES);
+    if (structures.some((s) => s.structureType === STRUCTURE_ROAD)) { return false; }
+    if (structures.some((s) => s.structureType !== STRUCTURE_RAMPART)) { return false; }
+    if (pos.lookFor(LOOK_CONSTRUCTION_SITES).length > 0) { return false; }
+    return true;
+}
+
+function advanceRemoteRoadCursor(sourcePlan: RemoteSourcePlan, latestPath: RoomPosition[], placed: RoomPosition): void {
+    const index = latestPath.findIndex((step) => sameRoomPosition(step, placed));
+    if (index < 0) { return; }
+    sourcePlan.roadCursor = (index + 1) % latestPath.length;
+}
+
+function sameRoomPosition(a: RoomPosition, b: RoomPosition): boolean {
+    return a.x === b.x && a.y === b.y && a.roomName === b.roomName;
+}
+
+function isRemoteExitApproach(pos: RoomPosition): boolean {
+    return pos.x <= 2 || pos.y <= 2 || pos.x >= 47 || pos.y >= 47;
+}
+
+function isSwampPathStep(pos: RoomPosition): boolean {
+    const room = Game.rooms[pos.roomName];
+    if (!room) { return false; }
+    return room.getTerrain().get(pos.x, pos.y) === TERRAIN_MASK_SWAMP;
+}
+
+function remoteSourceRouteDegraded(sourcePlan: RemoteSourcePlan | undefined): boolean {
+    return sourcePlan?.routeHealth === 'degraded';
 }
 
 function isOwnedByMe(room: Room, myUsername?: string): boolean {
@@ -1664,6 +1768,7 @@ function isRemoteSpawnRequest(request: SpawnRequest): boolean {
 function isEmergencyRemoteRequest(homeFleet: Creep[], request: SpawnRequest): boolean {
     if (request.archetype === 'remoteScout') { return true; }
     if (request.archetype !== 'remoteMiner' || !request.remoteRoom || !request.sourceId) { return false; }
+    if (countSourceLessRemoteStandbyMiners(homeFleet, request.remoteRoom) > 0) { return false; }
     return countRemoteMinersForSource(homeFleet, request.remoteRoom, request.sourceId) === 0 &&
         projectedRemoteMinerWork(homeFleet, request.remoteRoom, request.sourceId, 0) === 0;
 }
@@ -1675,6 +1780,7 @@ function remoteSpawnRecoveryBlockReason(
     availableEnergy: number = context.room.energyAvailable
 ): string | null {
     if (!isRemoteSpawnRequest(request)) { return null; }
+    if (isRouteHealthMaintainerRequest(context, request)) { return null; }
     if (isEmergencyRemoteRequest(homeFleet, request)) { return null; }
 
     const energyCapacity = context.room.energyCapacityAvailable;
@@ -1719,6 +1825,12 @@ function remoteSpawnMinimumCost(
     }
 
     return 0;
+}
+
+function isRouteHealthMaintainerRequest(context: RoomControllerContext, request: SpawnRequest): boolean {
+    if (request.archetype !== 'remoteMaintainer' || !request.remoteRoom) { return false; }
+    const remotePlan = context.room.memory.plan?.remoteRooms?.[request.remoteRoom];
+    return remoteNeedsRouteHealthMaintainer(request.remoteRoom, remotePlan);
 }
 
 function remoteSourcePlanForRequest(
@@ -2048,6 +2160,7 @@ function remoteSpawnRequest(
             const numSources = Object.keys(remote.sources).length;
             const totalRoomHaulers = countRemoteHaulersForRoom(homeFleet, roomName);
             const totalRoomMiners = countActiveRemoteMinersForRoom(homeFleet, roomName);
+            const sourceLessStandbyMiners = countSourceLessRemoteStandbyMiners(homeFleet, roomName);
             const standbySourceId = sourceNeedingStandbyReplacement(homeFleet, roomName);
             if (standbySourceId &&
                 !pending.some(r =>
@@ -2086,6 +2199,7 @@ function remoteSpawnRequest(
                         r.sourceId === sourceId);
                 if (minerProjectedWork < targetMinerWork && minerCount < sourceMinerLimit && (minerCount === 0 || minerProjectedWork === 0) &&
                     totalRoomMiners <= numSources &&
+                    sourceLessStandbyMiners === 0 &&
                     !sourceHasStandby &&
                     !pending.some(r => r.archetype === 'remoteMiner' && r.remoteRoom === roomName && r.sourceId === sourceId)) {
                     const request: SpawnRequest = {
@@ -2239,6 +2353,18 @@ function countRemoteStandbyMiners(creeps: Creep[], remoteRoom: string): number {
         if (ensureArchetype(creep) !== 'remoteMiner') { continue; }
         if (creep.memory.remoteRoom !== remoteRoom) { continue; }
         if (creep.memory.remoteStandby) { count++; }
+    }
+    return count;
+}
+
+function countSourceLessRemoteStandbyMiners(creeps: Creep[], remoteRoom: string): number {
+    let count = 0;
+    for (const creep of creeps) {
+        if (ensureArchetype(creep) !== 'remoteMiner') { continue; }
+        if (creep.memory.remoteRoom !== remoteRoom) { continue; }
+        if (!creep.memory.remoteStandby) { continue; }
+        if (creep.memory.assignedSourceId || creep.memory.sourceId) { continue; }
+        count++;
     }
     return count;
 }
@@ -2665,6 +2791,28 @@ function remoteNeedsMaintainer(remoteRoom: string): boolean {
     return room.find(FIND_STRUCTURES, {
         filter: s => (s.structureType === STRUCTURE_ROAD || s.structureType === STRUCTURE_CONTAINER) && s.hits < s.hitsMax * 0.7
     }).length > 0;
+}
+
+function remoteNeedsRouteHealthMaintainer(remoteRoom: string, remotePlan: RemoteRoomPlan | undefined): boolean {
+    if (!remotePlanHasDegradedRoute(remotePlan)) { return false; }
+    const room = Game.rooms[remoteRoom];
+    if (!room) { return false; }
+    if (room.find(FIND_MY_CONSTRUCTION_SITES, {
+        filter: site => site.structureType === STRUCTURE_ROAD || site.structureType === STRUCTURE_CONTAINER
+    }).length > 0) {
+        return true;
+    }
+    return room.find(FIND_STRUCTURES, {
+        filter: s => (s.structureType === STRUCTURE_ROAD || s.structureType === STRUCTURE_CONTAINER) && s.hits < s.hitsMax * 0.7
+    }).length > 0;
+}
+
+function remotePlanHasDegradedRoute(remotePlan: RemoteRoomPlan | undefined): boolean {
+    if (!remotePlan?.sources) { return false; }
+    for (const sourceId in remotePlan.sources) {
+        if (remoteSourceRouteDegraded(remotePlan.sources[sourceId])) { return true; }
+    }
+    return false;
 }
 
 function hasIdleRemoteHauler(creeps: Creep[], remoteRoom: string): boolean {

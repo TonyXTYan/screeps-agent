@@ -35,7 +35,10 @@ sources?: {
     sourceId, stationX, stationY, containerId, containerSiteId,
     pathSerialized, pathDistance, pathUpdatedAt,
     workDemand, haulerCapacityDemand,
-    assignedMinerWork, assignedHaulerCapacity, lastSeen
+    assignedMinerWork, assignedHaulerCapacity, lastSeen,
+    routeHealth, lastStallAt, stallCount,
+    lastStallX, lastStallY, lastStallRoom,
+    roadCursor, lastRoadPlanAt, lastHarvestedAt
   }
 }
 ```
@@ -68,7 +71,7 @@ For each configured remote room:
 ```
 
 Remote spawning is conservative when the home room is under pressure:
-- If stored energy is below 2k, or available spawn/extension energy is below 50%, only scouts and zero-coverage emergency remote miners are allowed.
+- If stored energy is below 2k, or available spawn/extension energy is below 50%, only scouts, zero-coverage emergency remote miners without source-less standby debt, and degraded-route maintainers are allowed.
 - If stored energy is below 5k, new income-consuming remote spawns are limited to the first enabled harvest remote.
 - Remote haulers are also suppressed while existing haulers for that remote show route congestion.
 
@@ -122,10 +125,10 @@ Paths from home storage/spawn to each remote source station are cached to avoid 
 
 Remote station validation also checks for a complete local path from the home-to-remote entry edge to
 the station. Long/winding but complete local paths remain valid; only incomplete local paths mark the
-source inaccessible. If a miner repeatedly stalls out of harvest range, the source path is invalidated
-and retried later rather than keeping the miner in a wall-pocket loop. When a miner is moving to an
-exact station coordinate for a pending container site, it clears any cached `moveTo` path and repaths
-within the remote room each tick until it stands on the station.
+source inaccessible. If a miner repeatedly remains on the same tile with no fatigue while out of
+harvest range, the source route is marked `degraded` and its cached path is preserved for road-site
+placement instead of clearing the source assignment or making the miner source-less standby. The route
+returns to `healthy` when a miner reaches harvest range or harvests successfully.
 
 ## Infrastructure Placement
 
@@ -135,9 +138,12 @@ container construction sites are tracked as `containerSiteId` and treated as sta
 miner caps/body planning, but haulers only withdraw from built `containerId` containers.
 
 ### Roads
-Placed along discovered paths at `REMOTE_ROAD_SITES_PER_TICK` (4) sites per tick, capped at
-`REMOTE_MAX_UNFINISHED_ROAD_SITES` (3). Roads are **skipped in owned rooms** so manual base
-layouts are preserved.
+Placed along discovered paths at `REMOTE_ROAD_SITES_PER_TICK` (4) sites per tick. Healthy routes are
+capped at `REMOTE_MAX_UNFINISHED_ROAD_SITES` (3) unfinished road sites; degraded routes can queue up
+to `REMOTE_DEGRADED_MAX_UNFINISHED_ROAD_SITES` (8). Road placement prioritizes remote exit-adjacent
+tiles, swamp tiles, the latest stall tile, then the remaining cached path via `roadCursor`. Tiles
+`1` and `48` are valid corridor road positions; true room borders `0` and `49` are skipped. Roads are
+**skipped in owned rooms** so manual base layouts are preserved.
 
 ## Danger Handling
 
@@ -170,6 +176,7 @@ Remote maintainers (not miners, not claimers) can renew at the home spawn:
 - Remote miners do not renew at the home spawn
 - When an active remote miner for a source reaches TTL <= 200, a source-targeted `remoteStandby` replacement is spawned
 - Source-targeted standby miners count as replacement coverage, so active deficit spawning does not bypass them
+- Source-less standby miners block additional active deficit remote-miner spawns until they are reassigned or expire
 - Standby routing is evaluated before generic outbound remote travel
 - Source-less standby miners are reassigned to uncovered accessible sources before idling at home
 - While incumbent is alive, standby pre-positions in the remote room near the mining site (range 4-10)

@@ -68,7 +68,12 @@ function harvestSource(creep: Creep): number {
     if (station && !atStation(creep, station)) {
         const isPositionTarget = station instanceof RoomPosition;
         const range = station instanceof StructureContainer || isPositionTarget ? 0 : 1;
-        moveToJobTarget(creep, station, '#3d2a22', { range });
+        const moveOptions: MoveToOpts = { range };
+        if (isPositionTarget) {
+            moveOptions.maxRooms = 1;
+            moveOptions.reusePath = 0;
+        }
+        moveToJobTarget(creep, station, '#3d2a22', moveOptions);
         return ERR_NOT_IN_RANGE;
     }
 
@@ -1026,7 +1031,7 @@ function moveToJobTarget(
         }
     };
 
-    if (needsPathReset) {
+    if (needsPathReset || extra.reusePath === 0) {
         (creep.memory as CreepMemory & { _move?: unknown })._move = undefined;
     }
 

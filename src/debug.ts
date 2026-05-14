@@ -81,6 +81,23 @@ function exitDirectionLabel(direction: number): string {
     return '?';
 }
 
+function remoteHarvestStationLabel(creep: Creep): string {
+    if (creep.memory.jobType !== 'harvestSource') { return ''; }
+    const x = creep.memory.stationX;
+    const y = creep.memory.stationY;
+    const roomName = creep.memory.remoteRoom;
+    if (x == null || y == null || !roomName || creep.room.name !== roomName) { return ''; }
+
+    const stationPos = new RoomPosition(x, y, roomName);
+    const range = creep.pos.getRangeTo(stationPos);
+    const route = PathFinder.search(
+        creep.pos,
+        { pos: stationPos, range: 0 },
+        { maxRooms: 1, maxOps: 2000 }
+    );
+    return route.incomplete ? ` stnR=${range} stnP=X` : ` stnR=${range} stnP=${route.path.length}`;
+}
+
 function remoteNavLabel(creep: Creep): string {
     const jobType = creep.memory.jobType;
     const jobRoom = creep.memory.jobRoomName;
@@ -106,6 +123,7 @@ function remoteNavLabel(creep: Creep): string {
 
     const range = creep.pos.getRangeTo(targetPos);
     label += ` r=${range}`;
+    label += remoteHarvestStationLabel(creep);
 
     const shouldPathInspect = jobType === 'withdrawEnergy' ||
         jobType === 'withdrawResource' ||
@@ -594,8 +612,6 @@ export function tickAutoDebug(): void {
         for (const room of ownedRooms()) {
             if (room.memory.debug_remotes) { printRemoteCreepStatus(room.name); }
         }
-    } else if (tick === 3) {
-        runMemoryAudit();
     }
 }
 

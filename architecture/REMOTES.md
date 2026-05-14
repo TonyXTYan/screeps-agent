@@ -114,7 +114,9 @@ Paths from home storage/spawn to each remote source station are cached to avoid 
 Remote station validation also checks for a complete local path from the home-to-remote entry edge to
 the station. Long/winding but complete local paths remain valid; only incomplete local paths mark the
 source inaccessible. If a miner repeatedly stalls out of harvest range, the source path is invalidated
-and retried later rather than keeping the miner in a wall-pocket loop.
+and retried later rather than keeping the miner in a wall-pocket loop. When a miner is moving to an
+exact station coordinate for a pending container site, it clears any cached `moveTo` path and repaths
+within the remote room each tick until it stands on the station.
 
 ## Infrastructure Placement
 
@@ -183,3 +185,6 @@ debug.trackRemote(homeRoom, remoteRoom, on?)             — periodic logging
 debug.dumpRemote(homeRoom, remoteRoom)                   — one-shot status
 debug.dumpHome(homeRoom)                                 — home room status
 ```
+
+Remote miner debug output includes `stnR` (range to station) and `stnP` (same-room path length to the
+station) while a miner is harvesting with `stationX/stationY`.

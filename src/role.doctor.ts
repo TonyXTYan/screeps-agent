@@ -1,9 +1,11 @@
 import * as creepHarvest from './creep.harvest';
 
 export function wallRampartRepairCap(rcl: number): number {
-    if (rcl <= 2) return 10_000;
-    if (rcl <= 4) return 30_000;
-    if (rcl <= 6) return 100_000;
+    if (rcl <= 2) return 20_000;
+    if (rcl === 3) return 30_000;
+    if (rcl === 4) return 50_000;
+    if (rcl === 5) return 75_000;
+    if (rcl === 6) return 100_000;
     if (rcl === 7) return 300_000;
     return Infinity;
 }

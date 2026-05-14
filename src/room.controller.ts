@@ -101,8 +101,13 @@ const REMOTE_STANDBY_COUNT = 1;
 const REMOTE_STANDBY_DISPATCH_TTL = 300;
 const MAX_REMOTE_HAULER_CAPACITY_PER_SOURCE = 2500;
 const MAX_REMOTE_HAULERS_PER_SOURCE = 2;
+const REMOTE_HAULER_RENEW_START_TTL = 500;
+const REMOTE_HAULER_RENEW_STOP_TTL = 1400;
+const REMOTE_HAULER_IDLE_RECHECK_TICKS = 75;
+const REMOTE_HAULER_WANDER_TICKS = 35;
+const REMOTE_HAULER_WANDER_MIN_RANGE = 4;
+const REMOTE_HAULER_WANDER_MAX_RANGE = 8;
 const REMOTE_HAULER_RETARGET_STUCK_TICKS = 4;
-const REMOTE_HAULER_LOW_TTL_TICKS = 200;
 const REMOTE_TARGET_MAX_HAULER_CLAIMS = 2;
 
 export function run(room: Room): void {
@@ -161,16 +166,11 @@ export function assignRemoteCreep(creep: Creep): boolean {
         maintainRoads: false
     };
 
-    const energyUsed = creep.store.getUsedCapacity(RESOURCE_ENERGY);
     const capabilities = getCreepCapabilities(creep);
-    if (manageRemoteRenewal(creep, archetype, capabilities, homeRoom, remoteRoom, remotePlan)) {
-        return true;
+    if (archetype === 'remoteHauler') {
+        return assignRemoteHaulerCycle(creep, homeRoom, remoteRoom, remotePlan);
     }
-
-    if (archetype === 'remoteHauler' &&
-        energyUsed > 0 &&
-        (energyUsed >= creep.store.getCapacity(RESOURCE_ENERGY) || creep.room.name !== remoteRoom)) {
-        assignRemoteHaulerDelivery(creep, homeRoom, energyUsed);
+    if (manageRemoteRenewal(creep, archetype, capabilities, homeRoom, remoteRoom, remotePlan)) {
         return true;
     }
 
@@ -302,14 +302,6 @@ export function assignRemoteCreep(creep: Creep): boolean {
         creep.memory.stationaryTargetId = stationaryTargetId ?? selectedSource.id;
         setJob(creep, 'harvestSource', selectedSource);
         return true;
-    }
-
-    if (archetype === 'remoteHauler') {
-        const source = findRemoteEnergySource(creep, remotePlan);
-        if (source) {
-            setJob(creep, source.jobType, source.target);
-            return true;
-        }
     }
 
     if (archetype === 'remoteMaintainer') {
@@ -666,10 +658,23 @@ function shouldBuildRemoteInfrastructure(
     if (creep.store.getUsedCapacity(RESOURCE_ENERGY) <= 0) { return false; }
     if (creep.getActiveBodyparts(WORK) <= 0) { return false; }
     if (creep.getActiveBodyparts(CARRY) <= 0) { return false; }
+    if (archetype === 'remoteMiner' && isRemoteMinerSittingOnContainer(creep)) { return false; }
 
     if (archetype === 'remoteMaintainer') { return true; }
-    if (archetype === 'remoteHauler' || archetype === 'remoteMiner') { return true; }
+    if (archetype === 'remoteMiner') { return true; }
     return false;
+}
+
+function isRemoteMinerSittingOnContainer(creep: Creep): boolean {
+    const stationaryTargetId = creep.memory.stationaryTargetId;
+    if (stationaryTargetId) {
+        const station = Game.getObjectById(stationaryTargetId as Id<StructureContainer>);
+        if (station && station.structureType === STRUCTURE_CONTAINER && creep.pos.isEqualTo(station.pos)) {
+            return true;
+        }
+    }
+
+    return creep.pos.lookFor(LOOK_STRUCTURES).some((structure) => structure.structureType === STRUCTURE_CONTAINER);
 }
 
 function manageRemoteRenewal(
@@ -1945,8 +1950,7 @@ function hasIdleRemoteHauler(creeps: Creep[], remoteRoom: string): boolean {
 }
 
 function remoteHaulerMinPickup(creep: Creep): number {
-    if ((creep.ticksToLive ?? Infinity) < REMOTE_HAULER_LOW_TTL_TICKS) { return 50; }
-    return Math.min(Math.ceil(creep.store.getCapacity(RESOURCE_ENERGY) * 0.33), 400);
+    return haulerMiningSiteMinPickup(creep);
 }
 
 function bestRemoteSourceContainer(creep: Creep, remotePlan: RemoteRoomPlan): StructureContainer | null {
@@ -2430,16 +2434,29 @@ function currentJobStillValid(
     if (jobType === 'withdrawEnergy') {
         const storeTarget = target as StructureContainer | StructureStorage | StructureTerminal | StructureLink;
         const reserved = reservations.resources[storeTarget.id] ?? 0;
+        const available = storeTarget.store.getUsedCapacity(RESOURCE_ENERGY) - reserved;
+        if (creep.store.getFreeCapacity(RESOURCE_ENERGY) <= 0 || available <= 0) { return false; }
+        const archetype = ensureArchetype(creep);
+        if ((archetype === 'hauler' || archetype === 'remoteHauler') &&
+            isMiningSiteEnergyTarget(context, storeTarget)) {
+            return available >= haulerMiningSiteMinPickup(creep);
+        }
         // Check remaining available energy after accounting for other creeps' reservations
-        return creep.store.getFreeCapacity(RESOURCE_ENERGY) > 0 &&
-            storeTarget.store.getUsedCapacity(RESOURCE_ENERGY) > reserved;
+        return true;
     }
     if (jobType === 'withdrawResource') {
         const storeTarget = target as WithdrawStructure;
         const resource = creep.memory.jobResourceType ?? firstStoredResource(storeTarget.store);
         if (!resource || creep.store.getFreeCapacity() === 0) { return false; }
         const remaining = (storeTarget.store.getUsedCapacity(resource) ?? 0) - (reservations.resources[storeTarget.id] ?? 0);
-        return remaining > 0;
+        if (remaining <= 0) { return false; }
+        const archetype = ensureArchetype(creep);
+        if (archetype === 'hauler' &&
+            resource !== RESOURCE_ENERGY &&
+            context.mineralPlan?.container?.id === storeTarget.id) {
+            return remaining >= haulerMiningSiteMinPickup(creep);
+        }
+        return true;
     }
     if (jobType === 'pickupEnergy' || jobType === 'pickupResource') {
         const resource = target as Resource<ResourceConstant>;
@@ -2588,6 +2605,7 @@ function mineralContainerWithdrawalTarget(
 
     const remaining = (container.store.getUsedCapacity(resource) ?? 0) - (reservations.resources[container.id] ?? 0);
     if (remaining <= 0) { return null; }
+    if (archetype === 'hauler' && remaining < haulerMiningSiteMinPickup(creep)) { return null; }
 
     return { target: container, resource, amount: remaining };
 }
@@ -2636,14 +2654,37 @@ function energyWithdrawalTarget(
     archetype: CreepArchetype,
     reservations: JobReservations
 ): StructureContainer | StructureStorage | StructureTerminal | StructureLink | null {
+    const haulerMinPickup = haulerMiningSiteMinPickup(creep);
+    const isHauler = archetype === 'hauler' || archetype === 'remoteHauler';
+    const miningSiteContainerIds: { [id: string]: boolean } = {};
+    for (const sourcePlan of context.sourcePlans) {
+        if (sourcePlan.container) {
+            miningSiteContainerIds[sourcePlan.container.id] = true;
+        }
+    }
+    if (context.mineralPlan?.container) {
+        miningSiteContainerIds[context.mineralPlan.container.id] = true;
+    }
+
     const sourceContainers = context.structures.containers
         .filter((container) => {
             // Threshold of 50 prevents idle stalls when containers dip below 200. Subtract reservations to avoid over-committing.
             const reserved = reservations.resources[container.id] ?? 0;
-            return container.store.getUsedCapacity(RESOURCE_ENERGY) - reserved >= Math.min(50, creep.store.getFreeCapacity(RESOURCE_ENERGY));
+            const available = container.store.getUsedCapacity(RESOURCE_ENERGY) - reserved;
+            if (available <= 0) { return false; }
+
+            const baseMin = Math.min(50, creep.store.getFreeCapacity(RESOURCE_ENERGY));
+            if (!isHauler) { return available >= baseMin; }
+            if (!miningSiteContainerIds[container.id]) { return available >= baseMin; }
+            return available >= haulerMinPickup;
         });
     const sourceLinks = context.structures.links.source
-        .filter((link) => link.store.getUsedCapacity(RESOURCE_ENERGY) > 0);
+        .filter((link) => {
+            const available = link.store.getUsedCapacity(RESOURCE_ENERGY) - (reservations.resources[link.id] ?? 0);
+            if (available <= 0) { return false; }
+            if (!isHauler) { return true; }
+            return available >= haulerMinPickup;
+        });
 
     if (archetype === 'hauler' || archetype === 'remoteHauler') {
         const demandLinks = [...context.structures.links.sink, ...context.structures.links.hub, ...context.structures.links.controller]
@@ -3132,6 +3173,22 @@ function firstStoredNonEnergyResource(store: StoreDefinition): ResourceConstant 
         if (store.getUsedCapacity(resource) > 0) { return resource; }
     }
     return null;
+}
+
+function haulerMiningSiteMinPickup(creep: Creep): number {
+    return Math.max(1, Math.ceil(creep.store.getCapacity() * 0.5));
+}
+
+function isMiningSiteEnergyTarget(
+    context: RoomControllerContext,
+    target: StructureContainer | StructureStorage | StructureTerminal | StructureLink
+): boolean {
+    if (target.structureType === STRUCTURE_LINK) {
+        return context.structures.links.source.some((link) => link.id === target.id);
+    }
+    if (target.structureType !== STRUCTURE_CONTAINER) { return false; }
+    if (context.mineralPlan?.container?.id === target.id) { return true; }
+    return context.sourcePlans.some((sourcePlan) => sourcePlan.container?.id === target.id);
 }
 
 function storedEnergy(context: RoomControllerContext): number {

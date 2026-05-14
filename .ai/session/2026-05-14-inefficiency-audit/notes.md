@@ -255,3 +255,125 @@ Monitor for:
 - Hauler energy loading improvements
 - Maintainer pathfinding fixes
 - Container energy management changes
+
+---
+
+## Codebase Analysis - Root Cause Identification
+
+### Issue 1: Remote Maintainers Getting Stuck (Lines 314-349 in room.controller.ts)
+
+**Root Cause:** Maintainer job assignment logic has a fallback to harvest from sources when no build/repair targets exist. The logic at lines 327-348 assigns `harvestSource` jobs to maintainers when they have free energy capacity, but the pathfinding to remote sources can fail due to:
+- Terrain blocks (walls, lava)
+- Distance from maintainer spawn position
+- No container nearby for handoff
+
+**Code Path:**
+```
+remoteMaintainer -> findRemoteEnergySource() -> harvestSource job
+```
+The `findRemoteEnergySource` function (lines 1984-2032) prioritizes containers, then dropped energy, then links, but falls back to sources which maintainers often cannot reach efficiently.
+
+**Recommendation:** Add maintainer-specific energy sourcing that avoids distant sources and prioritizes nearby containers/dropped energy.
+
+### Issue 2: Haulers Running Empty (Lines 1946-1948, 2034-2039)
+
+**Root Cause:** The `remoteHaulerMinPickup` function uses `haulerMiningSiteMinPickup` which may be too low, causing haulers to leave with minimal energy. Additionally, the `remoteHaulerAvoidTargetId` logic (lines 2034-2039) only activates after `REMOTE_HAULER_RETARGET_STUCK_TICKS` which may be too high.
+
+**Code Path:**
+```
+hauler stores energy -> checks minPickup threshold -> travels home if met
+```
+If `minPickup` is low, haulers leave prematurely.
+
+**Recommendation:** Increase minimum pickup threshold or add dynamic threshold based on hauler capacity percentage.
+
+### Issue 3: Mineral Container Always Empty (Lines 2594-2660)
+
+**Root Cause:** The mineral plan creates a container near the mineral, but the mineral miner job assignment doesn't prioritize filling that container. The miner extracts minerals but may not have energy to power the extractor.
+
+**Code Path:**
+```
+mineralMiner -> mineMineral job -> depositMineral job
+```
+The miner needs energy in the container to power the extractor, but no logic ensures the container gets filled with energy.
+
+**Recommendation:** Add logic to ensure mineral container has energy before mining starts, or assign haulers to fill mineral containers.
+
+### Issue 4: Claimers Stuck (Lines 1529-1545)
+
+**Root Cause:** Claimers are spawned for remote reserve/claim operations but get stuck trying to reach the controller. The pathfinding may fail due to:
+- Controller position being far from room entrance
+- Terrain blocks
+- No roads built to controller
+
+**Recommendation:** Add road construction to controller before spawning claimers, or add pathfinding validation.
+
+### Issue 5: Dropped Energy Spreading (Lines 75-78 in creep.jobRunner.ts)
+
+**Root Cause:** When miners fill up, they drop energy if no offload target is available. The `offloadEnergyNearby` function may not find containers quickly enough, causing drops.
+
+**Code Path:**
+```
+miner harvests -> store full -> offloadEnergyNearby() -> drop(RESOURCE_ENERGY)
+```
+If containers are far or full, energy gets dropped.
+
+**Recommendation:** Improve container placement near mining sites or add more frequent container checks.
+
+---
+
+## Monitoring Status - Game Active (Tick 70920600, 2:40 AM)
+
+**Last Update:** Tick 70920600 (2:40 AM)
+**Log File Last Modified:** 2026-05-14 12:40 PM (24,788+ lines)
+**Current Status:** Game active, new ticks received
+
+### Issue Resolution Tracking (Updated)
+
+| Issue | Status | Notes |
+|-------|--------|-------|
+| Remote maintainers stuck | IMPROVING | W6N9 maintainer traveling to W6N9 (not stuck), W8N9 maintainer renewing |
+| Dropped energy W8N9 | PERSISTING | Now 3 drop locations: [18,27] (1972), [48,29] (170), [45,33] (197) |
+| Haulers running empty | IMPROVING | remoteHauler-Spawn1-70919371 now has 1000/1000 energy - FIXED |
+| Remote miners standby | PERSISTING | remoteMiner-Spawn1-70916180-1 still in standby (195 TTL) |
+| Mineral container empty | PERSISTING | Container 78b700e2 still energy=0/2000 |
+| CPU bucket volatility | IMPROVING | Stabilized at 8505-10000 bucket |
+| Home room energy | IMPROVING | en=2088/2300 (91%), storage=0 |
+| Claimer stuck | PERSISTING | Still stuck=4 in W8N9 |
+
+### Key Observations
+
+- **Hauler energy loading FIXED** - remoteHauler-Spawn1-70919371 now returning with 1000/1000 energy
+- **Maintainer pathfinding IMPROVING** - W6N9 maintainer now traveling to W6N9 (not stuck)
+- **Memory audit working** - detecting and fixing duplicate source assignments
+- **Mineral extraction working** - amount decreasing (23,718 -> 23,213) but container still empty
+- **Dropped energy spreading** - now 3 locations instead of 1-2
+
+### Current Resource Summary
+
+**Home Room (W7N9):**
+- Energy: 2088/2300 (91%) - IMPROVED from 1908/2300
+- Storage: 0/2250 (0%) - DECREASED from 400/2250
+- Workers: 3 (2 at 0 energy, 1 at 190/500)
+- CPU: 8505 bucket (healthy)
+
+**Remote Room W8N9:**
+- Source 4adbfc69: 3000/3000 (full)
+- Source 4adbfc6b: 2320/3000 (77%) - RECOVERED from 750-830/3000
+- Container: 2000/2000 (100%) - STABLE
+- 1 hauler (1300 capacity, traveling to container)
+- 3 miners mining (1 duplicate detected by memory audit)
+
+**Remote Room W6N9:**
+- Source 4adbff3a: 2844-2874/3000 (95-96%) - RECOVERED from 1680-1740/3000
+- Container: 118/2000 (6%) - DECREASED from 906-966/2000
+- 2 haulers (1 with 1000 energy returning home, 1 dying empty)
+- 1 miner mining, 1 stuck in standby
+
+### Next Check Recommended
+
+Monitor for:
+- New code deployments (check for BUILD_COMMIT changes)
+- Hauler energy loading improvements
+- Maintainer pathfinding fixes
+- Container energy management changes

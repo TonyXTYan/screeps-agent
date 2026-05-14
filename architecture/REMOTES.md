@@ -88,10 +88,12 @@ haulerCapacityDemand = min(
 - Sources with a planned container or fixed station tile allow **1 active miner**.
 - Non-static sources allow up to **2 active miners** (terrain/access permitting).
 - If all source slots are full, extra remote miners are pushed into standby flow instead of crowding source stations.
+- A remote miner already parked on its container prioritizes `harvestSource` and does not take auxiliary remote build jobs from that position.
 
 ## Hauler Target Selection
 
 - Empty remote haulers select from source containers first, then dropped energy, then links.
+- Remote mining-site targets (source containers) must have at least 50% of the hauler carry capacity available before selection.
 - Candidate energy is reduced by in-flight remote-hauler claims before selection.
 - Per-target assignment is decongested with an access-tile-aware soft cap (up to 2 empty haulers per target).
 - If a hauler remains stuck on one tile for 4+ ticks while on `withdrawEnergy`/`pickupEnergy`, it temporarily avoids its current target and retargets.

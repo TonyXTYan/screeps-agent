@@ -44,7 +44,7 @@ Use this as the first stop before editing code.
 - Body capability derivation — `src/creep.capabilities.ts`
 - Body planning by archetype — `src/creep.capabilities.ts`
 - Remote hauler capacity cap (per source) — `src/room.controller.ts`
-- Hauling, refill, build, repair, upgrade assignment — `src/room.controller.ts`; haulers/workers pick dropped resources, salvage ruins/tombstones, then non-energy minerals from the planned mineral container, then use storage as the withdrawal source when refill targets are pending, and otherwise withdraw from containers/links
+- Hauling, refill, build, repair, upgrade assignment — `src/room.controller.ts`; haulers/workers pick dropped resources, salvage ruins/tombstones, then non-energy minerals from the planned mineral container, then use storage as the withdrawal source when refill targets are pending, and otherwise withdraw from containers/links. Local/remote haulers only consider mining-site pickups when available amount is at least 50% of hauler carry capacity.
 - Job execution for those assignments — `src/creep.jobRunner.ts`
 
 ## Types And Memory

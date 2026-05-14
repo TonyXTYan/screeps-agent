@@ -64,6 +64,7 @@ interface RemoteSourcePlan {
     assignedMinerWork?: number;
     assignedHaulerCapacity?: number;
     lastSeen?: number;
+    routeAccessible?: boolean;
 }
 
 interface RoomStructureMemory {

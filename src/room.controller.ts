@@ -250,9 +250,10 @@ export function assignRemoteCreep(creep: Creep): boolean {
         if (assignedSourceId) {
             const currentSource = sources.find((source) => source.id === assignedSourceId) ?? null;
             if (currentSource) {
+                const currentSourcePlan = remotePlan.sources?.[currentSource.id];
                 const currentCount = minerCountBySource.get(currentSource.id) ?? 0;
                 const currentCap = remoteSourceMinerSlotCap(remotePlan, currentSource);
-                if (currentCount < currentCap) {
+                if (currentSourcePlan?.routeAccessible !== false && currentCount < currentCap) {
                     selectedSource = currentSource;
                 }
             }
@@ -285,7 +286,7 @@ export function assignRemoteCreep(creep: Creep): boolean {
             stationaryTargetId = sourceCfg.containerId;
             creep.memory.stationX = undefined;
             creep.memory.stationY = undefined;
-        } else if (sourceCfg?.stationX != null && sourceCfg?.stationY != null) {
+        } else if (sourceCfg?.stationX != null && sourceCfg?.stationY != null && sourceCfg.routeAccessible !== false) {
             stationaryTargetId = undefined;
             creep.memory.stationX = sourceCfg.stationX;
             creep.memory.stationY = sourceCfg.stationY;
@@ -781,11 +782,29 @@ function updateRemoteRoomPlans(homeRoom: Room): void {
             if (anchor && station && (!existing.pathDistance || !hasCachedPath || pathStale)) {
                 const route = PathFinder.search(anchor.pos, { pos: station, range: 0 }, { maxRooms: 8 });
                 if (!route.incomplete) {
-                    latestPath = route.path;
-                    existing.pathDistance = route.path.length;
-                    existing.pathSerialized = serializeRemotePath(route.path);
-                    existing.pathUpdatedAt = Game.time;
+                    const directRoute = !route.path.some(pos =>
+                        pos.roomName !== homeRoom.name && pos.roomName !== remoteName);
+                    if (directRoute) {
+                        existing.routeAccessible = true;
+                        latestPath = route.path;
+                        existing.pathDistance = route.path.length;
+                        existing.pathSerialized = serializeRemotePath(route.path);
+                        existing.pathUpdatedAt = Game.time;
+                    } else {
+                        existing.routeAccessible = false;
+                        existing.pathDistance = fallbackRemotePathDistance(homeRoom.name, remoteName, route.path.length);
+                        const retryOffset = Math.max(0, REMOTE_PATH_REFRESH_INTERVAL - REMOTE_PATH_INCOMPLETE_RETRY_TICKS);
+                        existing.pathUpdatedAt = Game.time - retryOffset;
+                        latestPath = hasCachedPath ? cachedPath : [];
+                        if (Game.time % REMOTE_PLANNING_LOG_INTERVAL === 0) {
+                            console.log(
+                                'room.controller: indirect remote path (via 3rd room) ' + homeRoom.name + '->' + remoteName +
+                                ' source=' + source.id
+                            );
+                        }
+                    }
                 } else {
+                    existing.routeAccessible = false;
                     existing.pathDistance = fallbackRemotePathDistance(homeRoom.name, remoteName, route.path.length);
                     const retryOffset = Math.max(0, REMOTE_PATH_REFRESH_INTERVAL - REMOTE_PATH_INCOMPLETE_RETRY_TICKS);
                     existing.pathUpdatedAt = Game.time - retryOffset;
@@ -1716,6 +1735,7 @@ function remoteSpawnRequest(
             const totalRoomMiners = countActiveRemoteMinersForRoom(homeFleet, roomName);
             for (const sourceId in remote.sources) {
                 const sourcePlan = remote.sources[sourceId];
+                if (sourcePlan.routeAccessible === false) { continue; }
                 const targetMinerWork = sourcePlan.workDemand ?? 3;
                 const minerCoverageHorizon = remoteSourceReplacementHorizon(context, sourcePlan, 'remoteMiner');
                 const minerProjectedWork = projectedRemoteMinerWork(homeFleet, roomName, sourceId, minerCoverageHorizon);
@@ -1952,6 +1972,8 @@ function pickRemoteMinerSource(
     let bestLoad = Infinity;
     let bestRange = Infinity;
     for (const source of sources) {
+        const sourcePlan = remotePlan.sources?.[source.id];
+        if (sourcePlan?.routeAccessible === false) { continue; }
         const cap = remoteSourceMinerSlotCap(remotePlan, source);
         const count = minerCountBySource.get(source.id) ?? 0;
         if (count >= cap) { continue; }

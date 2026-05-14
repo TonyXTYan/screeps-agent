@@ -88,14 +88,13 @@ export function loop(): void {
     debug.installDebugHelpers();
     installMoveDebugHook();
     if (Game.cpu.bucket >= 10000) {
-        console.log('main: ✅ .time=' + Game.time + ', cpu.bucket=' + Game.cpu.bucket);
-        Game.cpu.generatePixel();
+        console.log('main: ✅ .time=' + Game.time + ', cpu.bucket=' + Game.cpu.bucket + ', generationPixel=' + Game.cpu.generatePixel());
     }
 
     
 
     creepMemoryManagement.run();
-    if (detectCodeChange() && Game.cpu.bucket >= 500) {
+    if (detectCodeChange() && Game.cpu.bucket >= 0) {
         memoryAudit.runFullAudit();
     }
 

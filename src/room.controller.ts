@@ -75,6 +75,9 @@ interface JobReservations {
 }
 
 const TOWER_RESERVE_RATIO = 0.7;
+const TERMINAL_RESERVE_RCL6 = 5000;
+const TERMINAL_RESERVE_RCL7 = 10000;
+const TERMINAL_RESERVE_RCL8 = 50000;
 
 const MINERAL_WORK_DEMAND = 5;
 const LINK_TRANSFER_THRESHOLD = 400;
@@ -1467,6 +1470,18 @@ function assignJob(context: RoomControllerContext, creep: Creep, reservations: J
             }
         }
 
+        if (archetype === 'hauler' &&
+            context.structures.storage &&
+            terminalEnergyReserveDeficit(context, reservations) > 0 &&
+            !roomNeedsEnergyRecovery(context)) {
+            const storageReserved = reservations.resources[context.structures.storage.id] ?? 0;
+            const storageAvailable = context.structures.storage.store.getUsedCapacity(RESOURCE_ENERGY) - storageReserved;
+            if (storageAvailable > 0) {
+                setJob(creep, 'withdrawEnergy', context.structures.storage);
+                return;
+            }
+        }
+
         const withdrawalTarget = energyWithdrawalTarget(context, creep, archetype, reservations);
         if (withdrawalTarget) {
             setJob(creep, 'withdrawEnergy', withdrawalTarget);
@@ -1531,7 +1546,7 @@ function assignEnergySpendingJob(
     if (resumed) { return; }
 
     if (archetype === 'hauler' || archetype === 'remoteHauler') {
-        const sink = energyDepositTarget(context, creep);
+        const sink = energyDepositTarget(context, creep, reservations);
         if (sink) {
             setJob(creep, 'depositEnergy', sink);
             return;
@@ -1592,7 +1607,7 @@ function assignEnergySpendingJob(
         return;
     }
 
-    const sink = energyDepositTarget(context, creep);
+    const sink = energyDepositTarget(context, creep, reservations);
     setJob(creep, 'depositEnergy', sink);
 }
 
@@ -2980,6 +2995,11 @@ function currentJobStillValid(
             return false;
         }
 
+        if (storeTarget.structureType === STRUCTURE_TERMINAL) {
+            const available = terminalWithdrawableEnergy(context, reservations, roomNeedsEnergyRecovery(context));
+            return creep.store.getFreeCapacity(RESOURCE_ENERGY) > 0 && available > 0;
+        }
+
         const reserved = reservations.resources[storeTarget.id] ?? 0;
         const available = storeTarget.store.getUsedCapacity(RESOURCE_ENERGY) - reserved;
         if (creep.store.getFreeCapacity(RESOURCE_ENERGY) <= 0 || available <= 0) { return false; }
@@ -3166,7 +3186,18 @@ function resourceDepositTarget(context: RoomControllerContext): StructureTermina
     return context.structures.containers.find((container) => container.store.getFreeCapacity() > 0) ?? null;
 }
 
-function energyDepositTarget(context: RoomControllerContext, creep: Creep): StructureStorage | StructureTerminal | StructureContainer | null {
+function energyDepositTarget(
+    context: RoomControllerContext,
+    creep: Creep,
+    reservations: JobReservations
+): StructureStorage | StructureTerminal | StructureContainer | null {
+    if (context.structures.terminal &&
+        context.structures.terminal.store.getFreeCapacity(RESOURCE_ENERGY) > 0 &&
+        terminalEnergyReserveDeficit(context, reservations) > 0 &&
+        !roomNeedsEnergyRecovery(context)) {
+        return context.structures.terminal;
+    }
+
     if (context.structures.storage && context.structures.storage.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
         return context.structures.storage;
     }
@@ -3237,12 +3268,16 @@ function energyWithdrawalTarget(
             if (!isHauler) { return true; }
             return available >= haulerMinPickup;
         });
+    const allowTerminalReserveBreak = roomNeedsEnergyRecovery(context);
+    const terminalAvailable = terminalWithdrawableEnergy(context, reservations, allowTerminalReserveBreak);
+    const terminalTarget = context.structures.terminal && terminalAvailable > 0 ? context.structures.terminal : null;
 
     if (archetype === 'hauler' || archetype === 'remoteHauler') {
         const demandLinks = [...context.structures.links.sink, ...context.structures.links.hub, ...context.structures.links.controller]
             .filter((link) => link.store.getUsedCapacity(RESOURCE_ENERGY) > 0);
         return closest(creep, sourceContainers) ??
                closest(creep, sourceLinks) ??
+               terminalTarget ??
                closest(creep, demandLinks);
     }
 
@@ -3254,7 +3289,7 @@ function energyWithdrawalTarget(
         return context.structures.storage;
     }
 
-    return closest(creep, [...sourceContainers, ...sourceLinks]);
+    return terminalTarget ?? closest(creep, [...sourceContainers, ...sourceLinks]);
 }
 
 function linkReceivers(context: RoomControllerContext): StructureLink[] {
@@ -3297,6 +3332,45 @@ function spawnEnergyRatio(context: RoomControllerContext): number {
 
 function spawnEnergyPressure(context: RoomControllerContext): number {
     return sumFreeEnergy([...context.structures.spawns, ...context.structures.extensions]);
+}
+
+function terminalEnergyReserveTarget(rcl: number): number {
+    if (rcl >= 8) { return TERMINAL_RESERVE_RCL8; }
+    if (rcl >= 7) { return TERMINAL_RESERVE_RCL7; }
+    if (rcl >= 6) { return TERMINAL_RESERVE_RCL6; }
+    return 0;
+}
+
+function roomNeedsEnergyRecovery(context: RoomControllerContext): boolean {
+    return spawnEnergyPressure(context) > 0 || refillTowerTargets(context).length > 0;
+}
+
+function terminalWithdrawableEnergy(
+    context: RoomControllerContext,
+    reservations: JobReservations,
+    allowReserveBreak: boolean
+): number {
+    const terminal = context.structures.terminal;
+    if (!terminal) { return 0; }
+    const reserved = reservations.resources[terminal.id] ?? 0;
+    const available = terminal.store.getUsedCapacity(RESOURCE_ENERGY) - reserved;
+    if (available <= 0) { return 0; }
+    if (allowReserveBreak) { return available; }
+
+    const reserveTarget = terminalEnergyReserveTarget(context.room.controller?.level ?? 0);
+    return Math.max(0, available - reserveTarget);
+}
+
+function terminalEnergyReserveDeficit(context: RoomControllerContext, reservations: JobReservations): number {
+    const terminal = context.structures.terminal;
+    if (!terminal) { return 0; }
+
+    const reserveTarget = terminalEnergyReserveTarget(context.room.controller?.level ?? 0);
+    if (reserveTarget <= 0) { return 0; }
+
+    const incomingReserved = reservations.energySinks[terminal.id] ?? 0;
+    const projectedEnergy = terminal.store.getUsedCapacity(RESOURCE_ENERGY) + incomingReserved;
+    return Math.max(0, reserveTarget - projectedEnergy);
 }
 
 function buildSourcePlans(sources: Source[], structures: RoomStructureCache): SourcePlan[] {

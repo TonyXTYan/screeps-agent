@@ -77,6 +77,9 @@ For haulers/workers with free capacity:
      - Workers: storage-first whenever room storage has energy
      - Haulers: source containers (at miner/mineral sites), then source links, then hub/controller/sink links
      - For local haulers only, mining-site source containers/links are considered only if they hold at least 50% of hauler carry capacity
+     - Terminal energy is available as a fallback withdrawal source with a reserve policy:
+       - Keep reserve in normal mode: RCL6=5k, RCL7=10k, RCL8=50k
+       - Allow reserve break in recovery mode: any spawn/extension deficit or any tower below 70%
 
 For haulers carrying energy but with free capacity & available drops:
   → Continue gathering dropped resources (skip spending phase)
@@ -98,6 +101,7 @@ When a creep has energy and needs a spending job:
 2. Refill towers below reserve   (70% threshold)
 3. Resume primary job            (remembered build/repair/upgrade)
 4. Deposit to storage/terminal   (for haulers)
+   - In normal mode, haulers prioritize topping the terminal reserve (RCL6/7/8 = 5k/10k/50k) before general storage buffering
 5. Guaranteed builder            (at least 1 worker builds before any upgrade)
 6. Controller upgrade            (minimum work threshold)
 7. Build more construction sites

@@ -85,17 +85,20 @@ Multiple inefficiencies found in remote operations, mineral mining, and energy m
 | 70930855 | 1:13 PM | 482336fa->dd3e2f7a | Remote miner fix 3 (station path check) |
 | 70931641 | 2:02 PM | dd3e2f7a->2b1d3db4 | Remote miner fix v4 (non-winding path check) |
 | 70932095 | 2:29 PM | 2b1d3db4->1138e419 | Remote miner fix v5 (major - standby, stuck recovery, container sites) |
+| 70932626 | 3:02 PM | 1138e419->c080a728 | Remote miner fix v6 (station validation, blank standby reassignment) |
 
 ### Impact Assessment
 - Hauler energy loading: FIXED (100% capacity returns)
 - Claimer progress: IMPROVED (stuck=1 vs stuck=4)
 - Remote maintainer: IMPROVED (traveling/building)
-- Mineral container: STILL EMPTY (L=0-15/2000)
+- Mineral container: IMPROVED (L=0-55/2000, highest L=55 observed)
 - Remote miner stuck bug: FIXED (routeAccessible detection working)
 - Inaccessible source 4adbfc69: FIXED (miners reassigned to standby)
 - Remote standby bypass: FIXED (source-targeted replacements)
 - Stuck-station recovery: FIXED (invalidates bad paths after stalls)
 - Container site tracking: FIXED (pending sites counted for miner caps)
+- Blank standby miners: FIXED (reassigned to uncovered accessible sources)
+- Station validation: FIXED (accepts complete winding paths, keeps moving to exact station)
 
 ---
 

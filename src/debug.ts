@@ -297,10 +297,21 @@ function printRemoteCreepStatus(filterHome?: string, filterRemote?: string): voi
                 const dist = sourcePlan.pathDistance ?? '?';
                 const minerCap = remoteSourceMinerCap(sourceId, sourcePlan);
                 const overload = minerCount > minerCap ? '!' : '';
+                const route = sourcePlan.routeAccessible === false
+                    ? 'blocked'
+                    : sourcePlan.routeAccessible === true ? 'ok' : '?';
+                const station = sourcePlan.stationX !== undefined && sourcePlan.stationY !== undefined
+                    ? `  stn=[${sourcePlan.stationX},${sourcePlan.stationY}]`
+                    : '';
+                const site = sourcePlan.containerSiteId && !sourcePlan.containerId
+                    ? `  site=${sourcePlan.containerSiteId.slice(-8)}`
+                    : '';
                 sourceSummary.push(
                     `  src=${shortId}  miners=${minerCount}/${minerCap}${overload} (${minerWork}W)` +
                     `  haulers=${haulerCount} (${haulerCap}C)` +
-                    `  demand=${wd}W/${hd}C  dist=${dist}`
+                    `  demand=${wd}W/${hd}C  dist=${dist}  route=${route}` +
+                    station +
+                    site
                 );
             }
 

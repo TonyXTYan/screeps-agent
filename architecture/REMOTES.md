@@ -111,9 +111,10 @@ Paths from home storage/spawn to each remote source station are cached to avoid 
 6. Incomplete paths retry quickly (about 100 ticks vs 5000)
 ```
 
-Remote station validation also checks the local path from the home-to-remote entry edge to the station.
-If a miner repeatedly stalls out of harvest range, the source path is invalidated and retried later rather
-than keeping the miner in a wall-pocket loop.
+Remote station validation also checks for a complete local path from the home-to-remote entry edge to
+the station. Long/winding but complete local paths remain valid; only incomplete local paths mark the
+source inaccessible. If a miner repeatedly stalls out of harvest range, the source path is invalidated
+and retried later rather than keeping the miner in a wall-pocket loop.
 
 ## Infrastructure Placement
 
@@ -159,6 +160,7 @@ Remote maintainers (not miners, not claimers) can renew at the home spawn:
 - When an active remote miner for a source reaches TTL <= 200, a source-targeted `remoteStandby` replacement is spawned
 - Source-targeted standby miners count as replacement coverage, so active deficit spawning does not bypass them
 - Standby routing is evaluated before generic outbound remote travel
+- Source-less standby miners are reassigned to uncovered accessible sources before idling at home
 - While incumbent is alive, standby pre-positions in the remote room near the mining site (range 4-10)
 - Once the incumbent dies, standby is promoted and takes over that source
 

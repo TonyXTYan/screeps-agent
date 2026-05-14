@@ -141,6 +141,7 @@ once TTL reaches 1300 (`HOME_RENEW_STOP_TTL`). The same miner stays assigned to 
 Remote miners do not renew at the home spawn. Instead, handoff replacement uses `remoteStandby`:
 - When an active remote miner's TTL drops to 200 or below, spawn a standby replacement for that source.
 - Source-targeted standby replacements are spawned before active deficit replacements and block duplicate active spawns for that source.
+- Source-less standby miners are reassigned to uncovered accessible remote sources instead of idling indefinitely.
 - The standby travels to the remote room and pre-positions near the mining site (kept within range 4-10).
 - When the incumbent miner dies, the standby is promoted and takes over harvesting that source.
 

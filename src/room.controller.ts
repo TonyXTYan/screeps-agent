@@ -112,8 +112,6 @@ const REMOTE_HAULER_WANDER_MAX_RANGE = 8;
 const REMOTE_HAULER_RETARGET_STUCK_TICKS = 4;
 const REMOTE_TARGET_MAX_HAULER_CLAIMS = 2;
 const REMOTE_MINER_STUCK_REPLAN_TICKS = 8;
-const REMOTE_LOCAL_PATH_WINDING_FACTOR = 3;
-const REMOTE_LOCAL_PATH_WINDING_BUFFER = 10;
 
 export function run(room: Room): void {
     const context = buildContext(room);
@@ -207,7 +205,7 @@ export function assignRemoteCreep(creep: Creep): boolean {
     }
 
     if (archetype === 'remoteMiner' && creep.memory.remoteStandby) {
-        return assignStandbyRemoteMiner(creep, homeRoom, remoteRoom);
+        return assignStandbyRemoteMiner(creep, homeRoom, remoteRoom, remotePlan);
     }
 
     if (archetype === 'remoteMiner') {
@@ -468,12 +466,15 @@ function invalidateRemoteSourcePath(sourcePlan: RemoteSourcePlan): void {
     console.log('room.controller: invalidated remote source station path source=' + sourcePlan.sourceId + ' after miner stall');
 }
 
-function assignStandbyRemoteMiner(creep: Creep, homeRoom: string, remoteRoom: string): boolean {
+function assignStandbyRemoteMiner(creep: Creep, homeRoom: string, remoteRoom: string, remotePlan: RemoteRoomPlan): boolean {
     const homeFleet = creepsForHomeRoom(homeRoom);
     let standbySourceId = creep.memory.assignedSourceId ?? creep.memory.sourceId;
     if (!standbySourceId) {
         const dyingMiner = findDyingRemoteMiner(homeFleet, remoteRoom);
         standbySourceId = dyingMiner?.memory.assignedSourceId ?? dyingMiner?.memory.sourceId;
+    }
+    if (!standbySourceId) {
+        standbySourceId = sourceNeedingBlankStandbyMiner(homeFleet, remoteRoom, remotePlan, creep.id) ?? undefined;
     }
 
     if (!standbySourceId) {
@@ -890,17 +891,12 @@ function updateRemoteRoomPlans(homeRoom: Room): void {
                     // Simulate the miner's local entry route into the remote room. A complete
                     // cross-room path is not enough if the selected exit enters a separated pocket.
                     const localRoute = bestRemoteEntryRoute(remoteEntries, station);
-                    const directRange = closestEntryRange(remoteEntries, station);
-                    const maxLocalDist = Math.max(25,
-                        directRange * REMOTE_LOCAL_PATH_WINDING_FACTOR + REMOTE_LOCAL_PATH_WINDING_BUFFER);
-                    const locallyReachable = !!localRoute &&
-                        !localRoute.incomplete &&
-                        localRoute.path.length <= maxLocalDist;
+                    const locallyReachable = !!localRoute && !localRoute.incomplete;
                     if (Game.time % REMOTE_PLANNING_LOG_INTERVAL === 0) {
                         console.log('room.controller: local path check ' + homeRoom.name + '->' + remoteName +
                             ' src=' + source.id +
                             ' len=' + (localRoute ? localRoute.path.length : -1) +
-                            ' threshold=' + maxLocalDist + (!localRoute || localRoute.incomplete ? ' incomplete' : ''));
+                            (!localRoute || localRoute.incomplete ? ' incomplete' : ''));
                     }
                     if (locallyReachable) {
                         existing.routeAccessible = true;
@@ -1191,15 +1187,6 @@ function bestRemoteEntryRoute(entries: RoomPosition[], station: RoomPosition): P
     if (entries.length === 0) { return null; }
     const route = PathFinder.search(station, entries.map(pos => ({ pos, range: 0 })), { maxRooms: 1 });
     return route;
-}
-
-function closestEntryRange(entries: RoomPosition[], station: RoomPosition): number {
-    if (entries.length === 0) { return 50; }
-    let best = Infinity;
-    for (const entry of entries) {
-        best = Math.min(best, entry.getRangeTo(station));
-    }
-    return best < Infinity ? best : 50;
 }
 
 function findStationForSource(room: Room, source: Source, entries: RoomPosition[] = []): RoomPosition | null {
@@ -2035,8 +2022,9 @@ function countRemoteStandbyMiners(creeps: Creep[], remoteRoom: string): number {
     return count;
 }
 
-function hasRemoteStandbyMinerForSource(creeps: Creep[], remoteRoom: string, sourceId: string): boolean {
+function hasRemoteStandbyMinerForSource(creeps: Creep[], remoteRoom: string, sourceId: string, excludeCreepId?: string): boolean {
     for (const creep of creeps) {
+        if (creep.id === excludeCreepId) { continue; }
         if (ensureArchetype(creep) !== 'remoteMiner') { continue; }
         if (creep.memory.remoteRoom !== remoteRoom) { continue; }
         if (!creep.memory.remoteStandby) { continue; }
@@ -2044,6 +2032,33 @@ function hasRemoteStandbyMinerForSource(creeps: Creep[], remoteRoom: string, sou
         return true;
     }
     return false;
+}
+
+function sourceNeedingBlankStandbyMiner(
+    creeps: Creep[],
+    remoteRoom: string,
+    remotePlan: RemoteRoomPlan,
+    excludeCreepId?: string
+): string | null {
+    if (!remotePlan.sources) { return null; }
+
+    let bestSourceId: string | null = null;
+    let bestDemand = -Infinity;
+    for (const sourceId in remotePlan.sources) {
+        const sourcePlan = remotePlan.sources[sourceId];
+        if (sourcePlan.routeAccessible === false) { continue; }
+        if (hasRemoteStandbyMinerForSource(creeps, remoteRoom, sourceId, excludeCreepId)) { continue; }
+        if (countRemoteMinersForSource(creeps, remoteRoom, sourceId) > 0) { continue; }
+        if (projectedRemoteMinerWork(creeps, remoteRoom, sourceId, 0) > 0) { continue; }
+
+        const demand = sourcePlan.workDemand ?? 0;
+        if (!bestSourceId || demand > bestDemand) {
+            bestSourceId = sourceId;
+            bestDemand = demand;
+        }
+    }
+
+    return bestSourceId;
 }
 
 function findDyingRemoteMiner(

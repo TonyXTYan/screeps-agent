@@ -67,11 +67,8 @@ function harvestSource(creep: Creep): number {
     const station = stationaryTarget(creep);
     if (station && !atStation(creep, station)) {
         const isPositionTarget = station instanceof RoomPosition;
-        const stuckTicks = creep.memory.travelStuckTicks ?? 0;
-        const stuckFallback = isPositionTarget && stuckTicks >= MOVE_STUCK_REPATH_TICKS;
-        const effectiveTarget = stuckFallback ? source : station;
-        const range = station instanceof StructureContainer ? 0 : (stuckFallback || !isPositionTarget ? 1 : 0);
-        moveToJobTarget(creep, effectiveTarget, '#3d2a22', { range });
+        const range = station instanceof StructureContainer || isPositionTarget ? 0 : 1;
+        moveToJobTarget(creep, station, '#3d2a22', { range });
         return ERR_NOT_IN_RANGE;
     }
 
@@ -1039,7 +1036,7 @@ function moveToJobTarget(
     if (code === ERR_NO_PATH || (needsPathReset && creep.fatigue === 0)) {
         if (!nudgeFromRoomEdge(creep) && needsPathReset) {
             if (targetPos && creep.room.name === targetPos.roomName) {
-                const pfResult = PathFinder.search(creep.pos, { pos: targetPos, range: 1 }, { maxRooms: 1 });
+                const pfResult = PathFinder.search(creep.pos, { pos: targetPos, range: targetRange }, { maxRooms: 1 });
                 if (pfResult.path.length > 0 && pfResult.path[0].getRangeTo(creep.pos) <= 1) {
                     creep.move(creep.pos.getDirectionTo(pfResult.path[0]));
                     return OK;

@@ -37,7 +37,7 @@ const maxCount = max(2, ceil(rawDemand / maxCarryPerHauler) + 1);
 |-----------|-----|-------|---|
 | **Remote Scout** | `REMOTE_SCOUT_KEEP_COUNT = 2` | Per remote room; extras overflow to `remoteWander` | `room.controller.ts:89, 472–476` |
 | **Remote Miner (active)** | Per-source slot cap (`1` on container/station sources, `2` max otherwise) | Spawned for coverage deficit; reassigned by slot availability; overflow falls back to standby/return-home behavior | `room.controller.ts` |
-| **Remote Miner (standby)** | `REMOTE_STANDBY_COUNT = 1` | Per remote room, idle at home spawn | `room.controller.ts:1549–1561` |
+| **Remote Miner (standby)** | Demand-driven handoff | Source-targeted replacement for dying miners; source-less standby miners are reassigned to uncovered accessible sources | `room.controller.ts` |
 | **Remote Hauler** | `MAX_REMOTE_HAULERS_PER_SOURCE = 2` | Per source; capped at 2 × sourceCount per room | `room.controller.ts:28, 1525–1526` |
 | **Remote Hauler (capacity)** | `MAX_REMOTE_HAULER_CAPACITY_PER_SOURCE = 2500` | Demand per source; distance-weighted but capped | `room.controller.ts:28` |
 | **Remote Maintainer** | 1 per room | Spawned if roads/containers need repair | `room.controller.ts:1540–1543` |

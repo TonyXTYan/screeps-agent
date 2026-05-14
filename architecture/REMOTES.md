@@ -61,9 +61,9 @@ For each configured remote room:
   ├─ For each known source:
   │   ├─ Miner work deficit?  → spawn remoteMiner (respect per-source active slot cap)
   │   ├─ Hauler cap deficit?  → spawn remoteHauler (max 2/source)
-  │   └─ (Standby dispatched separately)
+  │   └─ (Standby replacement targeted by low-TTL miner)
   ├─ Needs maintenance?       → spawn remoteMaintainer
-  ├─ Needs standby miner?     → spawn remoteMiner (remoteStandby=true)
+  ├─ Active miner TTL <= 200? → spawn remoteMiner (remoteStandby=true, source-targeted)
   └─ Mode: reserve/claim?     → spawn claimer
 ```
 
@@ -150,10 +150,11 @@ Remote maintainers (not miners, not claimers) can renew at the home spawn:
 - During this no-job idle window, the hauler wanders more than 3 tiles away from the home spawn and only enters renew mode when TTL drops below 500.
 
 ### Miner Replacement (Standby Dispatch)
-- One `remoteStandby` miner per remote room, idle at home spawn
-- Standby routing is evaluated before generic outbound remote travel, so standby miners remain in home until dispatched
-- When active miner TTL < 300 → standby dispatched to that source
-- Double-dispatch prevention: checks no other miner already holds the same source
+- Remote miners do not renew at the home spawn
+- When an active remote miner for a source reaches TTL <= 200, a source-targeted `remoteStandby` replacement is spawned
+- Standby routing is evaluated before generic outbound remote travel
+- While incumbent is alive, standby pre-positions in the remote room near the mining site (range 4-10)
+- Once the incumbent dies, standby is promoted and takes over that source
 
 ## Console API
 

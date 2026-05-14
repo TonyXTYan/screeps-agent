@@ -97,8 +97,10 @@ const REMOTE_RENEW_MIN_TTL = 220;
 const REMOTE_RENEW_BUFFER_TICKS = 80;
 const REMOTE_RENEW_HYSTERESIS = 140;
 const REMOTE_REPLACEMENT_BUFFER_TICKS = 60;
-const REMOTE_STANDBY_COUNT = 1;
-const REMOTE_STANDBY_DISPATCH_TTL = 300;
+const REMOTE_STANDBY_TRIGGER_TTL = 200;
+const REMOTE_STANDBY_PARK_RANGE_MIN = 4;
+const REMOTE_STANDBY_PARK_RANGE_TARGET = 6;
+const REMOTE_STANDBY_PARK_RANGE_MAX = 10;
 const MAX_REMOTE_HAULER_CAPACITY_PER_SOURCE = 2500;
 const MAX_REMOTE_HAULERS_PER_SOURCE = 2;
 const REMOTE_HAULER_RENEW_START_TTL = 500;
@@ -238,9 +240,6 @@ export function assignRemoteCreep(creep: Creep): boolean {
             if (ensureArchetype(other) !== 'remoteMiner') { continue; }
             if (other.memory.remoteRoom !== remoteRoom) { continue; }
             if (other.memory.remoteStandby) { continue; }
-            // Dying miners don't count — their slot is being vacated; a dispatched
-            // standby replacement should be allowed to claim it without being bounced.
-            if ((other.ticksToLive ?? Infinity) < REMOTE_STANDBY_DISPATCH_TTL) { continue; }
             const sid = other.memory.assignedSourceId ?? other.memory.sourceId;
             if (sid && sourceIds.has(sid)) {
                 minerCountBySource.set(sid, (minerCountBySource.get(sid) ?? 0) + 1);
@@ -380,35 +379,64 @@ export function assignRemoteCreep(creep: Creep): boolean {
 }
 
 function assignStandbyRemoteMiner(creep: Creep, homeRoom: string, remoteRoom: string): boolean {
-    if (creep.room.name !== homeRoom) {
+    const homeFleet = creepsForHomeRoom(homeRoom);
+    let standbySourceId = creep.memory.assignedSourceId ?? creep.memory.sourceId;
+    if (!standbySourceId) {
+        const dyingMiner = findDyingRemoteMiner(homeFleet, remoteRoom);
+        standbySourceId = dyingMiner?.memory.assignedSourceId ?? dyingMiner?.memory.sourceId;
+    }
+
+    if (!standbySourceId) {
+        creep.memory.sourceId = undefined;
+        creep.memory.assignedSourceId = undefined;
+        creep.memory.stationaryTargetId = undefined;
+        creep.memory.stationX = undefined;
+        creep.memory.stationY = undefined;
         setTravelJob(creep, homeRoom);
         return true;
     }
 
-    const homeFleet = creepsForHomeRoom(homeRoom);
-    const dyingMiner = findDyingRemoteMiner(homeFleet, remoteRoom);
-    if (dyingMiner) {
-        const dyingSourceId = dyingMiner.memory.assignedSourceId ?? dyingMiner.memory.sourceId;
-        if (dyingSourceId) {
-            const alreadyReplaced = homeFleet.some(
-                c => c.id !== dyingMiner.id &&
-                    ensureArchetype(c) === 'remoteMiner' &&
-                    c.memory.remoteRoom === remoteRoom &&
-                    !c.memory.remoteStandby &&
-                    (c.memory.assignedSourceId ?? c.memory.sourceId) === dyingSourceId
-            );
-            if (!alreadyReplaced) {
-                creep.memory.remoteStandby = undefined;
-                creep.memory.sourceId = dyingSourceId;
-                creep.memory.assignedSourceId = dyingSourceId;
-                setTravelJob(creep, remoteRoom);
-                return true;
-            }
+    creep.memory.sourceId = standbySourceId;
+    creep.memory.assignedSourceId = standbySourceId;
+
+    const activeMinerAlive = hasActiveRemoteMinerForSource(homeFleet, remoteRoom, standbySourceId, creep.id);
+    if (!activeMinerAlive) {
+        creep.memory.remoteStandby = undefined;
+        if (creep.room.name !== remoteRoom) {
+            setTravelJob(creep, remoteRoom);
+            return true;
         }
+
+        const source = Game.getObjectById<Source>(standbySourceId as Id<Source>) ??
+            creep.room.find(FIND_SOURCES).find((s) => s.id === standbySourceId) ??
+            null;
+        if (source) {
+            setJob(creep, 'harvestSource', source);
+            return true;
+        }
+
+        setTravelJob(creep, remoteRoom);
+        return true;
     }
 
-    setJob(creep, 'idle', Game.rooms[homeRoom]?.storage
-        ?? creep.pos.findClosestByRange(FIND_MY_SPAWNS));
+    if (creep.room.name !== remoteRoom) {
+        setTravelJob(creep, remoteRoom);
+        return true;
+    }
+
+    const source = Game.getObjectById<Source>(standbySourceId as Id<Source>) ??
+        creep.room.find(FIND_SOURCES).find((s) => s.id === standbySourceId) ??
+        null;
+    if (!source) {
+        setTravelJob(creep, remoteRoom);
+        return true;
+    }
+
+    const range = creep.pos.getRangeTo(source);
+    if (range > REMOTE_STANDBY_PARK_RANGE_MAX || range < REMOTE_STANDBY_PARK_RANGE_MIN) {
+        creep.moveTo(source, { range: REMOTE_STANDBY_PARK_RANGE_TARGET, visualizePathStyle: { stroke: '#f59e0b' } });
+    }
+    setTravelJob(creep, remoteRoom);
     return true;
 }
 
@@ -1718,20 +1746,22 @@ function remoteSpawnRequest(
                 return { archetype: 'remoteMaintainer', reason: 'remote maintenance ' + roomName, remoteRoom: roomName, remoteMode: remote.mode };
             }
 
-            const sourceCount = Object.keys(remote.sources).length;
-            const activeRemoteMiners = countActiveRemoteMinersForRoom(homeFleet, roomName);
-            const standbyRemoteMiners = countRemoteStandbyMiners(homeFleet, roomName);
-            if (activeRemoteMiners >= sourceCount && standbyRemoteMiners < REMOTE_STANDBY_COUNT &&
-                activeRemoteMiners + standbyRemoteMiners < sourceCount + REMOTE_STANDBY_COUNT &&
-                !pending.some(r => r.archetype === 'remoteMiner' && r.remoteRoom === roomName && r.remoteStandby)) {
+            const standbySourceId = sourceNeedingStandbyReplacement(homeFleet, roomName);
+            if (standbySourceId &&
+                !pending.some(r =>
+                    r.archetype === 'remoteMiner' &&
+                    r.remoteRoom === roomName &&
+                    r.remoteStandby &&
+                    r.sourceId === standbySourceId)) {
                 return {
                     archetype: 'remoteMiner',
-                    reason: 'remote standby ' + roomName,
+                    reason: 'remote standby replacement ' + roomName + ':' + standbySourceId,
                     remoteRoom: roomName,
                     remoteMode: remote.mode,
                     remoteStandby: true,
+                    sourceId: standbySourceId,
                     staticMining: true,
-                    hasContainer: false
+                    hasContainer: !!remote.sources[standbySourceId]?.containerId
                 };
             }
         }
@@ -1806,13 +1836,49 @@ function findDyingRemoteMiner(
         if (creep.memory.remoteStandby) { continue; }
         if (!(creep.memory.assignedSourceId ?? creep.memory.sourceId)) { continue; }
         const ttl = creep.ticksToLive;
-        if (!ttl || ttl > REMOTE_STANDBY_DISPATCH_TTL) { continue; }
+        if (!ttl || ttl > REMOTE_STANDBY_TRIGGER_TTL) { continue; }
         if (ttl < lowestTtl) {
             best = creep;
             lowestTtl = ttl;
         }
     }
     return best;
+}
+
+function hasActiveRemoteMinerForSource(
+    creeps: Creep[],
+    remoteRoom: string,
+    sourceId: string,
+    excludeCreepId?: string
+): boolean {
+    for (const creep of creeps) {
+        if (creep.id === excludeCreepId) { continue; }
+        if (creep.spawning) { continue; }
+        if (ensureArchetype(creep) !== 'remoteMiner') { continue; }
+        if (creep.memory.remoteRoom !== remoteRoom) { continue; }
+        if (creep.memory.remoteStandby) { continue; }
+        if ((creep.memory.assignedSourceId ?? creep.memory.sourceId) !== sourceId) { continue; }
+        if ((creep.ticksToLive ?? 0) <= 0) { continue; }
+        return true;
+    }
+    return false;
+}
+
+function sourceNeedingStandbyReplacement(
+    creeps: Creep[],
+    remoteRoom: string
+): string | null {
+    const anyStandby = creeps.some((creep) =>
+        ensureArchetype(creep) === 'remoteMiner' &&
+        creep.memory.remoteRoom === remoteRoom &&
+        creep.memory.remoteStandby);
+    if (anyStandby) { return null; }
+
+    const dyingMiner = findDyingRemoteMiner(creeps, remoteRoom);
+    if (!dyingMiner) { return null; }
+
+    const sourceId = dyingMiner.memory.assignedSourceId ?? dyingMiner.memory.sourceId;
+    return sourceId ?? null;
 }
 
 function countRemoteMinersForSource(creeps: Creep[], remoteRoom: string, sourceId: string): number {

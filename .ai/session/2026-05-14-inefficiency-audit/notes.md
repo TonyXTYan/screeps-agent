@@ -431,6 +431,50 @@ This explains why the mineral container is always empty - the mineral miner cann
 
 **Update (Tick 70921471):** Home room energy at 441/2300 (19%). Storage at 1337/2250. Mineral container still empty (energy=0/2000). Mineral amount decreasing (22716 -> 22708).
 
+**Update (Tick 70922001):** Home room energy recovered to 2300/2300 (100%). Storage at 0-400/2250. 3 mineral miners active. Mineral container still empty (energy=0/2000). Mineral amount decreasing (22708 -> 22582).
+
+**Update (Tick 70922161):** Home room energy at 1877/2300 (82%). Storage at 0/2250. 3 mineral miners active. **Mineral container now has L=34/2000!** Finally getting filled. Mineral amount decreasing (22582 -> 22544).
+
+**Update (Tick 70922221):** Home room energy at 2020/2300 (88%). Storage at 499/2250. 3 mineral miners active. Mineral container dropped to L=2/2000 - almost empty again. Mineral amount decreasing (22544 -> 22534).
+
+**Update (Tick 70922281):** Home room energy at 1780/2300 (77%). Storage at 0/2250. 3 mineral miners active. Mineral container has L=7/2000 - still low but not empty. Mineral amount decreasing (22534 -> 22521).
+
+**Update (Tick 70922341):** Home room energy at 1530/2300 (67%). Storage at 0/2250. 3 mineral miners active. Mineral container has L=14/2000 - increasing slightly. Mineral amount decreasing (22521 -> 22502).
+
+**Update (Tick 70922391):** Home room energy at 1168/2300 (51%). Storage at 562/2250. 3 mineral miners active. Mineral container dropped to L=1/2000 - almost empty again. Mineral amount decreasing (22502 -> 22494).
+
+**Update (Tick 70922421):** Home room energy at 1216/2300 (53%). Storage at 336/2250. 3 mineral miners active. Mineral container has L=5/2000 - still low. Mineral amount decreasing (22494 -> 22489).
+
+**Update (Tick 70922451):** Home room energy at 697/2300 (30%). Storage at 0/2250. 3 mineral miners active. Mineral container has L=6/2000 - still low. Mineral amount decreasing (22489 -> 22479).
+
+**Update (Tick 70922491):** Home room energy at 1845/2300 (80%). Storage at 0/2250. 3 mineral miners active. Mineral container has L=3/2000 - still low. Mineral amount decreasing (22479 -> 22470).
+
+**Update (Tick 70922531):** Home room energy at 2250/2300 (98%). Storage at 0/2250. 3 mineral miners active. Mineral container has L=4/2000 - still low. Mineral amount decreasing (22470 -> 22457).
+
+**Update (Tick 70922571):** Home room energy at 2300/2300 (100%). Storage at 0/2250. 3 mineral miners active. Mineral container has L=2/2000 - still low. Mineral amount decreasing (22457 -> 22448).
+
+**Update (Tick 70922611):** Home room energy at 2280/2300 (99%). Storage at 398/2250. 3 mineral miners active. Mineral container has L=10/2000 - increasing slightly. Mineral amount decreasing (22448 -> 22438).
+
+**Update (Tick 70922651):** Home room energy at 2273/2300 (99%). Storage at 0/2250. 3 mineral miners active. Mineral container has L=6/2000 - still low. Mineral amount decreasing (22438 -> 22431).
+
+**Update (Tick 70922691):** Home room energy at 2123/2300 (92%). Storage at 0/2250. 3 mineral miners active. Mineral container has L=4/2000 - still low. Mineral amount decreasing (22431 -> 22422).
+
+**Update (Tick 70922731):** Home room energy at 2142/2300 (93%). Storage at 0/2250. 3 mineral miners active. Mineral container has L=4/2000 - still low. Mineral amount decreasing (22422 -> 22414).
+
+**Update (Tick 70922771):** Home room energy at 2271/2300 (99%). Storage at 0/2250. 2 mineral miners active (one died). Mineral container has L=9/2000 - increasing slightly. Mineral amount decreasing (22414 -> 22400).
+
+**Update (Tick 70922821):** Home room energy at 1792/2300 (78%). Storage at 0/2250. No mineral miners active (all died). Mineral container has L=8/2000 - still low. Mineral amount decreasing (22400 -> 22386).
+
+**Update (Tick 70922861):** Home room energy at 2280/2300 (99%). Storage at 1936/2250. 1 mineral miner active. Mineral container has L=0/2000 - empty again. Mineral amount stable (22386).
+
+**Update (Tick 70922901):** Home room energy at 2300/2300 (100%). Storage at 1367/2250. 1 mineral miner active. Mineral container has L=10/2000 - increasing. Mineral amount decreasing (22386 -> 22376).
+
+**Update (Tick 70922951):** Home room energy at 2300/2300 (100%). Storage at 900/2250. 1 mineral miner active. Mineral container fluctuating L=5-25/2000. Mineral amount decreasing (22376 -> 22331).
+
+**Update (Tick 70922991):** Home room energy at 2025/2300 (88%). Storage at 780/2250. 1 mineral miner active. Mineral container L=0/2000 - empty again. Mineral amount decreasing (22306 -> 22301).
+
+**Update (Tick 70922991 - stale):** Terminal output not updating - game may be paused again. Mineral container persistently empty despite extractor active.
+
 **Root Cause:** Home room energy dropped from 2088/2300 to insufficient levels. The mineral miner spawning logic checks for 600 energy but the room is depleted.
 
 **Recommendation:** Ensure home room maintains minimum energy threshold for mineral miner spawning, or reduce the energy requirement for passive mineral extraction.
@@ -448,6 +492,7 @@ This explains why the mineral container is always empty - the mineral miner cann
 | 70921517 | 3:36 AM | f0a09b0d -> 42e06698 | Detect code change |
 | 70921727 | 3:49 AM | 42e06698 -> 0c6b96c7 | Docs align |
 | 70921779 | 3:52 AM | 0c6b96c7 -> c2ce28d0 | Wall rampart building |
+| 70922006 | 4:06 AM | c2ce28d0 -> adc529bf | Wall rampart building (v2) |
 
 ### Key Changes
 
@@ -457,6 +502,7 @@ This explains why the mineral container is always empty - the mineral miner cann
 4. **Remote claimer fix** (7f0376b) - Fixed claimer spawning when reservation >4000
 5. **Multiple claimer bug** (bce8de1) - Fixed multiple claimers in remote room
 6. **Wall rampart building** (c2ce28d) - Added critical defense structure repair priority
+7. **Wall rampart building v2** (adc529b) - Added critical normal structure repair, fixed mineral miner spawning logic
 
 ### Impact Assessment
 

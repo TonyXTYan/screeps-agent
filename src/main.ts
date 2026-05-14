@@ -17,7 +17,6 @@ import { BUILD_COMMIT } from './env';
 
 const DOCTOR_EMERGENCY_HITS_RATIO = 0.35;
 const DOCTOR_THREAT_RADIUS = 4;
-const REMOTE_STANDBY_RENEW_THRESHOLD = 1450;
 const HOME_RENEW_MIN_BODY_COST = 1000;
 const HOME_RENEW_START_TTL = 500;
 const HOME_RENEW_STOP_TTL = 1300;
@@ -506,32 +505,11 @@ function tryRenewHomeCreep(creep: Creep): boolean {
 
 function tryRenewStandbyMiner(creep: Creep): void {
     if (!creep.memory.remoteStandby) { return; }
-    const ttl = creep.ticksToLive ?? 0;
+    if (creep.memory.assignedSourceId || creep.memory.sourceId) { return; }
 
     const homeSpawn = creep.pos.findClosestByRange(FIND_MY_SPAWNS) as StructureSpawn | null;
     if (!homeSpawn) { return; }
-    const spawn = creep.pos.findClosestByRange(FIND_MY_SPAWNS, {
-        filter: (s) => !s.spawning
-    }) as StructureSpawn | null;
-    const needsRenew = ttl > 0 && ttl < REMOTE_STANDBY_RENEW_THRESHOLD;
-    if (!needsRenew || !spawn) {
-        parkStandbyMinerAwayFromSpawn(creep, homeSpawn);
-        return;
-    }
-
-    if (creep.pos.isNearTo(spawn)) {
-        const code = spawn.renewCreep(creep);
-        if (code === OK) {
-            if ((creep.ticksToLive ?? 0) >= REMOTE_STANDBY_RENEW_THRESHOLD) {
-                parkStandbyMinerAwayFromSpawn(creep, spawn);
-            }
-        } else if (code === ERR_BUSY || code === ERR_NOT_ENOUGH_ENERGY) {
-            parkStandbyMinerAwayFromSpawn(creep, spawn);
-        }
-        return;
-    }
-
-    creep.moveTo(spawn, { range: 1, visualizePathStyle: { stroke: '#fafafa' } });
+    parkStandbyMinerAwayFromSpawn(creep, homeSpawn);
 }
 
 function parkStandbyMinerAwayFromSpawn(creep: Creep, spawn: StructureSpawn): void {

@@ -45,6 +45,11 @@ Memory
 │       remoteMode?: RemoteRoomMode  — harvest/reserve/claim
 │       remoteRenewing?: boolean     — Currently traveling to/from spawn for renewal
 │       remoteStandby?: boolean      — Remote standby miner flag
+│       remoteHaulerRenewAfterTrip?: boolean — Remote hauler must renew before next outbound trip
+│       remoteHaulerIdleUntil?: number — Tick until next remote-hauler recheck after no-job idle
+│       remoteHaulerWanderX?: number — Home-idle wander target X for remote hauler
+│       remoteHaulerWanderY?: number — Home-idle wander target Y for remote hauler
+│       remoteHaulerWanderUntil?: number — Tick until remote-hauler wander target refresh
 │
 │       // Scout
 │       scoutWanderRoom?: string     — Room for overflow scout to explore

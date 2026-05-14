@@ -97,6 +97,7 @@ haulerCapacityDemand = min(
 - Candidate energy is reduced by in-flight remote-hauler claims before selection.
 - Per-target assignment is decongested with an access-tile-aware soft cap (up to 2 empty haulers per target).
 - If a hauler remains stuck on one tile for 4+ ticks while on `withdrawEnergy`/`pickupEnergy`, it temporarily avoids its current target and retargets.
+- Remote haulers still attempt pass-by maintenance while moving: if they have a WORK part and energy, they opportunistically build/repair targets already within range 3 without detouring from haul jobs.
 
 ## Path Caching
 
@@ -137,11 +138,16 @@ When a remote room is visible and contains armed hostiles, an invader core, or h
 ## Remote Creep Lifecycle
 
 ### Renewal
-Remote haulers and maintainers (not miners, not claimers) can renew at the home spawn:
+Remote maintainers (not miners, not claimers) can renew at the home spawn:
 - `renewStartTtl = max(220, oneWayDistance + 80)`
 - `renewStopTtl = min(1500, renewStartTtl + 140)`
 - Creep switches to `remoteRenewing = true` below start threshold
 - Travels home, queues at spawn, returns to work when above stop threshold
+
+### Remote Hauler Cycle
+- Default cycle: travel to remote room → gather energy/resources → return to home room → deposit to storage (terminal/emergency sinks only when storage unavailable/full) → renew at home spawn until TTL > 1400 → repeat.
+- If no remote pickup targets are found, the hauler returns home and idles there for a short recheck window instead of idling in the remote room.
+- During this no-job idle window, the hauler wanders more than 3 tiles away from the home spawn and only enters renew mode when TTL drops below 500.
 
 ### Miner Replacement (Standby Dispatch)
 - One `remoteStandby` miner per remote room, idle at home spawn

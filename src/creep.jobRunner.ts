@@ -34,6 +34,9 @@ export function run(creep: Creep): boolean {
         if (shouldClearJob(creep, jobType, result)) {
             clearJob(creep);
         }
+        if (jobType !== 'build' && jobType !== 'repair') {
+            opportunisticRemoteHaulerWork(creep, jobType);
+        }
         if (jobType !== 'heal') {
             opportunisticHealNearby(creep);
         }
@@ -363,6 +366,39 @@ function idle(creep: Creep): number {
         moveToJobTarget(creep, target, '#777777');
     }
     return OK;
+}
+
+function opportunisticRemoteHaulerWork(creep: Creep, jobType: CreepJobType): void {
+    if (creep.memory.archetype !== 'remoteHauler') { return; }
+    if (creep.getActiveBodyparts(WORK) <= 0) { return; }
+    if (creep.store.getUsedCapacity(RESOURCE_ENERGY) <= 0) { return; }
+    if (jobType === 'harvestSource' || jobType === 'mineMineral' || jobType === 'upgrade') { return; }
+
+    const site = creep.pos.findInRange(FIND_MY_CONSTRUCTION_SITES, 3)[0];
+    if (site) {
+        creep.build(site);
+        return;
+    }
+
+    const repairs = creep.pos.findInRange(FIND_STRUCTURES, 3, {
+        filter: (structure) => structure.hits < structure.hitsMax
+    }) as AnyStructure[];
+    if (repairs.length === 0) { return; }
+
+    let best = repairs[0];
+    let bestRatio = best.hits / Math.max(1, best.hitsMax);
+    let bestRange = creep.pos.getRangeTo(best);
+    for (const candidate of repairs) {
+        const ratio = candidate.hits / Math.max(1, candidate.hitsMax);
+        const range = creep.pos.getRangeTo(candidate);
+        if (ratio < bestRatio || (ratio === bestRatio && range < bestRange)) {
+            best = candidate;
+            bestRatio = ratio;
+            bestRange = range;
+        }
+    }
+
+    creep.repair(best);
 }
 
 function opportunisticHealNearby(creep: Creep): void {

@@ -377,3 +377,59 @@ Monitor for:
 - Hauler energy loading improvements
 - Maintainer pathfinding fixes
 - Container energy management changes
+
+---
+
+## Latest Status Update - Tick 70920880 (2:57 AM)
+
+### Issue Resolution Tracking (Updated)
+
+| Issue | Status | Notes |
+|-------|--------|-------|
+| Remote maintainers stuck | IMPROVING | W6N9 maintainer traveling, W8N9 maintainer renewing |
+| Dropped energy W8N9 | PERSISTING | Still 3 drop locations but amounts decreasing |
+| Haulers running empty | FIXED | Now returning with 1300-1500 energy (100% capacity) |
+| Remote miners standby | PERSISTING | remoteMiner-Spawn1-70916180-1 still in standby |
+| Mineral container empty | PERSISTING | Container 78b700e2 still energy=0/2000 |
+| CPU bucket volatility | STABLE | 8424 bucket (healthy) |
+| Home room energy | STABLE | en=2088/2300 (91%) |
+| Claimer stuck | IMPROVING | Now moving (stuck=1) and reserving controller |
+
+### Key Observations
+
+- **Hauler energy loading FIXED** - haulers now returning with 1300-1500 energy (100% capacity)
+- **Claimer progress** - now moving and reserving controller (stuck=1 instead of stuck=4)
+- **Mineral extraction working** - amount decreasing (23,718 -> 22,978) but container still empty
+- **Container energy management** - W8N9 container at 330/2000, W6N9 container at 68/2000
+- **No code deployments detected** - improvements appear to be from game state changes, not code fixes
+
+### Critical Issue Found - Tick 70921200 (3:17 AM)
+
+**CRITICAL:** `room.controller: insufficient energy for mineralMiner for passive mineral extraction need=600 have=99`
+
+This explains why the mineral container is always empty - the mineral miner cannot spawn because there's insufficient energy in the home room. The mineral extraction is passive (no active miner), but the system still needs 600 energy to spawn the mineral miner, and only 99 is available.
+
+**Root Cause:** Home room energy dropped from 2088/2300 to insufficient levels. The mineral miner spawning logic checks for 600 energy but the room is depleted.
+
+**Recommendation:** Ensure home room maintains minimum energy threshold for mineral miner spawning, or reduce the energy requirement for passive mineral extraction.
+
+---
+
+## Latest Status Update - Tick 70920880 (2:57 AM)
+- Energy: 2088/2300 (91%)
+- Storage: 0/2250 (0%)
+- Workers: 3 (2 at 0 energy, 1 at 190/500)
+- CPU: 8424 bucket (healthy)
+
+**Remote Room W8N9:**
+- Source 4adbfc69: 3000/3000 (full)
+- Source 4adbfc6b: 2700/3000 (90%)
+- Container: 330/2000 (17%)
+- 2 haulers (both with 1300-1500 energy returning home)
+- 2 miners mining
+
+**Remote Room W6N9:**
+- Source 4adbff3a: 2958-2988/3000 (99%)
+- Container: 68/2000 (3%)
+- 2 haulers (1 with 1000 energy returning home, 1 dying empty)
+- 1 miner mining, 1 stuck in standby

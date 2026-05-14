@@ -782,18 +782,30 @@ function updateRemoteRoomPlans(homeRoom: Room): void {
             if (anchor && station && (!existing.pathDistance || !hasCachedPath || pathStale || existing.routeAccessible === undefined)) {
                 const route = PathFinder.search(anchor.pos, { pos: station, range: 0 }, { maxRooms: 8 });
                 if (!route.incomplete) {
-                    // Verify station is reachable from the border facing homeRoom using single-room
-                    // pathfinding. This catches stations behind terrain barriers that are unreachable
-                    // for miners entering from the homeRoom side, even when a longer multi-room path exists.
-                    const exitDir = Game.map.findExit(remoteName, homeRoom.name);
+                    // Simulate the actual miner entry: nearest exit from homeRoom toward remoteName,
+                    // mirrored into the remote room. Require both reachability and a non-winding path.
+                    const exitDirFromHome = Game.map.findExit(homeRoom.name, remoteName);
                     let locallyReachable = false;
-                    if (typeof exitDir === 'number' && exitDir > 0) {
-                        const borderExits = visible.find(exitDir as ExitConstant) as RoomPosition[];
-                        if (borderExits.length > 0) {
-                            const nearestExit = borderExits.reduce((a, b) =>
-                                station.getRangeTo(a) < station.getRangeTo(b) ? a : b);
-                            const localRoute = PathFinder.search(station, { pos: nearestExit, range: 0 }, { maxRooms: 1 });
-                            locallyReachable = !localRoute.incomplete;
+                    if (typeof exitDirFromHome === 'number' && exitDirFromHome > 0) {
+                        const homeExits = homeRoom.find(exitDirFromHome as ExitConstant) as RoomPosition[];
+                        if (homeExits.length > 0) {
+                            const nearestHomeExit = homeExits.reduce((a, b) =>
+                                anchor.pos.getRangeTo(a) < anchor.pos.getRangeTo(b) ? a : b);
+                            // Mirror border coordinate into the remote room (x=0↔49, y=0↔49)
+                            let ex = nearestHomeExit.x, ey = nearestHomeExit.y;
+                            if (ex === 0) { ex = 49; } else if (ex === 49) { ex = 0; }
+                            else if (ey === 0) { ey = 49; } else if (ey === 49) { ey = 0; }
+                            const entryInRemote = new RoomPosition(ex, ey, remoteName);
+                            const localRoute = PathFinder.search(entryInRemote, { pos: station, range: 0 }, { maxRooms: 1 });
+                            const directRange = entryInRemote.getRangeTo(station);
+                            // 200 = four room edges: only flag sources that require looping most of the room
+                            const maxLocalDist = Math.max(200, 2 * directRange);
+                            locallyReachable = !localRoute.incomplete && localRoute.path.length <= maxLocalDist;
+                            if (Game.time % REMOTE_PLANNING_LOG_INTERVAL === 0) {
+                                console.log('room.controller: local path check ' + homeRoom.name + '->' + remoteName +
+                                    ' src=' + source.id + ' len=' + localRoute.path.length +
+                                    ' threshold=' + maxLocalDist + (localRoute.incomplete ? ' incomplete' : ''));
+                            }
                         }
                     }
                     if (locallyReachable) {

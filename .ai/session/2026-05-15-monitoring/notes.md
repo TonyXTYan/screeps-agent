@@ -67,9 +67,11 @@
 
 ## Monitoring Log
 
-| Tick | Energy | Storage | Mineral L | Notes |
-|------|--------|---------|-----------|-------|
-| 70932941 | 1758 | 0 | 25 | Fresh check, doctor dying |
+| Tick | Energy | Storage | Mineral L | Mineral Amt | Notes |
+|------|--------|---------|-----------|-------------|-------|
+| 70932941 | 1758 | 0 | 25 | 15414 | Fresh check, doctor dying |
+| 70943571 | 2300 | 0 | 5 | 7154 | Big tick jump, 7210 minerals extracted! |
+| 70943761 | 1399 | 0 | 5 | 6994 | Steady extraction continuing |
 | 70933521 | 1626 | 0 | 0 | Mineral miner spawned |
 | 70933791 | 18 | 0 | 20 | Energy crisis |
 | 70934161 | 326 | 150 | 35 | Energy recovering |

@@ -1617,15 +1617,9 @@ function assignJob(context: RoomControllerContext, creep: Creep, reservations: J
         if (archetype === 'worker' &&
             creep.store.getFreeCapacity(RESOURCE_ENERGY) > 0 &&
             hasEnergyToGather(context)) {
-            // Dump partial energy to storage before topping up, so the subsequent
-            // withdrawal is a clean full load from storage rather than a partial
-            // mix from whatever container happens to be available.
-            if (context.structures.storage &&
-                (refillSpawnTarget(context, creep, reservations) || refillTowerTarget(context, creep, reservations))) {
-                setJob(creep, 'depositEnergy', context.structures.storage);
-                return;
-            }
-            // Not full and there's ambient energy — fall through to gather more
+            // Not full and there's ambient energy — fall through to top up from storage.
+            // (energyWithdrawalTarget always returns storage for workers, so the "dump
+            // partial then re-withdraw" pattern is never needed and only causes bouncing.)
         } else {
             assignEnergySpendingJob(context, creep, archetype, capabilities, reservations);
             return;

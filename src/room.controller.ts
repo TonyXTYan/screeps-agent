@@ -124,6 +124,8 @@ const REMOTE_HAULER_USEFUL_MIN_COST = 900;
 const REMOTE_HAULER_MIN_DEMAND_RATIO = 0.4;
 const REMOTE_MAINTAINER_MIN_COST = 450;
 const REMOTE_CONTAINER_CRITICAL_REPAIR_THRESHOLD = 0.25;
+const REMOTE_MINER_REPAIR_THRESHOLD = 0.5;
+const REMOTE_MINER_REPAIR_RANGE = 3;
 
 export function run(room: Room): void {
     const context = buildContext(room);
@@ -323,6 +325,28 @@ export function assignRemoteCreep(creep: Creep): boolean {
         creep.memory.sourceId = selectedSource.id;
         creep.memory.assignedSourceId = selectedSource.id;
         creep.memory.stationaryTargetId = stationaryTargetId ?? selectedSource.id;
+
+        if (selectedSource.energy === 0) {
+            const damagedNearby = closest(creep, creep.room.find(FIND_STRUCTURES, {
+                filter: s => (s.structureType === STRUCTURE_CONTAINER || s.structureType === STRUCTURE_ROAD) &&
+                             s.hits < s.hitsMax * REMOTE_MINER_REPAIR_THRESHOLD &&
+                             creep.pos.getRangeTo(s) <= REMOTE_MINER_REPAIR_RANGE
+            }) as AnyStructure[]);
+            if (damagedNearby) {
+                if (creep.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
+                    setJob(creep, 'repair', damagedNearby);
+                    return true;
+                }
+                const stationContainer = sourceCfg?.containerId
+                    ? Game.getObjectById(sourceCfg.containerId as Id<StructureContainer>)
+                    : null;
+                if (stationContainer && stationContainer.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
+                    setJob(creep, 'withdrawEnergy', stationContainer);
+                    return true;
+                }
+            }
+        }
+
         setJob(creep, 'harvestSource', selectedSource);
         return true;
     }

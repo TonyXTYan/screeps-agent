@@ -63,7 +63,7 @@ Body planning lives in `planBodyForArchetype()` in `creep.capabilities.ts`. Lega
 **Gates**:
 - If any local spawn request is pending (not enough energy), remote requests are skipped entirely.
 - If stored energy is below 2k, or available spawn/extension energy is below 50%, remote spawning is limited to scouts and zero-coverage emergency remote miners.
-- If stored energy is below 5k, new income-consuming remote spawns are limited to the first enabled harvest remote.
+- If stored energy is below 1k, new income-consuming remote spawns are limited to the first enabled harvest remote.
 
 These gates prevent remote expansion from starving the home economy.
 

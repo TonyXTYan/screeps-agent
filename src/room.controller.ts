@@ -4146,7 +4146,14 @@ function desiredUpgraderWork(rcl: number): number {
 
 function shouldReserveUpgrade(context: RoomControllerContext, reservations: JobReservations): boolean {
     if (!context.room.controller) { return false; }
-    if (reservations.upgraderWork >= desiredUpgraderWork(context.room.controller.level)) { return false; }
+
+    const rcl = context.room.controller.level;
+    if (rcl >= 8) {
+        const downgradeTimer = context.room.controller.ticksToDowngrade;
+        if (downgradeTimer > 100000) { return false; }
+    }
+
+    if (reservations.upgraderWork >= desiredUpgraderWork(rcl)) { return false; }
     if (context.room.energyAvailable === 0 && storedEnergy(context) === 0) { return false; }
     return true;
 }

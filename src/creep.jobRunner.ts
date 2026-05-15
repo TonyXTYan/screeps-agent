@@ -962,69 +962,7 @@ function moveToWithdrawTarget(
     target: StructureContainer | StructureStorage | StructureTerminal | StructureLink,
     stroke: string
 ): number {
-    if (creep.memory.archetype === 'remoteHauler' && target.structureType === STRUCTURE_CONTAINER) {
-        const access = containerAccessPosition(creep, target as StructureContainer);
-        if (access) {
-            return moveToJobTarget(creep, access, stroke, { range: 0 });
-        }
-    }
-
     return moveToJobTarget(creep, target, stroke);
-}
-
-function containerAccessPosition(creep: Creep, container: StructureContainer): RoomPosition | null {
-    const room = Game.rooms[container.pos.roomName];
-    if (!room) { return null; }
-
-    const terrain = room.getTerrain();
-    const openCandidates: RoomPosition[] = [];
-    const occupiedCandidates: RoomPosition[] = [];
-    for (let dx = -1; dx <= 1; dx++) {
-        for (let dy = -1; dy <= 1; dy++) {
-            if (dx === 0 && dy === 0) { continue; }
-            const x = container.pos.x + dx;
-            const y = container.pos.y + dy;
-            if (x <= 0 || x >= 49 || y <= 0 || y >= 49) { continue; }
-            if (terrain.get(x, y) === TERRAIN_MASK_WALL) { continue; }
-            const pos = new RoomPosition(x, y, container.pos.roomName);
-            if (pos.lookFor(LOOK_SOURCES).length > 0) { continue; }
-            if (pos.lookFor(LOOK_MINERALS).length > 0) { continue; }
-            const blocked = pos.lookFor(LOOK_STRUCTURES).some((structure) =>
-                structure.structureType !== STRUCTURE_ROAD &&
-                structure.structureType !== STRUCTURE_CONTAINER &&
-                structure.structureType !== STRUCTURE_RAMPART);
-            if (blocked) { continue; }
-            const occupied = pos.lookFor(LOOK_CREEPS).some(other => other.id !== creep.id);
-            if (occupied) {
-                occupiedCandidates.push(pos);
-            } else {
-                openCandidates.push(pos);
-            }
-        }
-    }
-
-    const candidates = openCandidates.length > 0 ? openCandidates : occupiedCandidates;
-    if (candidates.length === 0) { return null; }
-    const byPath = creep.pos.findClosestByPath(candidates, { ignoreCreeps: false }) as RoomPosition | null;
-    if (byPath) { return byPath; }
-    const bySoftPath = creep.pos.findClosestByPath(candidates, { ignoreCreeps: true }) as RoomPosition | null;
-    if (bySoftPath) { return bySoftPath; }
-    return byPath ?? closestPositionByRange(creep.pos, candidates);
-}
-
-function closestPositionByRange(origin: RoomPosition, positions: RoomPosition[]): RoomPosition | null {
-    if (positions.length === 0) { return null; }
-
-    let best = positions[0];
-    let bestRange = origin.getRangeTo(best);
-    for (const pos of positions) {
-        const range = origin.getRangeTo(pos);
-        if (range < bestRange) {
-            best = pos;
-            bestRange = range;
-        }
-    }
-    return best;
 }
 
 function moveToJobTarget(

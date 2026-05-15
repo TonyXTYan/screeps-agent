@@ -20,7 +20,9 @@ const rclBonus = (rcl >= 7) ? 300 : 0;
 const salvageBonus = (tombstones + ruins + drops > 10) ? 300 : 0;
 const rawDemand = sources.length * base + rclBonus + salvageBonus;
 
-const maxCarryPerHauler = 2 * floor(energyCapacityAvailable / 150) * CARRY_CAPACITY;
+// budget capped at 50% of capacity (BODY_BUDGET_RATIO=0.5, BODY_MIN_BUDGET=300)
+const haulerBudget = max(BODY_MIN_BUDGET, floor(energyCapacityAvailable * BODY_BUDGET_RATIO));
+const maxCarryPerHauler = 2 * floor(haulerBudget / 150) * CARRY_CAPACITY;
 const maxCount = max(2, ceil(rawDemand / maxCarryPerHauler) + 1);
 ```
 
@@ -28,6 +30,7 @@ const maxCount = max(2, ceil(rawDemand / maxCarryPerHauler) + 1);
 - Minimum 2 haulers at RCL4+ with storage (line 1417)
 - Hauler spawn gates on count AND capacity deficit (line 1422–1425)
 - Old small-body haulers caused overflow at RCL6 (see KNOWN_ISSUES.md); fixed by this formula
+- `haulerBudget` matches the spawn planner's `maxBudget` so demand and actual body size stay in sync
 
 ---
 

@@ -1,5 +1,5 @@
 import * as creepRoleBalance from './creep.roleBalance';
-import { bodyCost } from './creep.capabilities';
+import { BODY_BUDGET_RATIO, BODY_MIN_BUDGET, bodyCost } from './creep.capabilities';
 import { isHostile } from './hostileUtils';
 
 const DEFENDER_SPAWN_ATTEMPT_INTERVAL = 5;
@@ -30,8 +30,10 @@ export function checkDefenders(room: Room): void {
     if (!shouldAttemptDefenderSpawn) { return; }
 
     const energy = room.energyAvailable; // includes spawn + extensions natively
-    const defenderBody: BodyPartConstant[] = energy >= 300
-        ? creepRoleBalance.balanceSpec(creepRoleBalance.specification.defender, energy)
+    const defenderBudget = Math.max(BODY_MIN_BUDGET, Math.floor(room.energyCapacityAvailable * BODY_BUDGET_RATIO));
+    const cappedEnergy = Math.min(energy, defenderBudget);
+    const defenderBody: BodyPartConstant[] = cappedEnergy >= 300
+        ? creepRoleBalance.balanceSpec(creepRoleBalance.specification.defender, cappedEnergy)
         : [TOUGH, MOVE, ATTACK];
     const defenderBodyCost = bodyCost(defenderBody);
     if (energy < defenderBodyCost) { return; }

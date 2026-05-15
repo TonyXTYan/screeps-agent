@@ -1,4 +1,4 @@
-import { bodyCost, ensureArchetype, getBodyCapabilities, getCreepCapabilities, planBodyForArchetype } from './creep.capabilities';
+import { BODY_BUDGET_RATIO, BODY_MIN_BUDGET, bodyCost, ensureArchetype, getBodyCapabilities, getCreepCapabilities, planBodyForArchetype } from './creep.capabilities';
 import { clearJob } from './creep.jobRunner';
 import { getRoomStructures, RoomStructureCache } from './room.structures';
 import { repairStructureFilter, wallRampartRepairCap } from './role.doctor';
@@ -1992,7 +1992,7 @@ function runSpawnPlanner(context: RoomControllerContext): void {
                 continue;
             }
 
-            const maxBudget = context.room.energyCapacityAvailable;
+            const maxBudget = Math.max(BODY_MIN_BUDGET, Math.floor(context.room.energyCapacityAvailable * BODY_BUDGET_RATIO));
             const body = planBodyForArchetype(request.archetype, maxBudget, {
                 staticMining: request.staticMining,
                 hasContainer: request.hasContainer,
@@ -3189,7 +3189,8 @@ function desiredHaulerCapacity(context: RoomControllerContext): { demand: number
     const salvageBonus = context.tombstones.length > 0 || context.ruins.length > 0 || context.droppedResources.length > 10 ? 300 : 0;
     const rawDemand = context.sources.length * base + rclBonus + salvageBonus;
 
-    const maxCarryPerHauler = 2 * Math.floor(context.room.energyCapacityAvailable / 150) * CARRY_CAPACITY;
+    const haulerBudget = Math.max(BODY_MIN_BUDGET, Math.floor(context.room.energyCapacityAvailable * BODY_BUDGET_RATIO));
+    const maxCarryPerHauler = 2 * Math.floor(haulerBudget / 150) * CARRY_CAPACITY;
     const maxCount = Math.max(2, Math.ceil(rawDemand / Math.max(1, maxCarryPerHauler)) + 1);
     return { demand: Math.min(rawDemand, maxCarryPerHauler * maxCount), maxCount };
 }
@@ -3203,7 +3204,7 @@ function desiredWorkerWork(context: RoomControllerContext): number {
             const ratio = workerWorkRatio(context);
             const unitCost = ratio * 100 + 100;
             const unitParts = ratio + 2;
-            const energyAvail = context.room.energyCapacityAvailable;
+            const energyAvail = Math.max(BODY_MIN_BUDGET, Math.floor(context.room.energyCapacityAvailable * BODY_BUDGET_RATIO));
             const segments = Math.min(
                 Math.floor(50 / unitParts),
                 Math.floor(energyAvail / unitCost)

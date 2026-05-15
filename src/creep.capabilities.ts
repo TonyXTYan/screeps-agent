@@ -16,6 +16,9 @@ export interface CreepCapabilities {
     reserve: number;
 }
 
+export const BODY_BUDGET_RATIO = 0.5;
+export const BODY_MIN_BUDGET = 300;
+
 const BODY_PART_COST: { [part in BodyPartConstant]: number } = {
     [MOVE]: 50,
     [WORK]: 100,

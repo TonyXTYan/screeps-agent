@@ -116,8 +116,10 @@ const REMOTE_HAULER_WANDER_MAX_RANGE = 8;
 const REMOTE_HAULER_RETARGET_STUCK_TICKS = 4;
 const REMOTE_TARGET_MAX_HAULER_CLAIMS = 2;
 const REMOTE_MINER_STUCK_REPLAN_TICKS = 8;
-const REMOTE_HOME_RECOVERY_STORED_ENERGY = 2000;
-const REMOTE_THROTTLE_STORED_ENERGY = 1000;
+const REMOTE_MINER_NO_PROGRESS_REPLAN_TICKS = 18;
+const REMOTE_MINER_OSCILLATION_REPLAN_TICKS = 4;
+const REMOTE_HOME_RECOVERY_STORED_ENERGY = 500;
+const REMOTE_THROTTLE_STORED_ENERGY = 1;
 const REMOTE_SPAWN_MIN_ENERGY_RATIO = 0.5;
 const REMOTE_HAULER_ABSOLUTE_MIN_COST = 600;
 const REMOTE_HAULER_USEFUL_MIN_COST = 900;
@@ -306,12 +308,17 @@ export function assignRemoteCreep(creep: Creep): boolean {
             resetRemoteMinerStationProgress(creep);
         }
 
+        const noProgressTicks = creep.memory.remoteStationNoProgressTicks ?? 0;
+        const preferDirectSourceApproach = !!sourceCfg &&
+            remoteSourceRouteDegraded(sourceCfg) &&
+            noProgressTicks >= REMOTE_MINER_NO_PROGRESS_REPLAN_TICKS;
+
         let stationaryTargetId: string | undefined;
-        if (sourceCfg?.containerId) {
+        if (!preferDirectSourceApproach && sourceCfg?.containerId) {
             stationaryTargetId = sourceCfg.containerId;
             creep.memory.stationX = undefined;
             creep.memory.stationY = undefined;
-        } else if (sourceCfg?.stationX != null && sourceCfg?.stationY != null && sourceCfg.routeAccessible !== false) {
+        } else if (!preferDirectSourceApproach && sourceCfg?.stationX != null && sourceCfg?.stationY != null && sourceCfg.routeAccessible !== false) {
             stationaryTargetId = undefined;
             creep.memory.stationX = sourceCfg.stationX;
             creep.memory.stationY = sourceCfg.stationY;
@@ -473,28 +480,67 @@ function remoteMinerStationRouteStalled(
     }
 
     const positionKey = creep.pos.x + ',' + creep.pos.y + ',' + creep.pos.roomName;
+    const sameSource = creep.memory.remoteStationStuckSourceId === source.id;
     const lastPositionKey = creep.memory.remoteStationLastX + ',' +
         creep.memory.remoteStationLastY + ',' +
         creep.memory.remoteStationLastRoom;
-    const sameSource = creep.memory.remoteStationStuckSourceId === source.id;
+    const prevPositionKey = creep.memory.remoteStationPrevX + ',' +
+        creep.memory.remoteStationPrevY + ',' +
+        creep.memory.remoteStationPrevRoom;
     const stalled = sameSource &&
         creep.memory.remoteStationLastX !== undefined &&
         positionKey === lastPositionKey;
+    const oscillating = sameSource &&
+        !stalled &&
+        creep.memory.remoteStationPrevX !== undefined &&
+        positionKey === prevPositionKey;
+
+    const rangeToSource = creep.pos.getRangeTo(source);
+    const priorBestRange = sameSource
+        ? creep.memory.remoteStationBestRange
+        : undefined;
+    const improvedBestRange = priorBestRange === undefined || rangeToSource < priorBestRange;
+    const noProgressTicks = improvedBestRange
+        ? 0
+        : (sameSource ? (creep.memory.remoteStationNoProgressTicks ?? 0) + 1 : 0);
+    const oscillationTicks = oscillating
+        ? (creep.memory.remoteStationOscillationTicks ?? 0) + 1
+        : 0;
+    const stuckSignal = stalled ||
+        oscillationTicks >= REMOTE_MINER_OSCILLATION_REPLAN_TICKS ||
+        noProgressTicks >= REMOTE_MINER_NO_PROGRESS_REPLAN_TICKS;
+    const stuckTicks = stuckSignal
+        ? (sameSource ? (creep.memory.remoteStationStuckTicks ?? 0) + 1 : 1)
+        : Math.max(0, (sameSource ? (creep.memory.remoteStationStuckTicks ?? 0) : 0) - 1);
 
     creep.memory.remoteStationStuckSourceId = source.id;
+    creep.memory.remoteStationPrevX = creep.memory.remoteStationLastX;
+    creep.memory.remoteStationPrevY = creep.memory.remoteStationLastY;
+    creep.memory.remoteStationPrevRoom = creep.memory.remoteStationLastRoom;
     creep.memory.remoteStationLastX = creep.pos.x;
     creep.memory.remoteStationLastY = creep.pos.y;
     creep.memory.remoteStationLastRoom = creep.pos.roomName;
-    creep.memory.remoteStationStuckTicks = stalled ? (creep.memory.remoteStationStuckTicks ?? 0) + 1 : 0;
+    creep.memory.remoteStationBestRange = improvedBestRange
+        ? rangeToSource
+        : (priorBestRange ?? rangeToSource);
+    creep.memory.remoteStationNoProgressTicks = noProgressTicks;
+    creep.memory.remoteStationOscillationTicks = oscillationTicks;
+    creep.memory.remoteStationStuckTicks = stuckTicks;
 
-    return (creep.memory.remoteStationStuckTicks ?? 0) >= REMOTE_MINER_STUCK_REPLAN_TICKS;
+    return stuckTicks >= REMOTE_MINER_STUCK_REPLAN_TICKS;
 }
 
 function resetRemoteMinerStationProgress(creep: Creep): void {
     creep.memory.remoteStationStuckSourceId = undefined;
+    creep.memory.remoteStationPrevX = undefined;
+    creep.memory.remoteStationPrevY = undefined;
+    creep.memory.remoteStationPrevRoom = undefined;
     creep.memory.remoteStationLastX = undefined;
     creep.memory.remoteStationLastY = undefined;
     creep.memory.remoteStationLastRoom = undefined;
+    creep.memory.remoteStationBestRange = undefined;
+    creep.memory.remoteStationNoProgressTicks = undefined;
+    creep.memory.remoteStationOscillationTicks = undefined;
     creep.memory.remoteStationStuckTicks = undefined;
 }
 

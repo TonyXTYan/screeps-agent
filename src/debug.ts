@@ -153,6 +153,21 @@ function remoteNavLabel(creep: Creep): string {
     return label;
 }
 
+function remoteMinerPathingLabel(creep: Creep): string {
+    if (ensureArchetype(creep) !== 'remoteMiner' || creep.memory.jobType !== 'harvestSource') { return ''; }
+
+    const noProgressTicks = creep.memory.remoteStationNoProgressTicks ?? 0;
+    const oscillationTicks = creep.memory.remoteStationOscillationTicks ?? 0;
+    const stationStuckTicks = creep.memory.remoteStationStuckTicks ?? 0;
+    if (noProgressTicks <= 0 && oscillationTicks <= 0 && stationStuckTicks <= 0) { return ''; }
+
+    const tags: string[] = [];
+    if (noProgressTicks > 0) { tags.push(`np=${noProgressTicks}`); }
+    if (oscillationTicks > 0) { tags.push(`osc=${oscillationTicks}`); }
+    if (stationStuckTicks > 0) { tags.push(`rst=${stationStuckTicks}`); }
+    return ` ${tags.join('/')}`;
+}
+
 function remoteSourceMinerCap(sourceId: string, sourcePlan: RemoteSourcePlan): number {
     if (sourcePlan.containerId || sourcePlan.containerSiteId) { return 1; }
     if (sourcePlan.stationX != null && sourcePlan.stationY != null) { return 1; }
@@ -242,6 +257,7 @@ function printRemoteCreepStatus(filterHome?: string, filterRemote?: string): voi
                 const result = creep.memory.lastJobResult !== undefined ? ` res=${creep.memory.lastJobResult}` : '';
                 const stuckTicks = creep.memory.travelStuckTicks ?? 0;
                 const stuck = stuckTicks > 0 ? ` stuck=${stuckTicks}` : '';
+                const pathing = remoteMinerPathingLabel(creep);
                 const claimCount = ensureArchetype(creep) === 'remoteHauler' &&
                     creep.memory.jobTargetId &&
                     (creep.memory.jobType === 'withdrawEnergy' || creep.memory.jobType === 'pickupEnergy')
@@ -262,6 +278,7 @@ function printRemoteCreepStatus(filterHome?: string, filterRemote?: string): voi
                     result +
                     claimCount +
                     stuck +
+                    pathing +
                     nav
                 );
             }
@@ -318,6 +335,7 @@ function printRemoteCreepStatus(filterHome?: string, filterRemote?: string): voi
                 const route = sourcePlan.routeAccessible === false
                     ? 'blocked'
                     : sourcePlan.routeAccessible === true ? 'ok' : '?';
+                const routeHealth = sourcePlan.routeHealth === 'degraded' ? '/degraded' : '';
                 const station = sourcePlan.stationX !== undefined && sourcePlan.stationY !== undefined
                     ? `  stn=[${sourcePlan.stationX},${sourcePlan.stationY}]`
                     : '';
@@ -327,7 +345,7 @@ function printRemoteCreepStatus(filterHome?: string, filterRemote?: string): voi
                 sourceSummary.push(
                     `  src=${shortId}  miners=${minerCount}/${minerCap}${overload} (${minerWork}W)` +
                     `  haulers=${haulerCount} (${haulerCap}C)` +
-                    `  demand=${wd}W/${hd}C  dist=${dist}  route=${route}` +
+                    `  demand=${wd}W/${hd}C  dist=${dist}  route=${route}${routeHealth}` +
                     station +
                     site
                 );

@@ -51,6 +51,8 @@ const MOVE_STUCK_RESET_PATH_TICKS = 4;
 const MOVE_STUCK_FORCED_STEP_TICKS = 6;
 const MOVE_STUCK_ESCAPE_TICKS = 12;
 const TRAFFIC_YIELD_TTL = 2;
+const REMOTE_MINER_AGGRESSIVE_REPATH_TICKS = 6;
+const REMOTE_MINER_SOURCE_FALLBACK_TICKS = 14;
 
 export function clearJob(creep: Creep): void {
     creep.memory.jobType = undefined;
@@ -69,9 +71,31 @@ function harvestSource(creep: Creep): number {
         const isPositionTarget = station instanceof RoomPosition;
         const range = station instanceof StructureContainer || isPositionTarget ? 0 : 1;
         const moveOptions: MoveToOpts = { range };
+        const noProgressTicks = creep.memory.remoteStationNoProgressTicks ?? 0;
+        const oscillationTicks = creep.memory.remoteStationOscillationTicks ?? 0;
+        const aggressiveRepath = creep.memory.archetype === 'remoteMiner' &&
+            (noProgressTicks >= REMOTE_MINER_AGGRESSIVE_REPATH_TICKS || oscillationTicks > 0);
+
         if (isPositionTarget) {
             moveOptions.maxRooms = 1;
             moveOptions.reusePath = 0;
+        } else if (aggressiveRepath) {
+            moveOptions.maxRooms = 1;
+        }
+        if (aggressiveRepath) {
+            moveOptions.reusePath = 0;
+            moveOptions.ignoreCreeps = true;
+        }
+        if (creep.memory.archetype === 'remoteMiner' &&
+            noProgressTicks >= REMOTE_MINER_SOURCE_FALLBACK_TICKS &&
+            creep.room.name === source.pos.roomName) {
+            moveToJobTarget(creep, source, '#3d2a22', {
+                range: 1,
+                maxRooms: 1,
+                reusePath: 0,
+                ignoreCreeps: true
+            });
+            return ERR_NOT_IN_RANGE;
         }
         moveToJobTarget(creep, station, '#3d2a22', moveOptions);
         return ERR_NOT_IN_RANGE;

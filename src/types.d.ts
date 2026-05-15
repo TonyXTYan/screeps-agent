@@ -220,9 +220,15 @@ interface CreepMemory {
     travelLastRoom?: string;
     travelStuckTicks?: number;
     remoteStationStuckSourceId?: string;
+    remoteStationPrevX?: number;
+    remoteStationPrevY?: number;
+    remoteStationPrevRoom?: string;
     remoteStationLastX?: number;
     remoteStationLastY?: number;
     remoteStationLastRoom?: string;
+    remoteStationBestRange?: number;
+    remoteStationNoProgressTicks?: number;
+    remoteStationOscillationTicks?: number;
     remoteStationStuckTicks?: number;
     trafficYieldX?: number;
     trafficYieldY?: number;

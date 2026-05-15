@@ -4,20 +4,28 @@
 
 ---
 
-## Current State Summary (Tick 70936621)
+## Current State Summary (Tick 70948431)
 
 ### Home Room (W7N9)
-- Energy: 2300/2300 (100%)
-- Storage: 0/2250
-- Links: 386+352+0
-- Creeps: 9 total (1 doctor, 2 haulers, 2 miners, 1 mineralMiner, 3 workers)
-- CPU bucket: 4949-6447 (healthy)
+- Energy: 2256/2300 (98%)
+- Storage: 0/2250 (EMPTY - triggers home recovery gate)
+- Links: 400+96+0
+- Creeps: 12 total (2 defender, 1 doctor, 2 hauler, 2 miner, 1 mineralMiner, 4 worker)
 
-### Mineral (735780cf at [11,5])
-- Type: L (Lava)
-- Amount: 12549 (down from ~22301 at start, ~44% consumed)
-- Extractor: active
-- Container 78b700e2 [12,6]: L=0/2000 (persistently empty despite miner active)
+### Remote Rooms
+- **W8N9 4adbfc69**: miners=1/1 (TTL=51 dying), haulers=0/1140 (BLOCKED), container=2000/2000, source=0/1500
+- **W8N9 4adbfc6b**: miners=1/1 (TTL=616), haulers=2/876, container=2000/2000, source=500/1500
+- **W6N9 4adbff3a**: miners=1/1 (TTL=866), haulers=2/756, container=12/2000, source=0/1500
+
+### Critical Issues
+1. **Home recovery gate blocking ALL remote spawns**: storage=0 triggers `stored<2000` gate
+   - Blocks: remoteMiner, remoteHauler, remoteMaintainer, claimer for W8N9 and W6N9
+   - Despite energy=2256/2300, storage is empty → vicious cycle
+2. **W8N9 4adbfc69 hauler deficit**: projected=0/1140 - no haulers delivering
+3. **W6N9 maintainer mining instead of maintaining**: job=harvestSource (bug?)
+4. **W6N9 hauler stuck**: renewing with stuck=1
+5. **Dropped resources**: 1826 energy at [19,27], 401 at [42,6] (W8N9)
+6. **W6N9 container nearly empty**: 12/2000 energy
 
 ### Remote Room W8N9
 - Not visible in current output (may be out of sight range)
@@ -29,12 +37,31 @@
 
 ---
 
-## Key Observations
+## Critical Finding: Home Recovery Gate Vicious Cycle
 
-### Positive
-1. **Home room energy stable** - Recovered to 2300/2300 after crisis
-2. **Remote miner fixes working** - Both W8N9 sources had route=ok, miners actively mining earlier
-3. **Memory audit clean** - No issues found
+The home recovery gate (v9) checks `stored<2000` to block remote spawns. However:
+- Home storage=0 (empty) → gate always active
+- Gate blocks ALL remote spawns: remoteMiner, remoteHauler, remoteMaintainer, claimer
+- No remote haulers = no energy delivery to storage
+- Storage stays empty = gate stays active
+- **Vicious cycle**: Storage can never recover because haulers are blocked
+
+### Root Cause
+The gate checks storage capacity, not spawn energy. Home has 2256/2300 energy but storage=0.
+The gate should check spawn/extension energy levels, not storage contents.
+
+### Impact
+- W8N9 4adbfc69: haulers=0/1140 (BLOCKED) - no energy delivery
+- W8N9 4adbfc6b: haulers=2/876 (working but can't renew)
+- W6N9 4adbff3a: haulers=2/756 (working but can't renew)
+- All remote maintainers blocked for W8N9
+- All remote miners blocked for standby replacement
+
+### Secondary Issues
+1. W6N9 maintainer mining instead of maintaining (job=harvestSource bug?)
+2. W6N9 hauler stuck renewing (stuck=1)
+3. Dropped resources: 1826 energy at [19,27], 401 at [42,6] in W8N9
+4. W6N9 container nearly empty (12/2000)
 4. **CPU healthy** - Bucket 4949-6447, ~500 per tick
 
 ### Concerns
@@ -62,6 +89,8 @@
 | 70936868 | 12f67739 | Remote miner fix v7 (force repath for station moves) |
 | 70937086 | 4a9944f9 | Terminal Energy Reserve Policy (RCL6=5k, RCL7=10k, RCL8=50k) |
 | 70939216 | 2e96d813 | Remote mining fix v9 (home economy gates, spawn throttling, min body rules) |
+| 70948431 | - | CRITICAL: Home recovery gate blocking ALL remote spawns (storage=0) |
+| 70948431 | - | GAME PAUSED: Tick stuck at 70948430, console showing cached data |
 
 ---
 
@@ -81,3 +110,4 @@
 | 70936871 | 2300 | 0 | 30 | v7 deployed (force repath), W6N9 still miners=0/1 |
 | 70937091 | 50 | 0 | 25 | v8 deployed (terminal reserve), W8N9 both miners=1/1 |
 | 70937511 | 927 | 0 | 15 | All remote sources miners=1/1, W6N9 haulers=2 (1200C) |
+| 70948431 | 2256 | 0 | 30 | GAME PAUSED - home recovery gate blocking ALL remote spawns |

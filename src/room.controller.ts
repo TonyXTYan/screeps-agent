@@ -86,6 +86,7 @@ const REPAIR_RESERVATION_TICKS = 5;
 const REMOTE_DANGER_TICKS = 1500;
 const REMOTE_PATH_REFRESH_INTERVAL = 5000;
 const REMOTE_PATH_INCOMPLETE_RETRY_TICKS = 100;
+const REMOTE_MAX_STATION_STALLS = 3;
 const REMOTE_ROAD_SITES_PER_TICK = 4;
 const REMOTE_MAX_UNFINISHED_ROAD_SITES = 3;
 const REMOTE_DEGRADED_MAX_UNFINISHED_ROAD_SITES = 8;
@@ -564,8 +565,19 @@ function markRemoteSourceRouteDegraded(sourcePlan: RemoteSourcePlan, pos: RoomPo
     sourcePlan.lastStallX = pos.x;
     sourcePlan.lastStallY = pos.y;
     sourcePlan.lastStallRoom = pos.roomName;
-    sourcePlan.pathUpdatedAt = undefined;
-    console.log('room.controller: degraded remote source route source=' + sourcePlan.sourceId + ' after miner stall at ' + pos.roomName + ':' + pos.x + ',' + pos.y);
+    if ((sourcePlan.stallCount ?? 0) >= REMOTE_MAX_STATION_STALLS) {
+        // Too many stalls without a successful harvest: mark inaccessible and keep
+        // pathUpdatedAt current so the path replan doesn't immediately re-enable it.
+        // The natural REMOTE_PATH_REFRESH_INTERVAL retry will re-evaluate later.
+        sourcePlan.routeAccessible = false;
+        sourcePlan.pathUpdatedAt = Game.time;
+        console.log('room.controller: force-disabled remote source after ' + sourcePlan.stallCount +
+            ' stalls source=' + sourcePlan.sourceId + ' at ' + pos.roomName + ':' + pos.x + ',' + pos.y);
+    } else {
+        sourcePlan.pathUpdatedAt = undefined;
+        console.log('room.controller: degraded remote source route source=' + sourcePlan.sourceId +
+            ' after miner stall at ' + pos.roomName + ':' + pos.x + ',' + pos.y);
+    }
 }
 
 function assignStandbyRemoteMiner(creep: Creep, homeRoom: string, remoteRoom: string, remotePlan: RemoteRoomPlan): boolean {

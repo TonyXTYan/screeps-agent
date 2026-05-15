@@ -123,6 +123,7 @@ const REMOTE_HAULER_ABSOLUTE_MIN_COST = 600;
 const REMOTE_HAULER_USEFUL_MIN_COST = 900;
 const REMOTE_HAULER_MIN_DEMAND_RATIO = 0.4;
 const REMOTE_MAINTAINER_MIN_COST = 450;
+const REMOTE_CONTAINER_CRITICAL_REPAIR_THRESHOLD = 0.25;
 
 export function run(room: Room): void {
     const context = buildContext(room);
@@ -327,8 +328,15 @@ export function assignRemoteCreep(creep: Creep): boolean {
     }
 
     if (archetype === 'remoteMaintainer') {
+        const criticalContainer = closest(creep, creep.room.find(FIND_STRUCTURES, {
+            filter: s => s.structureType === STRUCTURE_CONTAINER && s.hits < s.hitsMax * REMOTE_CONTAINER_CRITICAL_REPAIR_THRESHOLD
+        }) as AnyStructure[]);
+        if (criticalContainer && creep.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
+            setJob(creep, 'repair', criticalContainer);
+            return true;
+        }
         const site = closestRemoteInfrastructureSite(creep, true) ??
-            closest(creep, creep.room.find(FIND_CONSTRUCTION_SITES));
+            closest(creep, creep.room.find(FIND_MY_CONSTRUCTION_SITES));
         if (site && creep.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
             setJob(creep, 'build', site);
             return true;
@@ -2792,7 +2800,7 @@ function hasRemoteMaintainer(creeps: Creep[], remoteRoom: string): boolean {
 function remoteNeedsMaintainer(remoteRoom: string): boolean {
     const room = Game.rooms[remoteRoom];
     if (!room) { return false; }
-    if (room.find(FIND_CONSTRUCTION_SITES).length > 0) { return true; }
+    if (room.find(FIND_MY_CONSTRUCTION_SITES).length > 0) { return true; }
     return room.find(FIND_STRUCTURES, {
         filter: s => (s.structureType === STRUCTURE_ROAD || s.structureType === STRUCTURE_CONTAINER) && s.hits < s.hitsMax * 0.7
     }).length > 0;

@@ -118,6 +118,20 @@ Config is saved to `~/.screepsconsole.yaml` on first run (credentials stored the
 
 **Auto-logging:** The console automatically logs all I/O (incoming game messages + outgoing commands) to daily NDJSON files in `screeps_console/logs/screeps_console_YYYY-MM-DD.json`. Each line is a JSON object with `ts` (timestamp), `direction` (`"in"` or `"out"`), `shard`, `line` (message text), and `type` (for incoming messages). This allows agents to inspect recent tick history without the UI running. See `screeps_console/README.md` for details.
 
+## End-of-task reporting
+
+When completing edit tasks, close with a concise report:
+
+```
+Brief description of the change
+
+the change includes: specific details about what was modified
+```
+
+This format helps track what was done without verbose preamble.
+
+**Git workflow:** Never run `git add` or `git commit` autonomously. The user controls all git operations. When edits are complete, they will decide whether and when to commit.
+
 ## Memory Index
 
 Quick reference for persistent project knowledge:

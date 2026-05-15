@@ -23,3 +23,4 @@ dist/
 screeps_console/.venv/
 screeps_console/env/
 screeps_console
+.qwen

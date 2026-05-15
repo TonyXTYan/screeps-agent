@@ -549,9 +549,13 @@ function assignStandbyRemoteMiner(creep: Creep, homeRoom: string, remoteRoom: st
 
     const range = creep.pos.getRangeTo(source);
     if (range > REMOTE_STANDBY_PARK_RANGE_MAX || range < REMOTE_STANDBY_PARK_RANGE_MIN) {
-        creep.moveTo(source, { range: REMOTE_STANDBY_PARK_RANGE_TARGET, visualizePathStyle: { stroke: '#f59e0b' } });
+        creep.moveTo(source, {
+            range: REMOTE_STANDBY_PARK_RANGE_TARGET,
+            ignoreCreeps: true,
+            reusePath: 0,
+            visualizePathStyle: { stroke: '#f59e0b' }
+        });
     }
-    setTravelJob(creep, remoteRoom);
     return true;
 }
 
@@ -1784,7 +1788,8 @@ function remoteSpawnRecoveryBlockReason(
     if (isEmergencyRemoteRequest(homeFleet, request)) { return null; }
 
     const energyCapacity = context.room.energyCapacityAvailable;
-    if (storedEnergy(context) < REMOTE_HOME_RECOVERY_STORED_ENERGY) {
+    const hasStorage = !!(context.structures.storage || context.structures.terminal);
+    if (hasStorage && storedEnergy(context) < REMOTE_HOME_RECOVERY_STORED_ENERGY) {
         return 'home recovery stored<' + REMOTE_HOME_RECOVERY_STORED_ENERGY;
     }
     if (energyCapacity > 0 && availableEnergy < energyCapacity * REMOTE_SPAWN_MIN_ENERGY_RATIO) {

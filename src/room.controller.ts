@@ -607,8 +607,8 @@ function markRemoteSourceRouteDegraded(sourcePlan: RemoteSourcePlan, pos: RoomPo
                 stationFailures + ') source=' + sourcePlan.sourceId +
                 ' blocked at ' + pos.roomName + ':' + pos.x + ',' + pos.y);
         } else {
-            // Too many station failures: give up for shorter interval to allow standby miner survival
-            sourcePlan.pathUpdatedAt = Game.time - REMOTE_PATH_REFRESH_INTERVAL + REMOTE_INACCESSIBLE_RETRY_TICKS;
+            // Too many station failures: pathStale check uses shorter interval for blocked routes
+            sourcePlan.pathUpdatedAt = Game.time;
             console.log('room.controller: permanently inaccessible after ' + stationFailures +
                 ' station failures source=' + sourcePlan.sourceId +
                 ' at ' + pos.roomName + ':' + pos.x + ',' + pos.y);
@@ -1056,7 +1056,10 @@ function updateRemoteRoomPlans(homeRoom: Room): void {
             existing.workDemand = sourceWorkDemand(source);
             const anchor = homeRoom.storage ?? homeRoom.find(FIND_MY_SPAWNS)[0];
             let latestPath: RoomPosition[] = [];
-            const pathStale = !existing.pathUpdatedAt || Game.time - existing.pathUpdatedAt > REMOTE_PATH_REFRESH_INTERVAL;
+            const pathRetryInterval = existing.routeAccessible === false
+                ? REMOTE_INACCESSIBLE_RETRY_TICKS
+                : REMOTE_PATH_REFRESH_INTERVAL;
+            const pathStale = !existing.pathUpdatedAt || Game.time - existing.pathUpdatedAt > pathRetryInterval;
             const cachedPath = deserializeRemotePath(existing.pathSerialized);
             const hasCachedPath = cachedPath.length > 0;
             if (anchor && station && (!existing.pathDistance || !hasCachedPath || pathStale || existing.routeAccessible === undefined)) {

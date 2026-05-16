@@ -75,6 +75,7 @@ interface JobReservations {
 }
 
 const TOWER_RESERVE_RATIO = 0.7;
+const TOWER_RECOVERY_RATIO = 0.55;
 const TERMINAL_RESERVE_RCL6 = 5000;
 const TERMINAL_RESERVE_RCL7 = 10000;
 const TERMINAL_RESERVE_RCL8 = 50000;
@@ -86,6 +87,7 @@ const REPAIR_RESERVATION_TICKS = 5;
 const REMOTE_DANGER_TICKS = 1500;
 const REMOTE_PATH_REFRESH_INTERVAL = 5000;
 const REMOTE_INACCESSIBLE_RETRY_TICKS = 500;
+const REMOTE_CONTAINER_REROUTE_FREEZE_TICKS = 150;
 const REMOTE_PATH_INCOMPLETE_RETRY_TICKS = 100;
 const REMOTE_MAX_STATION_STALLS = 3;
 const REMOTE_MAX_STATION_FAILURES = 3;
@@ -578,6 +580,7 @@ function markRemoteSourceRouteHealthy(sourcePlan: RemoteSourcePlan): void {
     sourcePlan.blockedApproachX = undefined;
     sourcePlan.blockedApproachY = undefined;
     sourcePlan.blockedApproachRoom = undefined;
+    sourcePlan.containerClearedAt = undefined;
 }
 
 function markRemoteSourceRouteDegraded(sourcePlan: RemoteSourcePlan, pos: RoomPosition): void {
@@ -602,6 +605,7 @@ function markRemoteSourceRouteDegraded(sourcePlan: RemoteSourcePlan, pos: RoomPo
             sourcePlan.stationY = undefined;
             sourcePlan.containerId = undefined;
             sourcePlan.containerSiteId = undefined;
+            sourcePlan.containerClearedAt = Game.time;
             sourcePlan.pathUpdatedAt = undefined;
             console.log('room.controller: force-clearing station for re-route (failure #' +
                 stationFailures + ') source=' + sourcePlan.sourceId +
@@ -1026,10 +1030,12 @@ function updateRemoteRoomPlans(homeRoom: Room): void {
         for (const source of visible.find(FIND_SOURCES)) {
             const existing = remote.sources[source.id] ?? (remote.sources[source.id] = { sourceId: source.id });
             existing.lastSeen = Game.time;
-            const container = closestByRange(source, visible.find(FIND_STRUCTURES, {
+            const containerFrozen = existing.containerClearedAt !== undefined
+                && Game.time - existing.containerClearedAt < REMOTE_CONTAINER_REROUTE_FREEZE_TICKS;
+            const container = containerFrozen ? undefined : closestByRange(source, visible.find(FIND_STRUCTURES, {
                 filter: (s) => s.structureType === STRUCTURE_CONTAINER && s.pos.getRangeTo(source) <= REMOTE_CONTAINER_BUILD_DISTANCE
             }) as StructureContainer[]);
-            const containerSite = container ? null : closestByRange(source, visible.find(FIND_MY_CONSTRUCTION_SITES, {
+            const containerSite = (container || containerFrozen) ? null : closestByRange(source, visible.find(FIND_MY_CONSTRUCTION_SITES, {
                 filter: (site) => site.structureType === STRUCTURE_CONTAINER &&
                     site.pos.getRangeTo(source) <= REMOTE_CONTAINER_BUILD_DISTANCE
             }) as ConstructionSite[]);
@@ -1047,7 +1053,9 @@ function updateRemoteRoomPlans(homeRoom: Room): void {
                 const retryOffset = Math.max(0, REMOTE_PATH_REFRESH_INTERVAL - REMOTE_PATH_INCOMPLETE_RETRY_TICKS);
                 existing.pathUpdatedAt = Game.time - retryOffset;
             }
-            existing.containerId = container?.id;
+            if (!containerFrozen) {
+                existing.containerId = container?.id;
+            }
             if (containerSite) {
                 existing.containerSiteId = containerSite.id;
             } else {
@@ -1081,6 +1089,7 @@ function updateRemoteRoomPlans(homeRoom: Room): void {
                         existing.blockedApproachX = undefined;
                         existing.blockedApproachY = undefined;
                         existing.blockedApproachRoom = undefined;
+                        existing.containerClearedAt = undefined;
                         latestPath = route.path;
                         existing.pathDistance = route.path.length;
                         existing.pathSerialized = serializeRemotePath(route.path);
@@ -3326,7 +3335,7 @@ function refillSpawnTargets(context: RoomControllerContext): EnergyStructure[] {
 
 function refillTowerTargets(context: RoomControllerContext): EnergyStructure[] {
     return context.structures.towers
-        .filter((tower) => towerEnergyRatio(tower) < TOWER_RESERVE_RATIO);
+        .filter((tower) => towerEnergyRatio(tower) < TOWER_RECOVERY_RATIO);
 }
 
 function refillSpawnTarget(

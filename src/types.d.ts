@@ -58,6 +58,7 @@ interface RemoteSourcePlan {
     stationY?: number;
     containerId?: string;
     containerSiteId?: string;
+    containerClearedAt?: number;
     pathSerialized?: string;
     pathDistance?: number;
     pathUpdatedAt?: number;

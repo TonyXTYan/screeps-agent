@@ -2259,7 +2259,9 @@ function chooseSpawnRequest(context: RoomControllerContext, pending: SpawnReques
 
     if (capacities.workerWork < workerWorkDemand && !pending.some(r => r.archetype === 'worker')) {
         const rcl = context.room.controller?.level ?? 0;
-        const maxWorkerCount = [0, 2, 2, 2, 3, 3, 3, 4, 4][Math.min(rcl, 8)] || 4;
+        const maxWorkerCount = context.constructionSites.length < 3
+            ? 1
+            : ([0, 2, 2, 2, 3, 3, 3, 4, 4][Math.min(rcl, 8)] || 4);
         const workerCreeps = context.creeps.filter(c => ensureArchetype(c) === 'worker' && !c.spawning).length;
         if (workerCreeps < maxWorkerCount) {
             return { archetype: 'worker', reason: 'worker deficit ' + capacities.workerWork + '/' + workerWorkDemand + ' ' + workerCreeps + '/' + maxWorkerCount, workRatio: workerWorkRatio(context) };

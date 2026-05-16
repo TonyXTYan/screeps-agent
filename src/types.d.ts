@@ -238,6 +238,9 @@ interface CreepMemory {
     trafficYieldY?: number;
     trafficYieldRoom?: string;
     trafficYieldUntil?: number;
+    standbyParkStuckTicks?: number;
+    standbyParkLastX?: number;
+    standbyParkLastY?: number;
 }
 
 interface RoomMemory {

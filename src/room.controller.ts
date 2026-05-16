@@ -107,6 +107,7 @@ const REMOTE_STANDBY_TRIGGER_TTL = 200;
 const REMOTE_STANDBY_PARK_RANGE_MIN = 4;
 const REMOTE_STANDBY_PARK_RANGE_TARGET = 6;
 const REMOTE_STANDBY_PARK_RANGE_MAX = 10;
+const REMOTE_STANDBY_BOUNDARY_STUCK_TICKS = 15;
 const MAX_REMOTE_HAULER_CAPACITY_PER_SOURCE = 2500;
 const MAX_REMOTE_HAULERS_PER_SOURCE = 2;
 const REMOTE_HAULER_RENEW_START_TTL = 500;
@@ -480,7 +481,16 @@ function remoteMinerStationRouteStalled(
     }
 
     if (creep.fatigue > 0) {
-        resetRemoteMinerStationProgress(creep);
+        // Update position history without resetting stuck counters.
+        // Without this, the 3 resting ticks between plain-terrain moves would
+        // clear all tracking state and prevent noProgressTicks from accumulating.
+        creep.memory.remoteStationStuckSourceId = source.id;
+        creep.memory.remoteStationPrevX = creep.memory.remoteStationLastX;
+        creep.memory.remoteStationPrevY = creep.memory.remoteStationLastY;
+        creep.memory.remoteStationPrevRoom = creep.memory.remoteStationLastRoom;
+        creep.memory.remoteStationLastX = creep.pos.x;
+        creep.memory.remoteStationLastY = creep.pos.y;
+        creep.memory.remoteStationLastRoom = creep.pos.roomName;
         return false;
     }
 
@@ -554,6 +564,9 @@ function clearRemoteMinerStationMemory(creep: Creep): void {
     creep.memory.stationX = undefined;
     creep.memory.stationY = undefined;
     resetRemoteMinerStationProgress(creep);
+    creep.memory.standbyParkStuckTicks = undefined;
+    creep.memory.standbyParkLastX = undefined;
+    creep.memory.standbyParkLastY = undefined;
 }
 
 function markRemoteSourceRouteHealthy(sourcePlan: RemoteSourcePlan): void {
@@ -582,6 +595,8 @@ function markRemoteSourceRouteDegraded(sourcePlan: RemoteSourcePlan, pos: RoomPo
             // Clear station to force a new one, re-evaluate immediately
             sourcePlan.stationX = undefined;
             sourcePlan.stationY = undefined;
+            sourcePlan.containerId = undefined;
+            sourcePlan.containerSiteId = undefined;
             sourcePlan.pathUpdatedAt = undefined;
             console.log('room.controller: force-clearing station for re-route (failure #' +
                 stationFailures + ') source=' + sourcePlan.sourceId +
@@ -659,6 +674,19 @@ function assignStandbyRemoteMiner(creep: Creep, homeRoom: string, remoteRoom: st
 
     const range = creep.pos.getRangeTo(source);
     if (range > REMOTE_STANDBY_PARK_RANGE_MAX || range < REMOTE_STANDBY_PARK_RANGE_MIN) {
+        const atBoundary = creep.pos.x === 0 || creep.pos.x === 49 || creep.pos.y === 0 || creep.pos.y === 49;
+        const samePos = creep.memory.standbyParkLastX === creep.pos.x && creep.memory.standbyParkLastY === creep.pos.y;
+        const stuckTicks = samePos ? (creep.memory.standbyParkStuckTicks ?? 0) + 1 : 0;
+        creep.memory.standbyParkStuckTicks = stuckTicks;
+        creep.memory.standbyParkLastX = creep.pos.x;
+        creep.memory.standbyParkLastY = creep.pos.y;
+
+        if (atBoundary && stuckTicks >= REMOTE_STANDBY_BOUNDARY_STUCK_TICKS) {
+            // Can't navigate to park position from room entry — go home and wait
+            creep.memory.standbyParkStuckTicks = 0;
+            setTravelJob(creep, creep.memory.homeRoom!);
+            return true;
+        }
         creep.moveTo(source, {
             range: REMOTE_STANDBY_PARK_RANGE_TARGET,
             ignoreCreeps: true,

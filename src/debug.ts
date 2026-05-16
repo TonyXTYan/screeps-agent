@@ -162,10 +162,25 @@ function remoteMinerPathingLabel(creep: Creep): string {
     if (noProgressTicks <= 0 && oscillationTicks <= 0 && stationStuckTicks <= 0) { return ''; }
 
     const tags: string[] = [];
-    if (noProgressTicks > 0) { tags.push(`np=${noProgressTicks}`); }
+    if (noProgressTicks > 0) {
+        tags.push(`np=${noProgressTicks}${noProgressTicks >= 18 ? '✓' : ''}`);
+    }
     if (oscillationTicks > 0) { tags.push(`osc=${oscillationTicks}`); }
     if (stationStuckTicks > 0) { tags.push(`rst=${stationStuckTicks}`); }
     return ` ${tags.join('/')}`;
+}
+
+function standbyParkLabel(creep: Creep): string {
+    if (ensureArchetype(creep) !== 'remoteMiner' || !creep.memory.remoteStandby) { return ''; }
+
+    const stuckTicks = creep.memory.standbyParkStuckTicks ?? 0;
+    if (stuckTicks <= 0) { return ''; }
+
+    const x = creep.memory.standbyParkLastX;
+    const y = creep.memory.standbyParkLastY;
+    const atBoundary = x === 0 || x === 49 || y === 0 || y === 49;
+    const boundaryStr = atBoundary ? ' boundary' : '';
+    return ` park-stuck=${stuckTicks}${boundaryStr}`;
 }
 
 function remoteSourceMinerCap(sourceId: string, sourcePlan: RemoteSourcePlan): number {
@@ -258,6 +273,7 @@ function printRemoteCreepStatus(filterHome?: string, filterRemote?: string): voi
                 const stuckTicks = creep.memory.travelStuckTicks ?? 0;
                 const stuck = stuckTicks > 0 ? ` stuck=${stuckTicks}` : '';
                 const pathing = remoteMinerPathingLabel(creep);
+                const standbyPark = standbyParkLabel(creep);
                 const claimCount = ensureArchetype(creep) === 'remoteHauler' &&
                     creep.memory.jobTargetId &&
                     (creep.memory.jobType === 'withdrawEnergy' || creep.memory.jobType === 'pickupEnergy')
@@ -279,6 +295,7 @@ function printRemoteCreepStatus(filterHome?: string, filterRemote?: string): voi
                     claimCount +
                     stuck +
                     pathing +
+                    standbyPark +
                     nav
                 );
             }
@@ -342,12 +359,24 @@ function printRemoteCreepStatus(filterHome?: string, filterRemote?: string): voi
                 const site = sourcePlan.containerSiteId && !sourcePlan.containerId
                     ? `  site=${sourcePlan.containerSiteId.slice(-8)}`
                     : '';
+                const blocked = sourcePlan.blockedApproachX !== undefined && sourcePlan.blockedApproachRoom !== undefined
+                    ? `  blk=[${sourcePlan.blockedApproachX},${sourcePlan.blockedApproachY}]@${sourcePlan.blockedApproachRoom}`
+                    : '';
+                const failures = (sourcePlan.stationFailures ?? 0) > 0
+                    ? `  fails=${sourcePlan.stationFailures}`
+                    : '';
+                const stalls = (sourcePlan.stallCount ?? 0) > 0
+                    ? `  stalls=${sourcePlan.stallCount}`
+                    : '';
                 sourceSummary.push(
                     `  src=${shortId}  miners=${minerCount}/${minerCap}${overload} (${minerWork}W)` +
                     `  haulers=${haulerCount} (${haulerCap}C)` +
                     `  demand=${wd}W/${hd}C  dist=${dist}  route=${route}${routeHealth}` +
                     station +
-                    site
+                    site +
+                    blocked +
+                    failures +
+                    stalls
                 );
             }
 

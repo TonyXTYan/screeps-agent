@@ -1,7 +1,7 @@
 import { repairStructureFilter } from './role.doctor';
 import { isHostile } from './hostileUtils';
 
-const DEFENSE_CRITICAL_HITS = 1000;
+const DEFENSE_CRITICAL_HITS = 10_000;
 const DEFENSE_CRITICAL_MIN_ENERGY = 0.5;
 
 export function run(room: Room): void {
@@ -31,7 +31,7 @@ export function run(room: Room): void {
             s.structureType !== STRUCTURE_RAMPART
     }).sort((a, b) => a.hits - b.hits);
     // Non-defense structures: < 500 (veryUrgent), < 10K (urgent), or < 10% HP (criticalNormal) caught by absolute/percent thresholds;
-    // walls/ramparts below DEFENSE_CRITICAL_HITS handled at DEFENSE_CRITICAL_MIN_ENERGY gate in a separate branch
+    // walls/ramparts below 10K hits handled at 50% energy gate in a separate branch
     const normal = room.find(FIND_STRUCTURES, {
         filter: (s) => repairStructureFilter(s, rcl) &&
             s.structureType !== STRUCTURE_WALL && s.structureType !== STRUCTURE_RAMPART

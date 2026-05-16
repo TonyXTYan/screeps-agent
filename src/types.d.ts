@@ -73,6 +73,10 @@ interface RemoteSourcePlan {
     lastStallX?: number;
     lastStallY?: number;
     lastStallRoom?: string;
+    blockedApproachX?: number;
+    blockedApproachY?: number;
+    blockedApproachRoom?: string;
+    stationFailures?: number;
     roadCursor?: number;
     lastRoadPlanAt?: number;
     lastHarvestedAt?: number;

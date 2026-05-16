@@ -42,10 +42,10 @@ Executed every tick per room in `towerBasics.run(room)`.
       ii.   Urgent          (< 10K hits, non-wall)          [hits ascending]
       iii.  Critical        (non-wall, < 10% HP)            [hits ascending]
       iv.   Normal          (repairStructureFilter, non-wall) [hits ascending]
-      v.    Crit defense    (wall/rampart < 1K hits)        [hits ascending]
+      v.    Crit defense    (wall/rampart < 10K hits)       [hits ascending]
       vi.   Walls/ramparts  (full defense list)             (only if energy ≥ minEnergyForDefense)
 3. Critical-only phase (energy ≥ 50%, peace only; < 70%):
-   - non-wall < 10% HP  OR  wall/rampart < 1K hits         [hits ascending]
+   - non-wall < 10% HP  OR  wall/rampart < 10K hits        [hits ascending]
 ```
 
 **Claim distribution**: Towers track claimed repair IDs per tick so multiple towers don't all

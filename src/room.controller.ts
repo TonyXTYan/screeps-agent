@@ -80,13 +80,14 @@ const TERMINAL_RESERVE_RCL7 = 10000;
 const TERMINAL_RESERVE_RCL8 = 50000;
 
 const MINERAL_WORK_DEMAND = 5;
-const LINK_TRANSFER_THRESHOLD = 400;
+const LINK_TRANSFER_THRESHOLD = 200;
 const BUILD_RESERVATION_TICKS = 10;
 const REPAIR_RESERVATION_TICKS = 5;
 const REMOTE_DANGER_TICKS = 1500;
 const REMOTE_PATH_REFRESH_INTERVAL = 5000;
 const REMOTE_PATH_INCOMPLETE_RETRY_TICKS = 100;
 const REMOTE_MAX_STATION_STALLS = 3;
+const REMOTE_MAX_STATION_FAILURES = 3;
 const REMOTE_ROAD_SITES_PER_TICK = 4;
 const REMOTE_MAX_UNFINISHED_ROAD_SITES = 3;
 const REMOTE_DEGRADED_MAX_UNFINISHED_ROAD_SITES = 8;
@@ -304,9 +305,12 @@ export function assignRemoteCreep(creep: Creep): boolean {
         }
 
         const sourceCfg = remotePlan.sources?.[assignedSourceId];
+        const wasAlreadyDegraded = !!sourceCfg && remoteSourceRouteDegraded(sourceCfg);
         if (sourceCfg && remoteMinerStationRouteStalled(creep, selectedSource, sourceCfg)) {
             markRemoteSourceRouteDegraded(sourceCfg, creep.pos);
-            resetRemoteMinerStationProgress(creep);
+            if (!wasAlreadyDegraded) {
+                resetRemoteMinerStationProgress(creep);
+            }
         }
 
         const noProgressTicks = creep.memory.remoteStationNoProgressTicks ?? 0;
@@ -566,13 +570,29 @@ function markRemoteSourceRouteDegraded(sourcePlan: RemoteSourcePlan, pos: RoomPo
     sourcePlan.lastStallY = pos.y;
     sourcePlan.lastStallRoom = pos.roomName;
     if ((sourcePlan.stallCount ?? 0) >= REMOTE_MAX_STATION_STALLS) {
-        // Too many stalls without a successful harvest: mark inaccessible and keep
-        // pathUpdatedAt current so the path replan doesn't immediately re-enable it.
-        // The natural REMOTE_PATH_REFRESH_INTERVAL retry will re-evaluate later.
         sourcePlan.routeAccessible = false;
-        sourcePlan.pathUpdatedAt = Game.time;
-        console.log('room.controller: force-disabled remote source after ' + sourcePlan.stallCount +
-            ' stalls source=' + sourcePlan.sourceId + ' at ' + pos.roomName + ':' + pos.x + ',' + pos.y);
+        // Record the stuck zone for future pathfinding avoidance
+        sourcePlan.blockedApproachX = pos.x;
+        sourcePlan.blockedApproachY = pos.y;
+        sourcePlan.blockedApproachRoom = pos.roomName;
+        sourcePlan.stallCount = 0;
+        const stationFailures = (sourcePlan.stationFailures ?? 0) + 1;
+        sourcePlan.stationFailures = stationFailures;
+        if (stationFailures < REMOTE_MAX_STATION_FAILURES) {
+            // Clear station to force a new one, re-evaluate immediately
+            sourcePlan.stationX = undefined;
+            sourcePlan.stationY = undefined;
+            sourcePlan.pathUpdatedAt = undefined;
+            console.log('room.controller: force-clearing station for re-route (failure #' +
+                stationFailures + ') source=' + sourcePlan.sourceId +
+                ' blocked at ' + pos.roomName + ':' + pos.x + ',' + pos.y);
+        } else {
+            // Too many station failures: give up for full interval
+            sourcePlan.pathUpdatedAt = Game.time;
+            console.log('room.controller: permanently inaccessible after ' + stationFailures +
+                ' station failures source=' + sourcePlan.sourceId +
+                ' at ' + pos.roomName + ':' + pos.x + ',' + pos.y);
+        }
     } else {
         sourcePlan.pathUpdatedAt = undefined;
         console.log('room.controller: degraded remote source route source=' + sourcePlan.sourceId +
@@ -980,7 +1000,10 @@ function updateRemoteRoomPlans(homeRoom: Room): void {
                 filter: (site) => site.structureType === STRUCTURE_CONTAINER &&
                     site.pos.getRangeTo(source) <= REMOTE_CONTAINER_BUILD_DISTANCE
             }) as ConstructionSite[]);
-            const station = container?.pos ?? containerSite?.pos ?? findStationForSource(visible, source, remoteEntries);
+            const blockedApproach = (existing.blockedApproachX != null && existing.blockedApproachRoom != null && existing.blockedApproachRoom === remoteName)
+                ? new RoomPosition(existing.blockedApproachX, existing.blockedApproachY ?? 0, existing.blockedApproachRoom)
+                : undefined;
+            const station = container?.pos ?? containerSite?.pos ?? findStationForSource(visible, source, remoteEntries, blockedApproach);
             if (station) {
                 existing.stationX = station.x;
                 existing.stationY = station.y;
@@ -1008,7 +1031,7 @@ function updateRemoteRoomPlans(homeRoom: Room): void {
                 if (!route.incomplete) {
                     // Simulate the miner's local entry route into the remote room. A complete
                     // cross-room path is not enough if the selected exit enters a separated pocket.
-                    const localRoute = bestRemoteEntryRoute(remoteEntries, station);
+                    const localRoute = bestRemoteEntryRoute(remoteEntries, station, blockedApproach);
                     const locallyReachable = !!localRoute && !localRoute.incomplete;
                     if (Game.time % REMOTE_PLANNING_LOG_INTERVAL === 0) {
                         console.log('room.controller: local path check ' + homeRoom.name + '->' + remoteName +
@@ -1391,13 +1414,21 @@ function mirrorExitPositionIntoRoom(exit: RoomPosition, roomName: string): RoomP
     return null;
 }
 
-function bestRemoteEntryRoute(entries: RoomPosition[], station: RoomPosition): PathFinderPath | null {
+function bestRemoteEntryRoute(entries: RoomPosition[], station: RoomPosition, blockedPos?: RoomPosition): PathFinderPath | null {
     if (entries.length === 0) { return null; }
-    const route = PathFinder.search(station, entries.map(pos => ({ pos, range: 0 })), { maxRooms: 1 });
-    return route;
+    const opts: PathFinderOpts = { maxRooms: 1 };
+    if (blockedPos && blockedPos.roomName === station.roomName) {
+        opts.roomCallback = (roomName) => {
+            if (roomName !== station.roomName) { return false; }
+            const matrix = new PathFinder.CostMatrix();
+            matrix.set(blockedPos.x, blockedPos.y, 255);
+            return matrix;
+        };
+    }
+    return PathFinder.search(station, entries.map(pos => ({ pos, range: 0 })), opts);
 }
 
-function findStationForSource(room: Room, source: Source, entries: RoomPosition[] = []): RoomPosition | null {
+function findStationForSource(room: Room, source: Source, entries: RoomPosition[] = [], blockedPos?: RoomPosition): RoomPosition | null {
     const terrain = room.getTerrain();
     const around = room.lookForAtArea(LOOK_TERRAIN, source.pos.y - 1, source.pos.x - 1, source.pos.y + 1, source.pos.x + 1, true);
     let best: RoomPosition | null = null;
@@ -1406,7 +1437,7 @@ function findStationForSource(room: Room, source: Source, entries: RoomPosition[
         if (tile.x === source.pos.x && tile.y === source.pos.y) { continue; }
         const pos = new RoomPosition(tile.x, tile.y, room.name);
         if (!isRemoteStationTileUsable(pos, tile.terrain)) { continue; }
-        const route = entries.length > 0 ? bestRemoteEntryRoute(entries, pos) : null;
+        const route = entries.length > 0 ? bestRemoteEntryRoute(entries, pos, blockedPos) : null;
         if (entries.length > 0 && (!route || route.incomplete)) { continue; }
         const pathCost = route?.path.length ?? 0;
         const score = countOpenTilesAround(terrain, tile.x, tile.y) * 100 - pathCost;

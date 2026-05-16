@@ -111,3 +111,7 @@ The gate should check spawn/extension energy levels, not storage contents.
 | 70937091 | 50 | 0 | 25 | v8 deployed (terminal reserve), W8N9 both miners=1/1 |
 | 70937511 | 927 | 0 | 15 | All remote sources miners=1/1, W6N9 haulers=2 (1200C) |
 | 70948431 | 2256 | 0 | 30 | GAME PAUSED - home recovery gate blocking ALL remote spawns |
+| 70963051 | 1399 | 0 | - | Game resumed, gate threshold changed to stored<500 |
+| 70963191 | 188 | 800 | - | New miner spawned for W8N9 4adbfc69 standby |
+| 70963261 | 1360 | 0 | - | New miner spawned for W8N9 4adbfc6b standby |
+| 70964581 | 2300 | 0 | - | Home energy full, W8N9 4adbfc69 stuck (stuck=4) |

@@ -2096,7 +2096,10 @@ function runSpawnPlanner(context: RoomControllerContext): void {
                 continue;
             }
 
-            const maxBudget = Math.max(BODY_MIN_BUDGET, Math.floor(context.room.energyCapacityAvailable * BODY_BUDGET_RATIO));
+            const defaultBudget = Math.max(BODY_MIN_BUDGET, Math.floor(context.room.energyCapacityAvailable * BODY_BUDGET_RATIO));
+            const maxBudget = request.archetype === 'claimer' && request.remoteMode === 'reserve'
+                ? context.room.energyCapacityAvailable
+                : defaultBudget;
             const body = planBodyForArchetype(request.archetype, maxBudget, {
                 staticMining: request.staticMining,
                 hasContainer: request.hasContainer,

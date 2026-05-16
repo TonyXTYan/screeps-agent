@@ -1,4 +1,5 @@
 import { isHostile } from './hostileUtils';
+import { acquireRenewSpawn, nearestSpawn } from './spawn.renewal';
 
 const DEFENDER_RENEW_REQUEST = 800;
 const DEFENDER_RENEW_FULL = 1000;
@@ -26,7 +27,7 @@ export function run(creep: Creep): void {
     } else {
         let rally = creep.memory.rallySpawnId ? Game.getObjectById<StructureSpawn>(creep.memory.rallySpawnId) : null;
         if (!rally || rally.room.name !== creep.room.name) {
-            rally = creep.room.find(FIND_MY_SPAWNS)[0] ?? null;
+            rally = nearestSpawn(creep, creep.room);
             if (rally) {
                 creep.memory.rallySpawnId = rally.id;
             } else {
@@ -38,18 +39,21 @@ export function run(creep: Creep): void {
         const ttl = creep.ticksToLive ?? 0;
         const needsRenew = ttl > 0 && ttl < DEFENDER_RENEW_FULL && (ttl < DEFENDER_RENEW_REQUEST || creep.pos.isNearTo(rally));
         if (needsRenew) {
-            if (creep.pos.isNearTo(rally)) {
-                const code = rally.renewCreep(creep);
+            const renewSpawn = acquireRenewSpawn(creep, creep.room);
+            if (!renewSpawn) {
+                creep.moveTo(rally, { range: 1, visualizePathStyle: { stroke: '#ffaa00' } });
+                return;
+            }
+            if (creep.pos.isNearTo(renewSpawn)) {
+                const code = renewSpawn.renewCreep(creep);
                 if (code !== OK) {
-                    creep.moveTo(rally, { range: 10, visualizePathStyle: { stroke: '#ffaa00' } });
+                    creep.moveTo(renewSpawn, { range: 10, visualizePathStyle: { stroke: '#ffaa00' } });
                 }
             } else {
-                creep.moveTo(rally, { range: 1, visualizePathStyle: { stroke: '#ffaa00' } });
+                creep.moveTo(renewSpawn, { range: 1, visualizePathStyle: { stroke: '#ffaa00' } });
             }
         } else if (creep.pos.getRangeTo(rally) < 10) {
             creep.moveTo(rally, { range: 10, visualizePathStyle: { stroke: '#ffaa00' } });
         }
     }
 }
-
-

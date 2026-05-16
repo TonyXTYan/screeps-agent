@@ -34,8 +34,11 @@ export function run(creep: Creep): void {
                 if (Game.creeps[name].memory.role === 'builder') { counter++; }
             }
             if (counter <= 1) {
-                console.log('role.builder: last builder, ' + creep.name + ' so moving it to Spawn 1');
-                creep.moveTo(Game.spawns['Spawn1'], { visualizePathStyle: { stroke: '#fafafa' } });
+                const spawn = creep.pos.findClosestByRange(FIND_MY_SPAWNS);
+                if (spawn) {
+                    console.log('role.builder: last builder, ' + creep.name + ' so moving it to nearest spawn');
+                    creep.moveTo(spawn, { visualizePathStyle: { stroke: '#fafafa' } });
+                }
             } else {
                 console.log('role.builder: ' + creep.name + ' not doing anything, erasing his memory💾');
                 delete Memory.creeps[creep.name];

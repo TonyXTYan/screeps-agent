@@ -73,8 +73,11 @@ export function run(creep: Creep): void {
                 if (Game.creeps[name].memory.role === 'harvester') { counter++; }
             }
             if (counter <= 2) {
-                console.log('role.harvester: last harvester, so moving it to Spawn 1');
-                creep.moveTo(Game.spawns['Spawn1'], { visualizePathStyle: { stroke: '#fafafa' } });
+                const spawn = creep.pos.findClosestByRange(FIND_MY_SPAWNS);
+                if (spawn) {
+                    console.log('role.harvester: last harvester, so moving it to nearest spawn');
+                    creep.moveTo(spawn, { visualizePathStyle: { stroke: '#fafafa' } });
+                }
             } else {
                 console.log(creep.name + ' not doing anything, erasing his memory💾');
                 delete Memory.creeps[creep.name];

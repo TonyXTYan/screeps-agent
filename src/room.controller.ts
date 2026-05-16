@@ -3,6 +3,7 @@ import { clearJob } from './creep.jobRunner';
 import { getRoomStructures, RoomStructureCache } from './room.structures';
 import { repairStructureFilter, wallRampartRepairCap } from './role.doctor';
 import { findHostiles, isHostile } from './hostileUtils';
+import { acquireRenewSpawn, nearestSpawn, reserveRenewSpawns } from './spawn.renewal';
 
 interface RoomControllerContext {
     room: Room;
@@ -35,6 +36,10 @@ interface SpawnRequest {
     minClaimParts?: number;
     maxClaimParts?: number;
     remoteStandby?: boolean;
+}
+
+interface PendingSpawnRequest extends SpawnRequest {
+    plannedBody?: BodyPartConstant[];
 }
 
 interface ResourceTarget {
@@ -789,10 +794,16 @@ function manageRemoteHaulerRenewal(creep: Creep, homeRoomName: string, forceRene
         return true;
     }
 
-    const spawn = closest(creep, homeRoom.find(FIND_MY_SPAWNS, {
-        filter: (s) => !s.spawning
-    }));
+    const spawn = acquireRenewSpawn(creep, homeRoom);
     if (!spawn) {
+        const waitTarget = nearestSpawn(creep, homeRoom);
+        if (waitTarget) {
+            if (!creep.pos.isNearTo(waitTarget)) {
+                creep.moveTo(waitTarget, { visualizePathStyle: { stroke: '#f5f57a' } });
+            }
+            setJob(creep, 'idle', waitTarget);
+            return true;
+        }
         creep.memory.remoteRenewing = false;
         return false;
     }
@@ -1357,10 +1368,16 @@ function manageRemoteRenewal(
         return true;
     }
 
-    const spawn = closest(creep, homeRoom.find(FIND_MY_SPAWNS, {
-        filter: (s) => !s.spawning
-    }));
+    const spawn = acquireRenewSpawn(creep, homeRoom);
     if (!spawn) {
+        const waitTarget = nearestSpawn(creep, homeRoom);
+        if (waitTarget) {
+            if (!creep.pos.isNearTo(waitTarget)) {
+                creep.moveTo(waitTarget, { visualizePathStyle: { stroke: '#f5f57a' } });
+            }
+            setJob(creep, 'idle', waitTarget);
+            return true;
+        }
         creep.memory.remoteRenewing = false;
         return false;
     }
@@ -2062,23 +2079,29 @@ function logRemoteSpawnSkip(context: RoomControllerContext, request: SpawnReques
 }
 
 function runSpawnPlanner(context: RoomControllerContext): void {
-    const freeSpawns = context.structures.spawns.filter((s) => !s.spawning);
+    const allFreeSpawns = context.structures.spawns.filter((s) => !s.spawning);
+    if (allFreeSpawns.length === 0) { return; }
+
+    const renewalReservedSpawnIds = reserveRenewSpawns(renewalDemandCreepsForRoom(context.room.name), allFreeSpawns);
+    const freeSpawns = allFreeSpawns.filter((spawn) => !renewalReservedSpawnIds[spawn.id]);
     if (freeSpawns.length === 0) { return; }
 
-    const pending: SpawnRequest[] = [];
+    const pending: PendingSpawnRequest[] = [];
     const rcl = context.room.controller?.level ?? 0;
 
     for (const spawn of context.structures.spawns) {
         if (!spawn.spawning) continue;
         const memory = Memory.creeps[spawn.spawning.name];
         if (!memory || !memory.archetype) continue;
-        pending.push({
+        const spawningCreep = Game.creeps[spawn.spawning.name];
+        pending.push(pendingSpawnRequest({
             archetype: memory.archetype,
             sourceId: memory.sourceId ?? memory.assignedSourceId,
             remoteRoom: memory.remoteRoom,
+            remoteMode: memory.remoteMode,
             remoteStandby: memory.remoteStandby,
             reason: 'currently spawning'
-        });
+        }, spawningCreep?.body.map((part) => part.type)));
     }
 
     let remainingEnergy = context.room.energyAvailable;
@@ -2092,7 +2115,7 @@ function runSpawnPlanner(context: RoomControllerContext): void {
             const recoveryReason = remoteSpawnRecoveryBlockReason(context, homeFleet, request, remainingEnergy);
             if (recoveryReason) {
                 logRemoteSpawnSkip(context, request, recoveryReason);
-                pending.push(request);
+                pending.push(pendingSpawnRequest(request));
                 continue;
             }
 
@@ -2112,7 +2135,7 @@ function runSpawnPlanner(context: RoomControllerContext): void {
                 if (Game.time % 25 === 0) {
                     console.log('room.controller: waiting for energy to spawn ' + request.archetype + ' for ' + request.reason);
                 }
-                pending.push(request);
+                pending.push(pendingSpawnRequest(request));
                 continue;
             }
 
@@ -2120,7 +2143,7 @@ function runSpawnPlanner(context: RoomControllerContext): void {
             const remoteMinimumCost = remoteSpawnMinimumCost(context, request, cost);
             if (remoteMinimumCost > 0 && cost < remoteMinimumCost) {
                 logRemoteSpawnSkip(context, request, 'body below minimum need=' + remoteMinimumCost + ' planned=' + cost);
-                pending.push(request);
+                pending.push(pendingSpawnRequest(request));
                 continue;
             }
 
@@ -2134,10 +2157,11 @@ function runSpawnPlanner(context: RoomControllerContext): void {
                 });
                 if (affordableBody.length > 0) {
                     const affordableCost = bodyCost(affordableBody);
-                    const fleetCount = countFleetForArchetype(context.creeps, request.archetype);
+                    const fleetCount = countFleetForArchetype(context.creeps, request.archetype) +
+                        pendingArchetypeCount(pending, request.archetype);
                     if (remoteMinimumCost > 0 && affordableCost < remoteMinimumCost) {
                         logRemoteSpawnSkip(context, request, 'body below minimum need=' + remoteMinimumCost + ' have=' + affordableCost + ' planned=' + cost);
-                        pending.push(request);
+                        pending.push(pendingSpawnRequest(request));
                         continue;
                     }
                     if (meetsMinimumBody(affordableBody, request.archetype, rcl, fleetCount) && affordableCost <= remainingEnergy) {
@@ -2160,28 +2184,28 @@ function runSpawnPlanner(context: RoomControllerContext): void {
                         });
                         if (aCode === OK) {
                             console.log('room.controller: spawning ' + aName + ' for ' + request.reason + ' cost=' + affordableCost + ' (scaled from ' + cost + ')');
-                            pending.push(request);
+                            pending.push(pendingSpawnRequest(request, affordableBody));
                             remainingEnergy -= affordableCost;
                             spawned = true;
                         } else if (aCode !== ERR_BUSY && Game.time % 25 === 0) {
                             console.log('room.controller: spawn request for ' + request.archetype + ' failed with code ' + aCode);
                             break;
                         } else {
-                            pending.push(request);
+                            pending.push(pendingSpawnRequest(request));
                             continue;
                         }
                     } else {
                         if (Game.time % 25 === 0) {
                             console.log('room.controller: insufficient energy for ' + request.archetype + ' for ' + request.reason + ' need=' + cost + ' have=' + remainingEnergy);
                         }
-                        pending.push(request);
+                        pending.push(pendingSpawnRequest(request));
                         continue;
                     }
                 } else {
                     if (Game.time % 25 === 0) {
                         console.log('room.controller: insufficient energy for ' + request.archetype + ' for ' + request.reason + ' need=' + cost + ' have=' + remainingEnergy);
                     }
-                    pending.push(request);
+                    pending.push(pendingSpawnRequest(request));
                     continue;
                 }
             } else {
@@ -2205,7 +2229,7 @@ function runSpawnPlanner(context: RoomControllerContext): void {
 
                 if (code === OK) {
                     console.log('room.controller: spawning ' + name + ' for ' + request.reason + ' cost=' + cost);
-                    pending.push(request);
+                    pending.push(pendingSpawnRequest(request, body));
                     remainingEnergy -= cost;
                     spawned = true;
                 } else if (code !== ERR_BUSY && Game.time % 25 === 0) {
@@ -2217,6 +2241,107 @@ function runSpawnPlanner(context: RoomControllerContext): void {
     }
 }
 
+function pendingSpawnRequest(request: SpawnRequest, plannedBody?: BodyPartConstant[]): PendingSpawnRequest {
+    const pending: PendingSpawnRequest = {
+        ...request
+    };
+    if (plannedBody) {
+        pending.plannedBody = plannedBody;
+    }
+    return pending;
+}
+
+function renewalDemandCreepsForRoom(roomName: string): Creep[] {
+    const creeps: Creep[] = [];
+    for (const name in Game.creeps) {
+        const creep = Game.creeps[name];
+        if (creep.spawning) { continue; }
+        if (creep.room.name !== roomName) { continue; }
+        if ((creep.memory.homeRoom ?? creep.room.name) !== roomName) { continue; }
+        if (!creep.memory.renewing &&
+            !creep.memory.remoteRenewing &&
+            !creep.memory.remoteHaulerRenewAfterTrip) {
+            continue;
+        }
+        creeps.push(creep);
+    }
+    creeps.sort((a, b) => (a.ticksToLive ?? Infinity) - (b.ticksToLive ?? Infinity));
+    return creeps;
+}
+
+function addPendingCapabilities(
+    capacities: ReturnType<typeof measureCapabilities>,
+    pending: PendingSpawnRequest[]
+): ReturnType<typeof measureCapabilities> {
+    const totals = { ...capacities };
+    for (const request of pending) {
+        if (!request.plannedBody) { continue; }
+        const caps = getBodyCapabilities(request.plannedBody);
+
+        if (request.archetype === 'miner') {
+            totals.minerWork += caps.harvest;
+        } else if (request.archetype === 'hauler') {
+            totals.haulerCapacity += caps.haul;
+        } else if (request.archetype === 'mineralMiner') {
+            totals.mineralMinerWork += caps.harvest;
+        } else if (request.archetype === 'remoteMiner') {
+            totals.remoteMinerWork += caps.harvest;
+        } else if (request.archetype === 'remoteHauler') {
+            totals.remoteHaulerCapacity += caps.haul;
+        } else if (request.archetype === 'worker') {
+            totals.workerWork += caps.work;
+        }
+
+        totals.heal += caps.heal;
+        totals.claim += caps.claim;
+    }
+    return totals;
+}
+
+function pendingArchetypeCount(pending: PendingSpawnRequest[], archetype: CreepArchetype): number {
+    let count = 0;
+    for (const request of pending) {
+        if (request.archetype === archetype) { count++; }
+    }
+    return count;
+}
+
+function pendingRemoteArchetypeCount(
+    pending: PendingSpawnRequest[],
+    archetype: CreepArchetype,
+    remoteRoom: string,
+    sourceId?: string,
+    standby?: boolean
+): number {
+    let count = 0;
+    for (const request of pending) {
+        if (request.archetype !== archetype) { continue; }
+        if (request.remoteRoom !== remoteRoom) { continue; }
+        if (sourceId && request.sourceId !== sourceId) { continue; }
+        if (standby !== undefined && !!request.remoteStandby !== standby) { continue; }
+        count++;
+    }
+    return count;
+}
+
+function pendingRemoteBodyCapability(
+    pending: PendingSpawnRequest[],
+    archetype: CreepArchetype,
+    remoteRoom: string,
+    sourceId: string,
+    capability: 'harvest' | 'haul'
+): number {
+    let total = 0;
+    for (const request of pending) {
+        if (request.archetype !== archetype) { continue; }
+        if (request.remoteRoom !== remoteRoom) { continue; }
+        if (request.sourceId !== sourceId) { continue; }
+        if (!request.plannedBody) { continue; }
+        const caps = getBodyCapabilities(request.plannedBody);
+        total += capability === 'harvest' ? caps.harvest : caps.haul;
+    }
+    return total;
+}
 
 function workerWorkRatio(context: RoomControllerContext): number {
     const rcl = context.room.controller?.level ?? 0;
@@ -2228,8 +2353,8 @@ function workerWorkRatio(context: RoomControllerContext): number {
     return 1;
 }
 
-function chooseSpawnRequest(context: RoomControllerContext, pending: SpawnRequest[] = []): SpawnRequest | null {
-    const capacities = measureCapabilities(context.creeps);
+function chooseSpawnRequest(context: RoomControllerContext, pending: PendingSpawnRequest[] = []): SpawnRequest | null {
+    const capacities = addPendingCapabilities(measureCapabilities(context.creeps), pending);
     const { demand: haulerCapacityDemand, maxCount: maxHaulerCount } = desiredHaulerCapacity(context);
     const workerWorkDemand = desiredWorkerWork(context);
 
@@ -2256,13 +2381,14 @@ function chooseSpawnRequest(context: RoomControllerContext, pending: SpawnReques
         return { archetype: 'doctor', reason: 'no heal-capable creep' };
     }
 
+    const pendingHaulerCount = pendingArchetypeCount(pending, 'hauler');
     const haulerCount = context.creeps.filter(c => ensureArchetype(c) === 'hauler' && !c.spawning).length;
     if (context.structures.storage && (context.room.controller?.level ?? 0) >= 4 &&
-        haulerCount + pending.filter(r => r.archetype === 'hauler').length < 2) {
+        haulerCount + pendingHaulerCount < 2) {
         return { archetype: 'hauler', reason: 'min hauler count 2' };
     }
 
-    const haulerCountWithPending = haulerCount + pending.filter(r => r.archetype === 'hauler').length;
+    const haulerCountWithPending = haulerCount + pendingHaulerCount;
     if (capacities.haulerCapacity < haulerCapacityDemand &&
         haulerCountWithPending < maxHaulerCount &&
         !pending.some(r => r.archetype === 'hauler')) {
@@ -2274,7 +2400,8 @@ function chooseSpawnRequest(context: RoomControllerContext, pending: SpawnReques
         const maxWorkerCount = context.constructionSites.length < 3
             ? 1
             : ([0, 2, 2, 2, 3, 3, 3, 4, 4][Math.min(rcl, 8)] || 4);
-        const workerCreeps = context.creeps.filter(c => ensureArchetype(c) === 'worker' && !c.spawning).length;
+        const workerCreeps = context.creeps.filter(c => ensureArchetype(c) === 'worker' && !c.spawning).length +
+            pendingArchetypeCount(pending, 'worker');
         if (workerCreeps < maxWorkerCount) {
             return { archetype: 'worker', reason: 'worker deficit ' + capacities.workerWork + '/' + workerWorkDemand + ' ' + workerCreeps + '/' + maxWorkerCount, workRatio: workerWorkRatio(context) };
         }
@@ -2303,7 +2430,7 @@ function chooseSpawnRequest(context: RoomControllerContext, pending: SpawnReques
 function remoteSpawnRequest(
     context: RoomControllerContext,
     capacities: ReturnType<typeof measureCapabilities>,
-    pending: SpawnRequest[] = []
+    pending: PendingSpawnRequest[] = []
 ): SpawnRequest | null {
     if (activeMinerCount(context.creeps) < context.sourcePlans.length) { return null; }
     if (pending.some(r => !r.remoteRoom)) { return null; }
@@ -2350,8 +2477,10 @@ function remoteSpawnRequest(
         }
         if (remote.mode === 'harvest' && remote.sources) {
             const numSources = Object.keys(remote.sources).length;
-            const totalRoomHaulers = countRemoteHaulersForRoom(homeFleet, roomName);
-            const totalRoomMiners = countActiveRemoteMinersForRoom(homeFleet, roomName);
+            const totalRoomHaulers = countRemoteHaulersForRoom(homeFleet, roomName) +
+                pendingRemoteArchetypeCount(pending, 'remoteHauler', roomName);
+            const totalRoomMiners = countActiveRemoteMinersForRoom(homeFleet, roomName) +
+                pendingRemoteArchetypeCount(pending, 'remoteMiner', roomName, undefined, false);
             const sourceLessStandbyMiners = countSourceLessRemoteStandbyMiners(homeFleet, roomName);
             const standbySourceId = sourceNeedingStandbyReplacement(homeFleet, roomName);
             if (standbySourceId &&
@@ -2380,8 +2509,10 @@ function remoteSpawnRequest(
                 if (sourcePlan.routeAccessible === false) { continue; }
                 const targetMinerWork = sourcePlan.workDemand ?? 3;
                 const minerCoverageHorizon = remoteSourceReplacementHorizon(context, sourcePlan, 'remoteMiner');
-                const minerProjectedWork = projectedRemoteMinerWork(homeFleet, roomName, sourceId, minerCoverageHorizon);
-                const minerCount = countRemoteMinersForSource(homeFleet, roomName, sourceId);
+                const minerProjectedWork = projectedRemoteMinerWork(homeFleet, roomName, sourceId, minerCoverageHorizon) +
+                    pendingRemoteBodyCapability(pending, 'remoteMiner', roomName, sourceId, 'harvest');
+                const minerCount = countRemoteMinersForSource(homeFleet, roomName, sourceId) +
+                    pendingRemoteArchetypeCount(pending, 'remoteMiner', roomName, sourceId, false);
                 const sourceMinerLimit = remoteSourceActiveMinerLimit(sourcePlan);
                 const sourceHasStandby = hasRemoteStandbyMinerForSource(homeFleet, roomName, sourceId) ||
                     pending.some(r =>
@@ -2411,10 +2542,12 @@ function remoteSpawnRequest(
 
                 const targetHaulerCapacity = sourcePlan.haulerCapacityDemand ?? 150;
                 const haulerCoverageHorizon = remoteSourceReplacementHorizon(context, sourcePlan, 'remoteHauler');
-                const haulerProjectedCapacity = projectedRemoteHaulerCapacity(homeFleet, roomName, sourceId, haulerCoverageHorizon);
+                const haulerProjectedCapacity = projectedRemoteHaulerCapacity(homeFleet, roomName, sourceId, haulerCoverageHorizon) +
+                    pendingRemoteBodyCapability(pending, 'remoteHauler', roomName, sourceId, 'haul');
                 if (haulerProjectedCapacity < targetHaulerCapacity &&
                     totalRoomHaulers < 2 * numSources &&
-                    countRemoteHaulersForSource(homeFleet, roomName, sourceId) < MAX_REMOTE_HAULERS_PER_SOURCE &&
+                    countRemoteHaulersForSource(homeFleet, roomName, sourceId) +
+                        pendingRemoteArchetypeCount(pending, 'remoteHauler', roomName, sourceId) < MAX_REMOTE_HAULERS_PER_SOURCE &&
                     !hasIdleRemoteHauler(homeFleet, roomName) &&
                     !pending.some(r => r.archetype === 'remoteHauler' && r.remoteRoom === roomName && r.sourceId === sourceId)) {
                     const request: SpawnRequest = {
@@ -2906,8 +3039,7 @@ function projectedRemoteMinerWork(
         if (ensureArchetype(creep) !== 'remoteMiner') { continue; }
         if (creep.memory.remoteRoom !== remoteRoom) { continue; }
         if ((creep.memory.assignedSourceId ?? creep.memory.sourceId) !== sourceId) { continue; }
-        if (creep.memory.remoteRenewing) { continue; }
-        if (!creep.spawning && (creep.ticksToLive ?? 0) <= horizonTicks) { continue; }
+        if (!creep.memory.remoteRenewing && !creep.spawning && (creep.ticksToLive ?? 0) <= horizonTicks) { continue; }
         const caps = creep.spawning
             ? getBodyCapabilities(creep.body.map(p => p.type))
             : getCreepCapabilities(creep);
@@ -2927,8 +3059,7 @@ function projectedRemoteHaulerCapacity(
         if (ensureArchetype(creep) !== 'remoteHauler') { continue; }
         if (creep.memory.remoteRoom !== remoteRoom) { continue; }
         if ((creep.memory.assignedSourceId ?? creep.memory.sourceId) !== sourceId) { continue; }
-        if (creep.memory.remoteRenewing) { continue; }
-        if (!creep.spawning && (creep.ticksToLive ?? 0) <= horizonTicks) { continue; }
+        if (!creep.memory.remoteRenewing && !creep.spawning && (creep.ticksToLive ?? 0) <= horizonTicks) { continue; }
         const caps = creep.spawning
             ? getBodyCapabilities(creep.body.map(p => p.type))
             : getCreepCapabilities(creep);

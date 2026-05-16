@@ -232,11 +232,14 @@ function buildClaimerBody(energyBudget: number, minClaimParts: number, maxClaimP
 
 function buildWorkerBody(energyBudget: number, workRatio: number = 1): BodyPartConstant[] {
     const body: BodyPartConstant[] = [];
-    const unitParts = workRatio + 2;
-    const unitCost = workRatio * 100 + 100;
+    // MOVE count = ceil((WORK + CARRY) / 2) for full speed on roads
+    const moveCount = Math.ceil((workRatio + 1) / 2);
+    const unitParts = workRatio + 1 + moveCount;
+    const unitCost = workRatio * 100 + 50 + moveCount * 50;
     while (body.length + unitParts <= 50 && bodyCost(body) + unitCost <= energyBudget) {
         for (let i = 0; i < workRatio; i++) { body.push(WORK); }
-        body.push(CARRY, MOVE);
+        body.push(CARRY);
+        for (let i = 0; i < moveCount; i++) { body.push(MOVE); }
     }
     if (body.length > 0) { return body; }
     return selectLargestWithinBudget([[WORK, CARRY, MOVE]], energyBudget);

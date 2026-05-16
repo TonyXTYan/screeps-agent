@@ -14,6 +14,7 @@ import * as debug from './debug';
 import { findHostiles, isHostile } from './hostileUtils';
 import { bodyCost } from './creep.capabilities';
 import { BUILD_COMMIT } from './env';
+import { acquireRenewSpawn, nearestSpawn } from './spawn.renewal';
 
 const DOCTOR_EMERGENCY_HITS_RATIO = 0.35;
 const DOCTOR_THREAT_RADIUS = 4;
@@ -476,12 +477,13 @@ function tryRenewHomeCreep(creep: Creep): boolean {
     }
     if (!creep.memory.renewing) { return false; }
 
-    const spawn = creep.pos.findClosestByRange(FIND_MY_SPAWNS, {
-        filter: (s) => !s.spawning
-    }) as StructureSpawn | null;
+    const room = Game.rooms[homeRoomName];
+    if (!room) { return false; }
+
+    const spawn = acquireRenewSpawn(creep, room);
 
     if (!spawn) {
-        const anySpawn = creep.pos.findClosestByRange(FIND_MY_SPAWNS) as StructureSpawn | null;
+        const anySpawn = nearestSpawn(creep, room);
         if (anySpawn && !creep.pos.isNearTo(anySpawn)) {
             creep.moveTo(anySpawn, { range: 1, visualizePathStyle: { stroke: '#f5f57a' } });
         }

@@ -72,8 +72,11 @@ export function run(creep: Creep): void {
                 if (Game.creeps[name].memory.role === 'doctor') { counter++; }
             }
             if (counter <= 2) {
-                console.log('role.doctor: doctor job done, so moving it to Spawn 1');
-                creep.moveTo(Game.spawns['Spawn1'], { visualizePathStyle: { stroke: '#fafafa' } });
+                const spawn = creep.pos.findClosestByRange(FIND_MY_SPAWNS);
+                if (spawn) {
+                    console.log('role.doctor: doctor job done, so moving it to nearest spawn');
+                    creep.moveTo(spawn, { visualizePathStyle: { stroke: '#fafafa' } });
+                }
             }
         }
     } else {

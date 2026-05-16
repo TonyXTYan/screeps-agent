@@ -6,7 +6,7 @@ A TypeScript Screeps AI bot that manages a colony economy — source mining, hau
 upgrading, remote harvesting, and defense. Bundled via Rollup into `dist/main.js` and pushed to the
 Screeps server via `grunt-screeps`.
 
-## Source Map (21 modules)
+## Source Map (22 modules)
 
 ```
 src/
@@ -35,6 +35,7 @@ src/
 
   memoryAudit.ts           Memory consistency audit (runs on deploy)
   debug.ts                 Console debug helpers
+  spawn.renewal.ts         Per-tick renew-spawn reservation helper
   types.d.ts               All Memory extensions and type unions
 ```
 
@@ -86,6 +87,7 @@ Measure capabilities & demand
 Compute deficits (miner, hauler, worker, heal, mineral)
     ↓
 Spawn planning — chooseSpawnRequest() → spawnCreep()
+    (pending bodies are counted so multiple spawns do not duplicate demand)
     ↓
 Job assignment — setJob(type, target) on creep memory
     ↓

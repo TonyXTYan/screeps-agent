@@ -16,6 +16,7 @@ Use this as the first stop before editing code.
 - `src/env.ts` — exports `BUILD_COMMIT` from build-injected git hash
 - `src/creep.populationControl.ts` — emergency defender spawning before economic spawn planning
 - `src/room.controller.ts` — main room-level economic controller (room plans, remotes, spawn planning, job assignment)
+- `src/spawn.renewal.ts` — per-tick spawn reservation helper for renew actions
 - `src/tower.basics.ts` — tower attack, heal, and repair behavior
 - `src/creep.jobRunner.ts` — executes assigned jobs before legacy role fallback
 
@@ -24,6 +25,7 @@ Use this as the first stop before editing code.
 - Hostile detection is centralized in `src/hostileUtils.ts` (`isHostile`, `findHostiles`) and used by `main.ts`, `room.controller.ts`, `tower.basics.ts`, `creep.populationControl.ts`, and `role.defender.ts`.
 - `firstStoredResource(store)` — duplicated in `creep.jobRunner.ts` and `room.controller.ts`.
 - `closest()` / `closestByRange()` — overlap in `room.controller.ts`.
+- `spawn.renewal.ts` — shared `acquireRenewSpawn()` / `nearestSpawn()` helper used by home, remote, and defender renew flows.
 
 ## Architecture Docs
 
@@ -38,7 +40,7 @@ Use this as the first stop before editing code.
 
 - Source/mineral planning — `src/room.controller.ts`
 - Link classification — `src/room.structures.ts`
-- Spawn demand selection — `src/room.controller.ts`
+- Spawn demand selection — `src/room.controller.ts`; multiple free spawns share a pending-request ledger with planned bodies so in-flight creeps count toward capacity and per-source/per-role caps.
 - Home room priority gate (blocks remote spawns when home requests pending, throttles remotes under low stored/spawn energy, and rejects uneconomic scaled remote bodies) — `src/room.controller.ts`
 - Remote standby miner system (TTL-triggered source-targeted handoff with remote pre-positioning; blank standby reassignment; pending container-site awareness; no standby renew) — `src/room.controller.ts`, `src/creep.jobRunner.ts`, `src/main.ts`
 - Remote route health and road placement (degraded-route memory, prioritized road sites, route-health maintainer recovery bypass) — `src/room.controller.ts`
@@ -46,7 +48,7 @@ Use this as the first stop before editing code.
 - Body planning by archetype — `src/creep.capabilities.ts`
 - Remote hauler capacity cap (per source) — `src/room.controller.ts`
 - Hauling, refill, build, repair, upgrade assignment — `src/room.controller.ts`; haulers/workers pick dropped resources, salvage ruins/tombstones, then non-energy minerals from the planned mineral container. Workers now prefer room storage as the primary `withdrawEnergy` target whenever storage has energy; haulers continue container/link-first with storage fallback for refill pressure. Terminal energy now follows an RCL reserve floor (RCL6/7/8 = 5k/10k/50k) that can be broken only during room energy recovery (spawn/extension deficit or tower <70%). Non-miner `harvestSource` assignments are treated as temporary fallback jobs and are interrupted once energy is loaded or storage is available.
-- Remote hauler cycle (remote pickup → home storage deposit → renew to TTL>1400; no-job home idle/wander with TTL<500 renew gate) — `src/room.controller.ts`
+- Remote hauler cycle (remote pickup → home storage deposit → renew to TTL>1400; no-job home idle/wander with TTL<500 renew gate) — `src/room.controller.ts`; renew requests reserve free spawns through `src/spawn.renewal.ts` so multiple renewers spread across multiple spawns.
 - Job execution for those assignments — `src/creep.jobRunner.ts` (includes pass-by remote-hauler opportunistic build/repair within range 3)
 
 ## Types And Memory

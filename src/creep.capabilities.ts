@@ -172,8 +172,8 @@ export function planBodyForArchetype(
             body.push(CARRY, CARRY, MOVE);
         }
         if (body.length > 0) {
-            if (bodyCost(body) + 100 <= energyBudget && body.length + 1 <= 50) {
-                body.push(WORK);
+            if (bodyCost(body) + 150 <= energyBudget && body.length + 2 <= 50) {
+                body.push(WORK, MOVE);
             }
             return body;
         }

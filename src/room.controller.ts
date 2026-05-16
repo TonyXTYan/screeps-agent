@@ -1818,6 +1818,13 @@ function assignEnergySpendingJob(
             setJob(creep, 'refillTower', towerTarget);
             return;
         }
+
+        const terminalTarget = refillTerminalTarget(context, creep, reservations);
+        if (terminalTarget) {
+            reserveEnergySink(reservations, terminalTarget, Math.min(creep.store.getUsedCapacity(RESOURCE_ENERGY), terminalTarget.store.getFreeCapacity(RESOURCE_ENERGY)));
+            setJob(creep, 'depositEnergy', terminalTarget);
+            return;
+        }
     }
 
     const resumed = resumePrimaryEnergyJob(context, creep, capabilities, reservations);
@@ -3333,6 +3340,20 @@ function refillTowerTarget(
 ): EnergyStructure | null {
     return closest(creep, refillTowerTargets(context)
         .filter((target) => target.store.getFreeCapacity(RESOURCE_ENERGY) > (reservations.energySinks[target.id] ?? 0)));
+}
+
+function refillTerminalTarget(
+    context: RoomControllerContext,
+    creep: Creep,
+    reservations: JobReservations
+): StructureTerminal | null {
+    const terminal = context.structures.terminal;
+    if (!terminal || terminal.store.getFreeCapacity(RESOURCE_ENERGY) === 0) {
+        return null;
+    }
+    const reserved = reservations.energySinks[terminal.id] ?? 0;
+    const deficit = terminalEnergyReserveDeficit(context, reservations);
+    return deficit > reserved ? terminal : null;
 }
 
 function createReservations(context: RoomControllerContext): JobReservations {

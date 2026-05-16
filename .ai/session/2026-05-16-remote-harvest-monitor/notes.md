@@ -20,113 +20,140 @@
 - **Container threshold**: 50% of hauler carry capacity before selection
 - **Danger handling**: 50-tick cooldown when hostiles detected
 
-### Home Economy Gates (block remote spawns)
-- Stored < 2k: only scouts + emergency miners + degraded-route maintainers
-- Stored < 5k: limited to first enabled harvest remote
-- Local spawn pending: remote spawns skipped entirely
-
 ### Current Remote Rooms
-- W6N9 (active mining, route=ok)
-- W8N9 (active mining, route=degraded, stalls=1)
+- W6N9 (1 source, route=ok, dist=63)
+- W8N9 (2 sources, route=ok, dist=73-96)
 
 ---
 
-## Monitoring Round 1 (Tick ~70974300-70974690, ~10 min)
+## Monitoring Summary (3 rounds completed)
 
-### W6N9 Remote Room — Creep Status
-| Creep | Role | TTL | Status | Position |
-|-------|------|-----|--------|----------|
-| remoteMiner-Spawn1-70973881-2 | Miner (W5) | 705-1105 | mining | [37,37] |
-| remoteHauler-Spawn1-70961032 | Hauler (1100C) | 1144 | hauling | W6N9 |
-| remoteHauler-Spawn1-70961214 | Hauler (800C) | 1108-1398 | traveling/renewing | W7N9/W6N9 |
-| remoteMaintainer-Spawn1-70961299 | Maintainer | 196-406 | maintaining/repairing | W6N9 |
+### Round 1 (Tick ~70974300-70974690, ~10 min)
+- W6N9 throughput: ~150-170 energy/min to home room
+- Hauler cycle time: ~150-200 ticks (bottleneck)
+- W8N9 route degraded with stalls=1
+- Container HP declining across all remotes
+- Home storage: 0 (spawn-only bottleneck)
 
-**Allocation:** 1 miner / 2 haulers (1900C capacity) — route=ok, distance=63
+### Round 2 (Tick ~70977532-70977572, ~3 min)
+- Home storage: 31246-32146 (has storage now!)
+- W8N9 route recovered from degraded to ok
+- W8N9 container HP: 6fb8398e=115200, b3921e91=110600-111100
+- W6N9 container HP: 225100 (stable)
+- Hauler utilization: ~40% (low)
+- 4 remote haulers for W8N9, only 1 actively hauling
 
-### W6N9 Container Energy Levels (tracked over time)
-| Time | Container Energy | Source Energy | Regen Timer |
-|------|-----------------|---------------|-------------|
-| T+0s | 550/2000 | 1190/1500 | 29 |
-| T+30s | 300/2000 | 1090/1500 | 140 |
-| T+60s | 400/2000 | 990/1500 | 129 |
-| T+90s | 500/2000 | 890/1500 | 119 |
-| T+120s | 700/2000 | 690/1500 | 109 |
-| T+150s | 800/2000 | 590/1500 | 99 |
-| T+180s | 900/2000 | 490/1500 | 89 |
-| T+210s | 1000/2000 | 390/1500 | 79 |
-| T+240s | 1100/2000 | 290/1500 | 69 |
-| T+270s | 1200/2000 | 190/1500 | 59 |
-| T+300s | 300/2000 | 0/1500 | 49 |
-| T+330s | 200/2000 | 0/1500 | 39 |
-| T+360s | 100/2000 | 0/1500 | 29 |
-| T+390s | 0/2000 | 0/1500 | 19 |
-| T+420s | 0/2000 | 0/1500 | 9 |
-| T+450s | 0/2000 | 1490/1500 | 299 (regenerated) |
-| T+480s | 100/2000 | 1390/1500 | 289 |
-| T+510s | 200/2000 | 1290/1500 | 279 |
-| T+540s | 300/2000 | 1190/1500 | 269 |
-| T+570s | 500/2000 | 990/1500 | 249 |
-| T+600s | 600/2000 | 890/1500 | 239 |
-| T+630s | 700/2000 | 790/1500 | 229 |
+### Round 3 (Tick ~70977720-70977896, ~3 min)
+- Home storage: 56256→71378 (+15122 in 90 ticks = +168 energy/tick)
+- Terminal: 25934→9834 (drained, energy transferred to storage)
+- W8N9 container 6fb8398e: STABILIZED at 125300
+- W8N9 container b3921e91: DECLINING 120400→115400 (-5000 in 90 ticks)
+- W6N9 container 119f9ed3: INCREASING 220300→225300 (+5000, maintainer repairing)
+- W6N9 source: 1030→130/3000 (depleted, miner going idle)
+- Maintainer: switched from traveling to actively repairing
+- Hauler utilization: still ~40% (unchanged)
+- New claimers spawned for W8N9 and W6N9
 
-### Home Room W7N9 Energy Storage
-- **Spawn energy:** 2220-2280/2300 (consistently near full)
-- **Storage:** 0 (no dedicated energy storage structure)
-- **Terminal:** 340 energy
-- **Containers:** 0+0+17 (one container with 17 energy)
-- **Recovery mode:** No (home not in recovery)
+---
 
-### Key Metrics Derived
-**Harvest Rate:**
-- ~2 energy/tick (100 energy per 30s snapshot) from W5 miner
-- Source depletion: ~100 energy per 30s when active
-- Source regen time: ~150 ticks (from 0 to 1490)
+## Current State (Tick ~70977896)
 
-**Container Fill Rate:**
-- Fill rate: ~100 energy/30s when source available
-- Time to fill 0→1200: ~4.5 minutes (270 ticks)
-- Time to empty 1200→0: ~2 minutes (120 ticks) via hauler pickup
+### Home Room W7N9
+| Metric | Value | Trend |
+|--------|-------|-------|
+| Spawn energy | 2300/2300 | Full |
+| Storage | 71378 | STRONG UP (+39232 since R2) |
+| Terminal | 9834 | DRAINING (-41300 since R2) |
+| Containers | 256-546 | Stable |
+| Links | 163-290 + 70-80 + 699 | Stable |
+| Recovery mode | No | Good |
+| Total creeps | 9 | Stable |
 
-**Hauler Cycle Time (estimated):**
-- W6N9 container → W7N9 deposit → return: ~150-200 ticks
-- Hauler carries 800-1100 energy per trip
-- Two haulers provide ~1900C total capacity
+### W8N9 Remote Room (2 sources)
+| Source | Energy | Container | Container HP | Miner TTL | Route |
+|--------|--------|-----------|-------------|-----------|-------|
+| 4adbfc69 | 0/3000 (empty) | 0/2000 | 125300 (STABLE) | 894 | ok |
+| 4adbfc6b | 2300/3000 | 690/2000 | 115400 (DECLINING) | 1108 | ok |
 
-**Energy Throughput (W6N9):**
-- Net deposit to home per cycle: ~1200 energy (when container fills to ~1200)
-- Cycle time (fill + empty + regen): ~7-8 minutes
-- Estimated throughput: ~150-170 energy/minute to home room
+**Allocation:** 2 sources, each with 1 miner (5W) + 2 haulers (1400C each)
+- Source 4adbfc69: demand=3W/1152C, dist=96
+- Source 4adbfc6b: demand=3W/876C, dist=73
 
-### Issues and Bottlenecks Observed
-**CRITICAL — Hauler Stuck:**
-- remoteHauler-Spawn1-70967397-1 showed `stuck=143` ticks at W7N9 while traveling to deposit energy
+### W6N9 Remote Room (1 source)
+| Source | Energy | Container | Container HP | Miner TTL | Route |
+|--------|--------|-----------|-------------|-----------|-------|
+| 4adbff3a | 130/3000 (nearly depleted) | 510/2000 | 225300 (INCREASING) | 634 | ok |
 
-**ROUTE DEGRADATION — W8N9:**
-- Route status: `ok/degraded` with `stalls=1`
-- Error: `force-clearing station for re-route (failure #1) source=4adbfc69 blocked at W8N9:40,5`
-- This affected W8N9 harvesting, not W6N9 directly
+**Allocation:** 1 source, 1 miner (5W) + 2 haulers (1400C)
+- Demand: 3W/756C, dist=63
 
-**W6N9 Route:**
-- Remained `route=ok` throughout monitoring — no degradation
+---
 
-**MINER INEFFICIENCY:**
-- Miner sits idle at container when source depleted (0→1490 regen takes ~150 ticks)
-- During source depletion, miner wastes ~150 ticks waiting
+## Throughput Analysis
 
-**CONTAINER HP:**
-- W6N9 container HP: 212700/250000 → dropped to 220300 during monitoring
-- W8N9 containers: 121600/250000 and 120800/250000 (significantly damaged)
-- Container repair active but slow
+### Energy Flow
+- Home storage gaining +168 energy/tick (excellent rate)
+- Terminal drained significantly (energy likely transferred to storage)
+- Net remote contribution: ~150-200 energy/tick to home storage
 
-**W8N9 Over-allocation:**
-- Source 4adbfc69: `miners=2/1!` (2 miners assigned, only 1 needed)
+### Per-Source Efficiency
+**W8N9 4adbfc69:**
+- Source empty, container empty — 0% utilization
+- Miner idle, waiting for regen (regen=14 ticks)
+- Container HP stabilized at 125300
 
-### Summary
-W6N9 remote harvesting is functioning but with notable inefficiency:
-- **Effective throughput:** ~150-170 energy/minute to home room
-- **Bottleneck:** Hauler cycle time is the limiting factor, not mining speed
-- **Idle time:** Miner wastes ~150 ticks per cycle waiting for source regen
-- **Route health:** W6N9 route stable, W8N9 showing degradation
-- **Home storage:** No dedicated storage, relying on spawn energy (near capacity at 2280/2300)
+**W8N9 4adbfc6b:**
+- Source regenerated to 2300/3000 — ready for mining
+- Container at 690/2000 — moderate fill
+- Container HP declining at -55 HP/tick
+
+**W6N9 4adbff3a:**
+- Source nearly depleted (130/3000) — miner going idle
+- Container at 510/2000 — moderate fill
+- Container HP increasing (+5000 in 90 ticks) due to maintainer repair
+
+### Hauler Utilization
+- Overall: ~40% (2 of 5 remote haulers actively hauling at any time)
+- W8N9: 3 haulers, 1-2 hauling, rest traveling
+- W6N9: 2 haulers, 0-1 hauling, rest traveling
+- Home: 3 haulers, 1 permanently idle
+- Body: W1C14M7 (700C) — consistent across all remotes
+
+---
+
+## Issues Identified
+
+### Critical
+1. **W8N9 container b3921e91 HP declining** — 120400→115400 (-5000 in 90 ticks), ~55 HP/tick loss rate. At this rate, container dies in ~2100 ticks
+2. **Hauler utilization low** — 40% active hauling, 60% traveling/idle
+3. **Miner idle during source regen** — ~100-150 ticks wasted per source per cycle
+
+### Moderate
+4. **W8N9 claimer stuck** — stuck=4 ticks, not making progress
+5. **W6N9 claimer low TTL** — TTL=426, may die soon
+6. **Terminal draining** — 51134→9834, energy transferred to storage (normal?)
+
+### Minor
+7. **Hauler body size** — 700C seems small for dist=63-96 routes
+8. **Source capacity** — sources show 3000 capacity (not 1500 as in R1/R2) — RCL upgrade?
+
+---
+
+## Recommendations
+
+### Immediate
+1. **Repair W8N9 container b3921e91** — maintainer should prioritize this container
+2. **Reduce hauler count** when utilization is low — 2 per source may be overkill
+3. **Consider larger hauler bodies** for longer routes (dist=96)
+
+### Medium-term
+4. **Miner standby during source regen** — park miner, don't waste ticks at depleted source
+5. **Cross-source hauler sharing** — haulers could pick from either W8N9 source container
+6. **Claimer stuck handling** — investigate why W8N9 claimer is stuck
+
+### Long-term
+7. **Dynamic hauler scaling** — adjust hauler count based on container fill rates
+8. **Source balancing** — distribute mining across sources to avoid simultaneous depletion
+9. **Container repair priority** — maintainers should repair containers before roads
 
 ---

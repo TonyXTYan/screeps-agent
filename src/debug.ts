@@ -1,4 +1,5 @@
 import { ensureArchetype } from './creep.capabilities';
+import { getRoomStructures } from './room.structures';
 
 const DEBUG_CREEP_INTERVAL = 10;
 let debugCreepsLastPrintedAt: number | undefined;
@@ -666,6 +667,9 @@ export function tickAutoDebug(): void {
     } else if (tick === 1) {
         for (const room of ownedRooms()) {
             if (room.memory.debug_home) { printHomeCreepStatus(room.name); }
+            const { links } = getRoomStructures(room);
+            const summary = `src=${links.source.length} hub=${links.hub.length} ctrl=${links.controller.length} sink=${links.sink.length} other=${links.other.length}`;
+            console.log(`[LINKS] ${room.name}: ${summary}`);
         }
     } else if (tick === 2) {
         for (const room of ownedRooms()) {

@@ -1,5 +1,6 @@
 import * as creepHarvest from './creep.harvest';
 import * as roleDoctor from './role.doctor';
+import * as towerBasics from './tower.basics';
 
 export function energyTargets(creep: Creep): EnergyStructure[] {
     return creep.room.find(FIND_STRUCTURES, {
@@ -47,6 +48,8 @@ export function run(creep: Creep): void {
     } else {
         creep.memory.harvestTargetSourceId = undefined;
         creep.memory.harvestTargetSourceIndex = undefined;
+
+        if (towerBasics.tryFillTowerUnderSiege(creep)) { return; }
 
         const targets = energyTargets(creep);
 

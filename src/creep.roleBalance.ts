@@ -4,7 +4,8 @@ export const specification: { [role: string]: number[] } = {
     harvester: [1, 1, 1, 0, 0, 0, 0, 0],
     builder:   [1, 1, 1, 0, 0, 0, 0, 0],
     upgrader:  [1, 1, 1, 0, 0, 0, 0, 0],
-    doctor:    [2, 1, 1, 0, 0, 1, 0, 0]
+    doctor:    [2, 1, 1, 0, 0, 1, 0, 0],
+    defender:  [1, 0, 0, 1, 1, 0, 0, 2]
 };
 
 export function trySpawn(spawn: StructureSpawn): void {

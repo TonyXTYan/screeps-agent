@@ -1,4 +1,5 @@
 import * as creepHarvest from './creep.harvest';
+import * as towerBasics from './tower.basics';
 
 export function run(creep: Creep): void {
     if (creep.memory.upgrading === undefined) {
@@ -15,6 +16,8 @@ export function run(creep: Creep): void {
     }
 
     if (creep.memory.upgrading) {
+        if (towerBasics.tryFillTowerUnderSiege(creep)) { return; }
+
         creep.memory.harvestTargetSourceId = undefined;
         creep.memory.harvestTargetSourceIndex = undefined;
 

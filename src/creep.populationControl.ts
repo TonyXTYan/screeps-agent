@@ -1,57 +1,46 @@
 import * as creepRoleBalance from './creep.roleBalance';
+import { BODY_BUDGET_RATIO, BODY_MIN_BUDGET, bodyCost } from './creep.capabilities';
+import { isHostile } from './hostileUtils';
 
-export function check(): void {
-    const specification = creepRoleBalance.specification;
-    const spawn = Game.spawns['Spawn1'];
-    const room = spawn.room;
+const DEFENDER_SPAWN_ATTEMPT_INTERVAL = 5;
 
-    const totalEnergyAvailable = creepRoleBalance.countEnergy(spawn).available;
-    creepRoleBalance.balanceSpec(specification['harvester'], totalEnergyAvailable);
+export function checkDefenders(room: Room): void {
+    const spawn = room.find(FIND_MY_SPAWNS).find(s => !s.spawning);
+    if (!spawn) { return; }
 
-    const roles = creepRoleBalance.creepsType(room);
-    const harvesters = roles.harvester;
-    const builders = roles.builder;
-    const upgraders = roles.upgrader;
-    const doctors = roles.doctor;
+    const hostiles = room.find(FIND_HOSTILE_CREEPS, {
+        filter: isHostile
+    });
+    if (hostiles.length === 0) { return; }
 
-    console.log('creep.populationControl: Have harvester: ' + harvesters.length
-        + ', builders: ' + builders.length
-        + ', upgraders: ' + upgraders.length
-        + ', doctors: ' + doctors.length);
-
-    const energy = Math.max(totalEnergyAvailable, 300);
-
-    if (harvesters.length < 2) {
-        const newName = 'Harvester' + Game.time;
-        const o = spawn.spawnCreep(creepRoleBalance.balanceSpec(specification.harvester, energy), newName, { memory: { role: 'harvester' } });
-        console.log('creep.populationControl: Spawning new harvester: ' + newName + ', returned: ' + o);
+    const targetDefenders = Math.ceil(hostiles.length * 1.5);
+    let defenders = 0;
+    for (const name in Game.creeps) {
+        const creep = Game.creeps[name];
+        if (creep.memory.role !== 'defender') { continue; }
+        if (creep.room.name !== room.name && creep.memory.homeRoom !== room.name) { continue; }
+        defenders++;
     }
 
-    if (builders.length < 1) {
-        const newName = 'Builder' + Game.time;
-        const o = spawn.spawnCreep(creepRoleBalance.balanceSpec(specification.builder, energy), newName, { memory: { role: 'builder' } });
-        console.log('creep.populationControl: Spawning new builder: ' + newName + ', returned: ' + o);
+    const shouldAttemptDefenderSpawn = Game.time % DEFENDER_SPAWN_ATTEMPT_INTERVAL === 0;
+    if (shouldAttemptDefenderSpawn) {
+        console.log('creep.populationControl: Hostiles: ' + hostiles.length + ', defenders: ' + defenders + '/' + targetDefenders);
     }
+    if (defenders >= targetDefenders) { return; }
+    if (!shouldAttemptDefenderSpawn) { return; }
 
-    if (upgraders.length < 1) {
-        const newName = 'Upgrader' + Game.time;
-        const o = spawn.spawnCreep(creepRoleBalance.balanceSpec(specification.upgrader, energy), newName, { memory: { role: 'upgrader', upgrading: false } });
-        console.log('creep.populationControl: Spawning new upgrader: ' + newName + ', returned: ' + o);
-    }
+    const energy = room.energyAvailable; // includes spawn + extensions natively
+    const defenderBudget = Math.max(BODY_MIN_BUDGET, Math.floor(room.energyCapacityAvailable * BODY_BUDGET_RATIO));
+    const cappedEnergy = Math.min(energy, defenderBudget);
+    const defenderBody: BodyPartConstant[] = cappedEnergy >= 300
+        ? creepRoleBalance.balanceSpec(creepRoleBalance.specification.defender, cappedEnergy)
+        : [TOUGH, MOVE, ATTACK];
+    const defenderBodyCost = bodyCost(defenderBody);
+    if (energy < defenderBodyCost) { return; }
 
-    if (doctors.length < 1 && totalEnergyAvailable >= 500) {
-        const newName = 'Doctor' + Game.time;
-        const o = spawn.spawnCreep(creepRoleBalance.balanceSpec(specification.doctor, totalEnergyAvailable), newName, { memory: { role: 'doctor' } });
-        console.log('creep.populationControl: Spawning new doctor: ' + newName + ', returned: ' + o);
-    }
-
-    if (spawn.spawning) {
-        const spawningCreep = Game.creeps[spawn.spawning.name];
-        spawn.room.visual.text(
-            '🛠️' + spawningCreep.memory.role,
-            spawn.pos.x + 1,
-            spawn.pos.y,
-            { align: 'left', opacity: 0.8 }
-        );
-    }
+    const newName = 'Defender-' + spawn.name + '-' + Game.time;
+    const o = spawn.spawnCreep(defenderBody, newName, { memory: { role: 'defender', attacking: true, homeRoom: room.name } });
+    console.log('creep.populationControl: Spawning new defender: ' + newName + ', returned: ' + o);
 }
+
+

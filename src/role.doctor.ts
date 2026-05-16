@@ -1,14 +1,25 @@
 import * as creepHarvest from './creep.harvest';
 
-export function repairStructureFilter(structure: AnyStructure): boolean {
-    if (structure.structureType === STRUCTURE_WALL) {
-        return structure.hits < 10 * 1000;
+export function wallRampartRepairCap(rcl: number): number {
+    if (rcl <= 2) return 20_000;
+    if (rcl === 3) return 30_000;
+    if (rcl === 4) return 50_000;
+    if (rcl === 5) return 75_000;
+    if (rcl === 6) return 100_000;
+    if (rcl === 7) return 300_000;
+    return Infinity;
+}
+
+export function repairStructureFilter(structure: AnyStructure, rcl: number): boolean {
+    if (structure.structureType === STRUCTURE_WALL || structure.structureType === STRUCTURE_RAMPART) {
+        return structure.hits < Math.min(wallRampartRepairCap(rcl), structure.hitsMax);
     }
-    return structure.hits < structure.hitsMax;
+    return structure.hits < structure.hitsMax * 0.9;
 }
 
 export function repairTargetToRepair(creep: Creep): AnyStructure | null {
-    return creep.pos.findClosestByPath(FIND_STRUCTURES, { filter: repairStructureFilter });
+    const rcl = creep.room.controller?.level ?? 0;
+    return creep.pos.findClosestByPath(FIND_STRUCTURES, { filter: (s) => repairStructureFilter(s as AnyStructure, rcl) });
 }
 
 export function repairJob(creep: Creep): boolean {
@@ -47,10 +58,12 @@ export function run(creep: Creep): void {
         });
 
         if (healTargets.length > 0) {
-            const transferCode = creep.heal(healTargets[0]);
+            const healTarget = creep.pos.findClosestByRange(healTargets) ?? healTargets[0];
+            const transferCode = creep.heal(healTarget);
             if (transferCode === ERR_NOT_IN_RANGE) {
-                creep.moveTo(healTargets[0], { visualizePathStyle: { stroke: '#65fd62' } });
-            } else {
+                creep.rangedHeal(healTarget);
+                creep.moveTo(healTarget, { visualizePathStyle: { stroke: '#65fd62' } });
+            } else if (transferCode !== OK) {
                 console.log('role.doctor: heal return code: ' + transferCode);
             }
         } else if (!repairJob(creep)) {

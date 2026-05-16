@@ -1,0 +1,6 @@
+[submodule "docs"]
+	path = docs
+	url = https://github.com/screeps/docs
+[submodule "screeps_console"]
+	path = screeps_console
+	url = https://github.com/screepers/screeps_console

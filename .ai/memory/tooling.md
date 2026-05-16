@@ -1,6 +1,6 @@
 ---
 name: Tooling & Agent Conventions
-description: Script location, .local-scripts symlink warning, local docs location, and docs source-of-truth guidance
+description: Script location, .local-scripts symlink warning, local docs location, docs source-of-truth guidance, and GitHub workflow preference
 type: project
 ---
 
@@ -20,3 +20,8 @@ Scraped Screeps docs are saved locally for convenience:
 If local docs seem stale, ambiguous, or inconsistent with runtime behavior, treat the official online Screeps docs as the source of truth:
 - API reference: `https://docs.screeps.com/api/`
 - Guides and reference pages: `https://docs.screeps.com/`
+
+## GitHub Workflow Preference
+- Prefer `gh` CLI for GitHub write actions in this repo (posting PR comments, reviews, resolving threads, etc.).
+- The Codex GitHub app/connector is fine for read operations, but write actions can fail with `403 Resource not accessible by integration`.
+- If both tools are available, default to: connector for reads, `gh` for writes.

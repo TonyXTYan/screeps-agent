@@ -1,0 +1,76 @@
+---
+name: Known Issues
+description: Current known alignment, cleanup, and architecture follow-up work
+type: project
+---
+
+# Known Issues
+
+This file tracks known follow-up work that future agents should consider before making nearby edits.
+
+## Runtime Cleanup
+
+- `.DS_Store` files exist in the repo and `.ai`; remove them in a dedicated cleanup commit and make sure `.gitignore` covers them.
+
+## Strategic Alignment
+
+- Local miners now include one standby substitute, but active source miner scaling is still mostly count-based and does not explicitly add extra active miners when per-source WORK is under target.
+- Legacy role scripts (`role.harvester.ts`, `role.builder.ts`) still `delete Memory.creeps[creep.name]` when idle. This can destroy remote-creep memory (archetype, remoteRoom, sourceId, homeRoom) if a remote creep falls through to legacy fallback and happens to be idle. Remove or add a guard.
+- Remote danger detection is visibility-driven only; unseen hostiles between scout passes can still cause delayed pauses.
+- (Fixed) Remote hauler target convergence is now mitigated in two layers: remote energy selection subtracts other empty remote-hauler claims, and per-target assignment now applies an access-tile-aware soft cap (up to 2 empty haulers per target). Stuck haulers on `withdrawEnergy`/`pickupEnergy` also retarget after 4+ stuck ticks.
+- (Fixed) Haulers no longer prioritize links over source containers. Source containers are now selected before links, preventing light source-link buffers from diverting haulers away from full source containers. This applies to both remote and local haulers. Remote haulers also prioritize full containers over dropped-energy piles.
+- (Fixed) Remote haulers no longer path directly at occupied source containers. When withdrawing from a remote source container, haulers choose a free adjacent access tile because the static miner normally occupies the container tile.
+- (Fixed) Shared movement now negotiates creep congestion: stuck creeps request nearby blockers to yield into valid adjacent tiles, and blockers execute that yield request on their own turn. Static miners on source containers are explicitly exempt.
+- (Fixed) Remote danger handling now lets any remote creep that sees nearby hostiles mark `dangerUntil` for the remote and head toward the home-room exit instead of only local-fleeing inside the dangerous room.
+- (Fixed) Remote miner over-spawning: `projectedRemoteMinerWork` now uses full body capabilities for spawning creeps and the spawn loop caps room miners at `sourceCount` active to prevent accumulation.
+- (Fixed) Remote miner/source congestion: active remote miners are now capped by per-source slot capacity (1 for container/fixed-station sources), reassigned by available slots, and overflow miners fall back to standby-return flow instead of crowding a single static station.
+- (Fixed) Remote pending-container handoff: remote source plans now track pending container construction sites separately from built containers. Pending sites count as static mining stations for miner caps/body planning, but haulers only withdraw from built containers.
+- (Fixed) Remote miner bad-station loops: remote miners now bias room-entry travel toward their assigned source station, validate local entry-to-station paths, treat complete winding local paths as reachable, force a fresh same-room path when moving to exact pending-container station tiles, and mark a route degraded for road-health work if an active miner stalls on one tile without fatigue. Degraded routes preserve cached paths, prioritize extra road sites, and do not clear the miner's source assignment into source-less standby. Remote debug no longer runs the full memory audit every 10 ticks, so path caches are not constantly cleared outside deploy/manual audits.
+- (Fixed) Standby remote miner boundary ping-pong: `assignRemoteCreep()` now handles `remoteMiner + remoteStandby` before the generic "travel to remote room" branch. Previously standby miners in home would get re-routed outbound, then immediately routed home again, causing repeated exit-edge bouncing/stalls.
+- (Fixed) Remote standby renew loop and late dispatch: standby miners previously renewed at home spawn and only dispatched on active-miner TTL < 300, delaying handoff positioning. Standby renewal is now disabled, replacement trigger is TTL <= 200, standby replacements are source-targeted, and they pre-position in the remote room near the source (range 4-10) until incumbent death.
+- (Fixed) Blank remote standby miners: source-less `remoteStandby` miners now claim uncovered accessible sources instead of idling at home while a remote source reports `miners=0/1`.
+- (Fixed) Remote standby bypass: low-TTL active remote miners now request source-targeted standby replacements before active deficit spawns, same-source standby miners block active deficit spawning until they can promote, and source-less standby debt blocks additional active deficit spawns for that remote.
+- (Fixed) Remote hauler now picks from the source container with the most energy (not just the assigned source's container), preventing haulers from ignoring productive sources.
+- (Fixed) Remote hauler now opportunistically builds road/container construction sites within range 3 while transiting (not only in the remote room with a near-full container).
+- (Fixed) Local standby miner race: `sourceSpawnDeficit` now accepts `pendingStandbyMiners` count and suppresses redundant active-miner spawns when a standby is in-flight and total coverage remains adequate. Previously, if an active miner died while the standby was spawning, an extra active miner was spawned, yielding N+2 for N sources.
+- (Fixed) Doctor WORK parts no longer inflate `workerWork` in `measureCapabilities`. Doctors have 2 WORK parts in their body plan but prioritize healing; their work capacity was counted as available for building/repairing/upgrading, reducing the worker deficit signal and causing under-supply of workers.
+- (Fixed) Remote hauler idle detection now works when the remote room is invisible. `hasIdleRemoteHauler` no longer immediately returns `false` for unviewed rooms; instead it checks for an empty-store hauler waiting at home, treating it as idle to prevent spawning duplicates before the first one departs.
+- (Fixed) Remote hauler home-room loop: `assignRemoteCreep()` no longer routes empty `remoteHauler` creeps in the home room to withdraw from local links. That branch trapped haulers in home `withdrawEnergy`/`depositEnergy` cycling and prevented outbound remote hauling.
+- (Fixed) Worker `workRatio` now activates at RCL 3+ (was RCL 4+), and ratio 3 at RCL 4+ with >30k construction (was RCL 6+). This gives workers more WORK parts per body at lower RCL, reducing the number of workers needed to meet demand.
+- (Fixed) Worker energy-spending priority regression: `assignEnergySpendingJob` could assign the "guaranteed upgrader" before the "guaranteed builder". In low-worker rooms this starved construction despite available storage energy. The ordering is restored so one builder is reserved before upgrade whenever construction sites exist.
+- (Fixed) Worker fallback harvesting could become sticky: once a worker was assigned `harvestSource`, `keepCurrentJob` kept it indefinitely, so workers could keep mining even with stocked storage. `currentJobStillValid` now invalidates non-miner `harvestSource` once energy is loaded and forces worker `withdrawEnergy` retargeting to storage when storage has energy.
+- (Fixed) Hauler refill-from-storage: empty haulers never considered storage as a withdrawal source, so when no containers/links had energy but storage did and spawns needed refilling, haulers idled instead of doing storage→spawn runs. Fixed by adding a hauler-specific check in `assignJob`'s gathering phase (`room.controller.ts`) that routes the hauler to storage when `refillSpawnTarget` or `refillTowerTarget` is non-null.
+- (Fixed) Mineral-site container drain: local haulers/workers only used `withdrawEnergy` from structures, so non-energy minerals parked in the planned mineral container were never hauled to storage/terminal. Fixed by adding a targeted `withdrawResource` assignment for non-energy resources in the planned mineral container before standard energy-withdraw selection.
+- (Fixed) Hauler low-value mining trips: local and remote haulers could path to source/mineral mining sites for small trickles. Mining-site pickups now require at least 50% of the hauler carry capacity before assignment.
+- (Fixed) Remote miner container detours: remote miners could be assigned auxiliary remote build jobs before their source-mining assignment, causing container-seated miners to leave mining for nearby build sites. Build assignment now skips `remoteMiner` creeps that are already sitting on a container station tile.
+- (Fixed) Remote hauler cycle drift: remote haulers previously mixed with generic remote flow (no dedicated post-delivery renew phase, could idle in remotes when empty, and could deliver to non-storage sinks). Remote haulers now use a dedicated cycle: remote pickup → home storage deposit → spawn renew to TTL > 1400, with no-job home idle/wander and renew-on-ttl<500 behavior.
+- (Fixed) Remote hauler pass-by maintenance gap: while on haul jobs, remote haulers with WORK parts did not opportunistically repair/build nearby structures/sites unless explicitly assigned a build/repair job. Job execution now attempts non-detouring range-3 build/repair side actions for `remoteHauler`.
+- (Fixed) Remote spawn churn under home energy pressure: remote spawning is now blocked when home stored energy is below 2k or spawn/extension energy is below 50%, income-consuming remote spawns are throttled to the first enabled harvest remote below 5k stored energy, route-congested remotes suppress new haulers, and scaled remote bodies must meet role-specific minimums.
+- (Fixed) Hauler overflow: `chooseSpawnRequest()` had no hard count maximum for local haulers — only a capacity check. Old small-body haulers (from early-game or low-energy spawns) kept `haulerCapacity` below demand, causing 7–8 haulers to accumulate at RCL 6. Fixed by refactoring `desiredHaulerCapacity` to return `{ demand, maxCount }` (exposing the already-computed `maxHaulerCreeps`) and adding a `haulerCountWithPending < maxHaulerCount` guard in `chooseSpawnRequest`. RemoteHaulers were already adequately capped (`MAX_REMOTE_HAULERS_PER_SOURCE=2`, per-room cap, idle detection).
+- (Fixed) Worker overflow: `chooseSpawnRequest()` had no hard count cap — workers spawned until total WORK capacity met `desiredWorkerWork()` (up to 12+ at high RCL with many construction sites), producing 12 workers at RCL 6. Fixed by adding `maxWorkerCount` per-RCL cap `[0,2,2,2,3,4,4,4,4]` in `chooseSpawnRequest()`, adding `!pending.some(r => r.archetype === 'worker')` to the emergency-recovery guard, adding `'defender'` to `CreepArchetype` in `types.d.ts`, adding a defender role check in `inferArchetype()` before the `return 'worker'` fallback, and excluding `'defender'` archetype from `workerWork` in `measureCapabilities()`. Previously ATTACK+MOVE defender creeps were misclassified as workers and consumed a worker count slot.
+- Remote path demand can be noisy when long paths are temporarily incomplete (fallback distance is conservative by design).
+- Wall/rampart repair caps (`wallRampartRepairCap` in `role.doctor.ts`) are hardcoded; a future improvement would make them configurable via `room.memory.plan` for rooms that want custom defense budgets.
+
+## Architecture Cleanup
+
+- Two parallel body planning systems exist: `creep.capabilities.ts:planBodyForArchetype()` (strategic) and `creep.roleBalance.ts:balanceSpec()` (legacy). They can produce different bodies for similar purposes. Unify when legacy roles are fully retired.
+- Structure discovery cache is still write-through only (not read back); writes are now throttled and forced on structure-count changes.
+- `firstStoredResource()` exists in both `creep.jobRunner.ts` and `room.controller.ts`; consider consolidating once shared utilities exist.
+- `closest()` and `closestByRange()` in `room.controller.ts` overlap heavily.
+- `interruptReason` is written for observability but not consumed.
+- Remote hauler repair/build branches in `assignRemoteCreep()` rely on the optional trailing WORK part added by `planBodyForArchetype` (only when budget allows +100 energy). These branches do nothing if the hauler spawned without the WORK part.
+- Remote room memory (plans, serialized paths, demand data) is never garbage-collected when a room is disabled. Over many enable/disable cycles, this accumulates stale memory.
+- `room.controller.ts` is 2,868 lines — a god module. Candidates for extraction: remote room logic (~400 lines), spawn planning (~250 lines), job assignment (~300 lines).
+
+## Deferred By Strategy
+
+- Market trading is not enabled.
+- Lab reactions and boosts are not enabled.
+- Factory automation is not enabled.
+- Power processing is not enabled.
+- Observer automation is not enabled.
+- Nuker automation is not enabled.
+- Combat squads and remote defense are not enabled.
+- Autonomous claiming is not enabled.
+
+These should stay disabled until `architecture/*.md` (or explicit `room.memory.plan` policy config) documents enabling rules.

@@ -85,6 +85,7 @@ const BUILD_RESERVATION_TICKS = 10;
 const REPAIR_RESERVATION_TICKS = 5;
 const REMOTE_DANGER_TICKS = 1500;
 const REMOTE_PATH_REFRESH_INTERVAL = 5000;
+const REMOTE_INACCESSIBLE_RETRY_TICKS = 500;
 const REMOTE_PATH_INCOMPLETE_RETRY_TICKS = 100;
 const REMOTE_MAX_STATION_STALLS = 3;
 const REMOTE_MAX_STATION_FAILURES = 3;
@@ -442,7 +443,7 @@ export function assignRemoteCreep(creep: Creep): boolean {
     if (creep.room.name === remoteRoom) {
         setJob(creep, 'idle', creep.room.controller);
     } else {
-        setTravelJob(creep, homeRoom);
+        setTravelJob(creep, remoteRoom);
     }
     return true;
 }
@@ -573,6 +574,10 @@ function markRemoteSourceRouteHealthy(sourcePlan: RemoteSourcePlan): void {
     sourcePlan.routeHealth = 'healthy';
     sourcePlan.stallCount = 0;
     sourcePlan.lastHarvestedAt = Game.time;
+    sourcePlan.stationFailures = 0;
+    sourcePlan.blockedApproachX = undefined;
+    sourcePlan.blockedApproachY = undefined;
+    sourcePlan.blockedApproachRoom = undefined;
 }
 
 function markRemoteSourceRouteDegraded(sourcePlan: RemoteSourcePlan, pos: RoomPosition): void {
@@ -602,8 +607,8 @@ function markRemoteSourceRouteDegraded(sourcePlan: RemoteSourcePlan, pos: RoomPo
                 stationFailures + ') source=' + sourcePlan.sourceId +
                 ' blocked at ' + pos.roomName + ':' + pos.x + ',' + pos.y);
         } else {
-            // Too many station failures: give up for full interval
-            sourcePlan.pathUpdatedAt = Game.time;
+            // Too many station failures: give up for shorter interval to allow standby miner survival
+            sourcePlan.pathUpdatedAt = Game.time - REMOTE_PATH_REFRESH_INTERVAL + REMOTE_INACCESSIBLE_RETRY_TICKS;
             console.log('room.controller: permanently inaccessible after ' + stationFailures +
                 ' station failures source=' + sourcePlan.sourceId +
                 ' at ' + pos.roomName + ':' + pos.x + ',' + pos.y);
@@ -1069,6 +1074,10 @@ function updateRemoteRoomPlans(homeRoom: Room): void {
                     }
                     if (locallyReachable) {
                         existing.routeAccessible = true;
+                        existing.stationFailures = 0;
+                        existing.blockedApproachX = undefined;
+                        existing.blockedApproachY = undefined;
+                        existing.blockedApproachRoom = undefined;
                         latestPath = route.path;
                         existing.pathDistance = route.path.length;
                         existing.pathSerialized = serializeRemotePath(route.path);
@@ -1728,6 +1737,17 @@ function assignJob(context: RoomControllerContext, creep: Creep, reservations: J
             }
         }
 
+        if ((archetype === 'hauler' || archetype === 'worker') && roomNeedsEnergyRecovery(context)) {
+            const spawnTarget = refillSpawnTarget(context, creep, reservations);
+            if (spawnTarget) {
+                const withdrawalTarget = energyWithdrawalTarget(context, creep, archetype, reservations);
+                if (withdrawalTarget) {
+                    setJob(creep, 'withdrawEnergy', withdrawalTarget);
+                    return;
+                }
+            }
+        }
+
         if (archetype === 'hauler' &&
             context.structures.storage &&
             terminalEnergyReserveDeficit(context, reservations) > 0 &&
@@ -2229,7 +2249,7 @@ function chooseSpawnRequest(context: RoomControllerContext, pending: SpawnReques
 
     if (capacities.workerWork < workerWorkDemand && !pending.some(r => r.archetype === 'worker')) {
         const rcl = context.room.controller?.level ?? 0;
-        const maxWorkerCount = [0, 2, 2, 2, 3, 4, 4, 4, 4][Math.min(rcl, 8)] || 4;
+        const maxWorkerCount = [0, 2, 2, 2, 3, 3, 3, 4, 4][Math.min(rcl, 8)] || 4;
         const workerCreeps = context.creeps.filter(c => ensureArchetype(c) === 'worker' && !c.spawning).length;
         if (workerCreeps < maxWorkerCount) {
             return { archetype: 'worker', reason: 'worker deficit ' + capacities.workerWork + '/' + workerWorkDemand + ' ' + workerCreeps + '/' + maxWorkerCount, workRatio: workerWorkRatio(context) };

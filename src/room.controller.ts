@@ -1817,6 +1817,8 @@ function assignJob(context: RoomControllerContext, creep: Creep, reservations: J
         if (archetype === 'worker' &&
             creep.store.getFreeCapacity(RESOURCE_ENERGY) > 0 &&
             hasEnergyToGather(context)) {
+            if (assignWorkerPartialEnergyWork(context, creep, capabilities, reservations)) { return; }
+
             // Not full and there's ambient energy — fall through to top up from storage.
             // (energyWithdrawalTarget always returns storage for workers, so the "dump
             // partial then re-withdraw" pattern is never needed and only causes bouncing.)
@@ -1916,6 +1918,37 @@ function hasEnergyToGather(context: RoomControllerContext): boolean {
     if (context.structures.links.controller.some(l => l.store.getUsedCapacity(RESOURCE_ENERGY) > 0)) return true;
     if (context.structures.links.hub.some(l => l.store.getUsedCapacity(RESOURCE_ENERGY) > 0)) return true;
     if (context.structures.links.sink.some(l => l.store.getUsedCapacity(RESOURCE_ENERGY) > 0)) return true;
+    return false;
+}
+
+function assignWorkerPartialEnergyWork(
+    context: RoomControllerContext,
+    creep: Creep,
+    capabilities: ReturnType<typeof getCreepCapabilities>,
+    reservations: JobReservations
+): boolean {
+    if (capabilities.build > 0 && context.constructionSites.length > 0) {
+        const site = bestConstructionSite(creep, context.constructionSites, reservations, capabilities.build);
+        if (site) {
+            reserveConstructionProgress(reservations, site, capabilities.build);
+            rememberPrimaryJob(creep, 'build', site);
+            setJob(creep, 'build', site);
+            return true;
+        }
+    }
+
+    if (capabilities.repair > 0 &&
+        context.repairTargets.length > 0 &&
+        shouldRepairWithCreeps(context)) {
+        const repairTarget = repairTargetFor(creep, context.repairTargets, reservations, capabilities.repair);
+        if (repairTarget) {
+            reserveRepairProgress(reservations, repairTarget, capabilities.repair);
+            rememberPrimaryJob(creep, 'repair', repairTarget);
+            setJob(creep, 'repair', repairTarget);
+            return true;
+        }
+    }
+
     return false;
 }
 

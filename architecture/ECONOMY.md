@@ -90,6 +90,9 @@ For haulers/workers with free capacity:
 For haulers carrying energy but with free capacity & available drops:
   → Continue gathering dropped resources (skip spending phase)
 
+For workers carrying partial energy:
+  → Continue available build/repair work before topping up, so chains of small wall/rampart sites do not cause refill bounces
+
 Emergency refill preemption:
   → During spawn/extension pressure, energy-carrying local haulers and support creeps interrupt idle/deposit/withdraw/build/repair/upgrade work to refill spawn/extensions first, then low towers.
 

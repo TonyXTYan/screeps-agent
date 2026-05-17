@@ -235,8 +235,8 @@ function buildClaimerBody(energyBudget: number, minClaimParts: number, maxClaimP
 
 function buildWorkerBody(energyBudget: number, workRatio: number = 1): BodyPartConstant[] {
     const body: BodyPartConstant[] = [];
-    // MOVE count = ceil((WORK + CARRY) / 2) for full speed on roads
-    const moveCount = Math.ceil((workRatio + 1) / 2);
+    // MOVE = WORK: satisfies road-when-loaded (2*MOVE >= WORK+CARRY) and plain-when-empty (2*MOVE >= 2*WORK)
+    const moveCount = workRatio;
     const unitParts = workRatio + 1 + moveCount;
     const unitCost = workRatio * 100 + 50 + moveCount * 50;
     while (body.length + unitParts <= 50 && bodyCost(body) + unitCost <= energyBudget) {

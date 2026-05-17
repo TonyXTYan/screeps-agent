@@ -1628,11 +1628,11 @@ function runLinks(context: RoomControllerContext): void {
     const receivers = linkReceivers(context);
     if (receivers.length === 0) { return; }
 
-    const senders = [
+    const senders = uniqueLinks([
         ...context.structures.links.source,
         ...context.structures.links.hub.filter((link) => spawnEnergyPressure(context) === 0),
         ...context.structures.links.other
-    ];
+    ]);
 
     for (const link of senders) {
         if (link.cooldown > 0) { continue; }
@@ -1757,14 +1757,6 @@ function assignJob(context: RoomControllerContext, creep: Creep, reservations: J
             return;
         }
 
-        if ((archetype === 'hauler' || archetype === 'worker') &&
-            context.structures.storage &&
-            context.structures.storage.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
-            if (refillSpawnTarget(context, creep, reservations) || refillTowerTarget(context, creep, reservations)) {
-                setJob(creep, 'withdrawEnergy', context.structures.storage);
-                return;
-            }
-        }
 
         if ((archetype === 'hauler' || archetype === 'worker') && roomNeedsEnergyRecovery(context)) {
             const spawnTarget = refillSpawnTarget(context, creep, reservations);
@@ -3965,12 +3957,14 @@ function energyWithdrawalTarget(
     const terminalTarget = context.structures.terminal && terminalAvailable > 0 ? context.structures.terminal : null;
 
     if (archetype === 'hauler' || archetype === 'remoteHauler') {
-        const demandLinks = [...context.structures.links.sink, ...context.structures.links.hub, ...context.structures.links.controller]
+        const demandLinks = [...context.structures.links.hub, ...context.structures.links.controller, ...context.structures.links.sink]
             .filter((link) => link.store.getUsedCapacity(RESOURCE_ENERGY) > 0);
-        return closest(creep, sourceContainers) ??
-               closest(creep, sourceLinks) ??
+        // Primary: drain hub/controller/sink links so they always have capacity for incoming transfers.
+        // Fallback to source containers/links only when link chain can't keep up (overflow).
+        return closest(creep, demandLinks) ??
                terminalTarget ??
-               closest(creep, demandLinks);
+               closest(creep, sourceContainers) ??
+               closest(creep, sourceLinks);
     }
 
     const linkWithEnergy = closest(creep, [...context.structures.links.controller, ...context.structures.links.hub, ...sourceLinks]

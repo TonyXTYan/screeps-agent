@@ -475,8 +475,10 @@ function tryRenewHomeCreep(creep: Creep): boolean {
     const renewBlockedByEconomy =
         room.memory.energyRecoveryActive === true ||
         room.energyAvailable < Math.floor(room.energyCapacityAvailable * 0.9);
-    if (renewBlockedByEconomy && ttl > HOME_RENEW_CRITICAL_TTL) {
-        creep.memory.renewing = false;
+
+    // Only block *starting* a new renew cycle when economy is stressed.
+    // If already renewing, let the cycle complete to avoid spawn-bounce.
+    if (renewBlockedByEconomy && !creep.memory.renewing && ttl > HOME_RENEW_CRITICAL_TTL) {
         return false;
     }
 

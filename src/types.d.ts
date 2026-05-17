@@ -217,6 +217,7 @@ interface CreepMemory {
     remoteRenewing?: boolean;
     remoteStandby?: boolean;
     remoteHaulerRenewAfterTrip?: boolean;
+    remoteHaulerReturning?: boolean;
     remoteHaulerIdleUntil?: number;
     remoteHaulerLastPickupWasDropped?: boolean;
     remoteHaulerWanderX?: number;

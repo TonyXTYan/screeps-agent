@@ -740,7 +740,7 @@ function assignRemoteHaulerCycle(
     const full = creep.store.getFreeCapacity() === 0;
 
     if (totalUsed > 0) {
-        if (!full && creep.room.name === remoteRoom) {
+        if (!full && !creep.memory.remoteHaulerReturning && creep.room.name === remoteRoom) {
             const followDroppedTopUp = creep.memory.remoteHaulerLastPickupWasDropped === true &&
                 creep.memory.jobType !== 'pickupEnergy';
             const source = findRemoteEnergySource(creep, remotePlan, {
@@ -759,6 +759,7 @@ function assignRemoteHaulerCycle(
             }
         }
 
+        creep.memory.remoteHaulerReturning = true;
         creep.memory.remoteHaulerLastPickupWasDropped = undefined;
         creep.memory.remoteRenewing = false;
         creep.memory.remoteHaulerRenewAfterTrip = ttl < REMOTE_HAULER_POST_TRIP_RENEW_START_TTL ? true : undefined;
@@ -768,6 +769,7 @@ function assignRemoteHaulerCycle(
         return true;
     }
 
+    creep.memory.remoteHaulerReturning = undefined;
     if (creep.memory.remoteHaulerRenewAfterTrip) {
         const renewing = manageRemoteHaulerRenewal(creep, homeRoom, true);
         if ((creep.ticksToLive ?? 0) >= REMOTE_HAULER_RENEW_STOP_TTL) {

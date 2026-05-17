@@ -1,4 +1,4 @@
-import { BODY_BUDGET_RATIO, BODY_MIN_BUDGET, bodyCost, ensureArchetype, getBodyCapabilities, getCreepCapabilities, planBodyForArchetype } from './creep.capabilities';
+import { BODY_BUDGET_RATIO, BODY_MIN_BUDGET, MAX_CARRY_CAPACITY, bodyCost, ensureArchetype, getBodyCapabilities, getCreepCapabilities, planBodyForArchetype } from './creep.capabilities';
 import { clearJob } from './creep.jobRunner';
 import { getRoomStructures, RoomStructureCache } from './room.structures';
 import { repairStructureFilter, wallRampartRepairCap } from './role.doctor';
@@ -3795,7 +3795,7 @@ function desiredHaulerCapacity(context: RoomControllerContext): { demand: number
     const rawDemand = context.sources.length * base + rclBonus + salvageBonus;
 
     const haulerBudget = Math.max(BODY_MIN_BUDGET, Math.floor(context.room.energyCapacityAvailable * BODY_BUDGET_RATIO));
-    const maxCarryPerHauler = 2 * Math.floor(haulerBudget / 150) * CARRY_CAPACITY;
+    const maxCarryPerHauler = Math.min(MAX_CARRY_CAPACITY, 2 * Math.floor(haulerBudget / 150) * CARRY_CAPACITY);
     const maxCount = Math.max(2, Math.ceil(rawDemand / Math.max(1, maxCarryPerHauler)) + 1);
     return { demand: Math.min(rawDemand, maxCarryPerHauler * maxCount), maxCount };
 }

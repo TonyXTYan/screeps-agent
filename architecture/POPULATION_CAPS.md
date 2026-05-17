@@ -22,8 +22,7 @@ const rawDemand = sources.length * base + rclBonus + salvageBonus;
 
 // budget capped at 50% of capacity (BODY_BUDGET_RATIO=0.5, BODY_MIN_BUDGET=300)
 const haulerBudget = max(BODY_MIN_BUDGET, floor(energyCapacityAvailable * BODY_BUDGET_RATIO));
-const maxCarryFromBudget = 2 * floor(haulerBudget / 150) * CARRY_CAPACITY;
-const maxCarryPerHauler = min(MAX_CARRY_CAPACITY, maxCarryFromBudget);  // hard cap: 1000
+const maxCarryPerHauler = min(MAX_CARRY_CAPACITY, 2 * floor(haulerBudget / 150) * CARRY_CAPACITY);  // hard cap: 1000
 const maxCount = max(2, ceil(rawDemand / maxCarryPerHauler) + 1);
 ```
 

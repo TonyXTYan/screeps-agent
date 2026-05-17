@@ -18,7 +18,7 @@ export interface CreepCapabilities {
 
 export const BODY_BUDGET_RATIO = 0.5;
 export const BODY_MIN_BUDGET = 300;
-const MAX_CARRY_CAPACITY = 1000;
+export const MAX_CARRY_CAPACITY = 1000;
 
 const BODY_PART_COST: { [part in BodyPartConstant]: number } = {
     [MOVE]: 50,

@@ -24,7 +24,7 @@ function acquireRenewSpawnFrom(creep: Creep, spawns: StructureSpawn[]): Structur
     const reservedSpawnId = renewSpawnByCreepName[creep.name];
     if (reservedSpawnId) {
         const reservedSpawn = spawns.find((spawn) => spawn.id === reservedSpawnId && !spawn.spawning);
-        if (reservedSpawn && (!reservedSpawnIds[reservedSpawn.id] || reservedSpawnOwner[reservedSpawn.id] === creep.name)) {
+        if (reservedSpawn && canUseReservedSpawn(creep, reservedSpawn)) {
             reserveSpawnForCreep(creep, reservedSpawn);
             return reservedSpawn;
         }
@@ -33,12 +33,30 @@ function acquireRenewSpawnFrom(creep: Creep, spawns: StructureSpawn[]): Structur
 
     const availableSpawns = spawns.filter((candidate) =>
         !candidate.spawning &&
-        (!reservedSpawnIds[candidate.id] || reservedSpawnOwner[candidate.id] === creep.name));
+        canUseReservedSpawn(creep, candidate));
     const spawn = creep.pos.findClosestByRange(availableSpawns) as StructureSpawn | null;
     if (spawn) {
         reserveSpawnForCreep(creep, spawn);
     }
     return spawn;
+}
+
+function canUseReservedSpawn(creep: Creep, spawn: StructureSpawn): boolean {
+    if (!reservedSpawnIds[spawn.id]) { return true; }
+    const ownerName = reservedSpawnOwner[spawn.id];
+    if (!ownerName || ownerName === creep.name) { return true; }
+
+    const owner = Game.creeps[ownerName];
+    if (!owner) { return true; }
+
+    const myRange = creep.pos.getRangeTo(spawn);
+    const ownerRange = owner.pos.getRangeTo(spawn);
+
+    // If the current owner is still traveling, let an adjacent creep take over
+    // so at least one renew can happen this tick.
+    if (myRange <= 1 && ownerRange > 1) { return true; }
+
+    return false;
 }
 
 function reserveSpawnForCreep(creep: Creep, spawn: StructureSpawn): void {

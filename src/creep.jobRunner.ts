@@ -53,6 +53,8 @@ const MOVE_STUCK_ESCAPE_TICKS = 12;
 const TRAFFIC_YIELD_TTL = 2;
 const REMOTE_MINER_AGGRESSIVE_REPATH_TICKS = 6;
 const REMOTE_MINER_SOURCE_FALLBACK_TICKS = 14;
+const REMOTE_CONTAINER_REPAIR_INTERVAL = 5;
+const REMOTE_CONTAINER_REPAIR_THRESHOLD = 0.5;
 
 export function clearJob(creep: Creep): void {
     creep.memory.jobType = undefined;
@@ -104,6 +106,18 @@ function harvestSource(creep: Creep): number {
     if (creep.store.getFreeCapacity(RESOURCE_ENERGY) === 0 && creep.store.getCapacity(RESOURCE_ENERGY) > 0) {
         if (offloadEnergyNearby(creep)) { return OK; }
         return creep.drop(RESOURCE_ENERGY);
+    }
+
+    // Remote miners repair their mining container when it drops below threshold.
+    // Repair (WORK) is mutually exclusive with harvest (WORK), so we skip harvest on repair ticks.
+    // We also don't offload this tick to avoid competing with repair for carry energy.
+    if (creep.memory.archetype === 'remoteMiner' &&
+        Game.time % REMOTE_CONTAINER_REPAIR_INTERVAL === 0 &&
+        station instanceof StructureContainer &&
+        station.hits < station.hitsMax * REMOTE_CONTAINER_REPAIR_THRESHOLD &&
+        creep.store.getUsedCapacity(RESOURCE_ENERGY) >= creep.getActiveBodyparts(WORK)) {
+        creep.repair(station);
+        return OK;
     }
 
     const code = creep.harvest(source);

@@ -9,6 +9,7 @@ type: project
 ## Script Location
 - Agent/utility scripts go in `.ai/scripts/` (e.g., `scrape-docs.mjs`)
 - `.local-scripts/` is a **symlink to the Steam Screeps client folder** — never place tooling there, it maps directly to the live game runtime
+- Use `.ai/scripts/check-screeps-recovery-regressions.py <logfile>` to summarize Screeps console NDJSON and flag recovery-pull mismatches, remote-hauler renew loops, home energy flatlines, and stale recovery pull after full energy.
 
 ## Local Documentation
 Scraped Screeps docs are saved locally for convenience:

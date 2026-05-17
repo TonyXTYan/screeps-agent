@@ -636,6 +636,7 @@ function printHomeCreepStatus(homeRoom: string): void {
         const hasEnergyDemand = spawnExtensionPressure > 0 || lowTowers.length > 0;
         parts.push(`demand=${hasEnergyDemand ? 'YES' : 'no'}`);
         parts.push(`recoveryPull=${room.memory.energyRecoveryActive ? 'YES' : 'no'}`);
+        parts.push(`recoveryReason=${room.memory.energyRecoveryReason ?? 'none'}`);
         if (parts.length > 0) {
             enStr += '  ' + parts.join('  ');
         }

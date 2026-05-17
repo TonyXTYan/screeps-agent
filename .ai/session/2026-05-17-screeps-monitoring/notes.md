@@ -99,3 +99,8 @@
 | remoteMaintainer-Spawn2-70989745-1 | [42,31] W7N9 | stuck=2 | renewing, traveling to W7N9 |
 | remoteMaintainer-Spawn1-70989584 | [12,26] W7N9 | stuck=2 | traveling to W8N9 |
 | remoteMiner-Spawn1-70992248 | [37,37] W6N9 | stuck=1 | mining (minor) |
+
+## Follow-up (Post 5f626790)
+
+- Added focused post-deploy recommendations file:
+  - `build-5f626790-followup-suggestions.md`

@@ -134,6 +134,8 @@ const REMOTE_HAULER_FAR_PICKUP_PATH_LENGTH = 100;
 const REMOTE_HAULER_FAR_PICKUP_RETURN_LOAD_RATIO = 0.75;
 const REMOTE_HAULER_RETARGET_STUCK_TICKS = 4;
 const REMOTE_TARGET_MAX_HAULER_CLAIMS = 2;
+const REMOTE_HAULER_ASSIGNED_SOURCE_MIN_ENERGY = 50;
+const REMOTE_HAULER_CROSS_SOURCE_MIN_ENERGY = 1000;
 const REMOTE_MINER_STUCK_REPLAN_TICKS = 8;
 const REMOTE_MINER_NO_PROGRESS_REPLAN_TICKS = 18;
 const REMOTE_MINER_OSCILLATION_REPLAN_TICKS = 4;
@@ -1799,6 +1801,10 @@ function assignJob(context: RoomControllerContext, creep: Creep, reservations: J
         return;
     }
 
+    if (assignEmergencyEnergyDelivery(context, creep, archetype, capabilities, reservations)) {
+        return;
+    }
+
     if (energyUsed > 0) {
         if (archetype === 'worker' &&
             creep.store.getFreeCapacity(RESOURCE_ENERGY) > 0 &&
@@ -1912,6 +1918,10 @@ function assignEnergySpendingJob(
     capabilities: ReturnType<typeof getCreepCapabilities>,
     reservations: JobReservations
 ): void {
+    if (assignEmergencyEnergyDelivery(context, creep, archetype, capabilities, reservations)) {
+        return;
+    }
+
     const spawnRatio = spawnEnergyRatio(context);
     if (!(archetype === 'worker' && context.structures.storage && spawnRatio >= 0.5)) {
         const spawnTarget = refillSpawnTarget(context, creep, reservations);
@@ -3272,15 +3282,59 @@ function bestRemoteSourceContainer(creep: Creep, remotePlan: RemoteRoomPlan): St
     return pickRemoteEnergyTarget(creep, candidates, avoidTargetId);
 }
 
+type RemoteEnergySourceTarget = {
+    jobType: 'withdrawEnergy' | 'pickupEnergy';
+    target: RoomObject & { id: string };
+    fromDropped: boolean;
+};
+
 function findRemoteEnergySource(
     creep: Creep,
     remotePlan: RemoteRoomPlan,
     opts?: { followDroppedTopUp?: boolean; droppedFirst?: boolean; droppedMinAmount?: number }
-): { jobType: 'withdrawEnergy' | 'pickupEnergy'; target: RoomObject & { id: string }; fromDropped: boolean } | null {
+): RemoteEnergySourceTarget | null {
     const avoidTargetId = remoteHaulerAvoidTargetId(creep);
     const sourceContainerIds = remoteSourceContainerIds(remotePlan);
     const droppedFirst = opts?.droppedFirst !== false;
     const droppedMinAmount = Math.max(1, opts?.droppedMinAmount ?? 1);
+    const assignedSourceId = creep.memory.assignedSourceId ?? creep.memory.sourceId;
+    const followDroppedTopUp = opts?.followDroppedTopUp === true;
+
+    if (assignedSourceId && remotePlan.sources?.[assignedSourceId]) {
+        const assignedTarget = bestRemoteEnergyTargetForSource(
+            creep,
+            remotePlan,
+            assignedSourceId,
+            avoidTargetId,
+            droppedMinAmount,
+            followDroppedTopUp
+        );
+        const assignedAvailable = remoteEnergyAvailableForSource(creep, remotePlan, assignedSourceId, droppedMinAmount);
+        const assignedIsDry = assignedAvailable < REMOTE_HAULER_ASSIGNED_SOURCE_MIN_ENERGY;
+
+        if (assignedTarget && !assignedIsDry) {
+            return assignedTarget;
+        }
+
+        if (assignedIsDry) {
+            const overflowTarget = bestCrossSourceRemoteEnergyTarget(
+                creep,
+                remotePlan,
+                assignedSourceId,
+                avoidTargetId,
+                REMOTE_HAULER_CROSS_SOURCE_MIN_ENERGY
+            );
+            if (overflowTarget) {
+                return overflowTarget;
+            }
+        }
+
+        if (assignedTarget) {
+            return assignedTarget;
+        }
+
+        return null;
+    }
 
     const droppedCandidates = creep.room.find(FIND_DROPPED_RESOURCES, {
         filter: (resource) =>
@@ -3289,7 +3343,6 @@ function findRemoteEnergySource(
             remoteEnergyAvailableAfterClaims(creep, resource as Resource<RESOURCE_ENERGY>) > 0
     }) as Resource<RESOURCE_ENERGY>[];
     const droppedEnergy = pickRemoteEnergyTarget(creep, droppedCandidates, avoidTargetId);
-    const followDroppedTopUp = opts?.followDroppedTopUp === true;
 
     if (!followDroppedTopUp && droppedFirst && droppedEnergy) {
         return { jobType: 'pickupEnergy', target: droppedEnergy, fromDropped: true };
@@ -3337,6 +3390,127 @@ function findRemoteEnergySource(
     }
 
     return null;
+}
+
+function bestRemoteEnergyTargetForSource(
+    creep: Creep,
+    remotePlan: RemoteRoomPlan,
+    sourceId: string,
+    avoidTargetId: string | undefined,
+    droppedMinAmount: number,
+    containersOnly: boolean
+): RemoteEnergySourceTarget | null {
+    const targets = remoteEnergyTargetsForSource(creep, remotePlan, sourceId, droppedMinAmount, containersOnly)
+        .filter((candidate) => !shouldAvoidRemoteEnergyTarget(creep, candidate.target, avoidTargetId));
+
+    return pickRemoteEnergySourceTarget(creep, targets);
+}
+
+function bestCrossSourceRemoteEnergyTarget(
+    creep: Creep,
+    remotePlan: RemoteRoomPlan,
+    assignedSourceId: string,
+    avoidTargetId: string | undefined,
+    minEnergy: number
+): RemoteEnergySourceTarget | null {
+    const candidates: RemoteEnergySourceTarget[] = [];
+    if (!remotePlan.sources) { return null; }
+
+    for (const sourceId in remotePlan.sources) {
+        if (sourceId === assignedSourceId) { continue; }
+        for (const candidate of remoteEnergyTargetsForSource(creep, remotePlan, sourceId, minEnergy, false)) {
+            if (remoteEnergyAvailableAfterClaims(creep, candidate.target as StructureContainer | Resource<RESOURCE_ENERGY>) < minEnergy) {
+                continue;
+            }
+            if (shouldAvoidRemoteEnergyTarget(creep, candidate.target, avoidTargetId)) {
+                continue;
+            }
+            candidates.push(candidate);
+        }
+    }
+
+    return pickRemoteEnergySourceTarget(creep, candidates);
+}
+
+function remoteEnergyAvailableForSource(
+    creep: Creep,
+    remotePlan: RemoteRoomPlan,
+    sourceId: string,
+    droppedMinAmount: number
+): number {
+    return remoteEnergyTargetsForSource(creep, remotePlan, sourceId, droppedMinAmount, false)
+        .reduce((total, candidate) =>
+            total + remoteEnergyAvailableAfterClaims(creep, candidate.target as StructureContainer | Resource<RESOURCE_ENERGY>), 0);
+}
+
+function remoteEnergyTargetsForSource(
+    creep: Creep,
+    remotePlan: RemoteRoomPlan,
+    sourceId: string,
+    droppedMinAmount: number,
+    containersOnly: boolean
+): RemoteEnergySourceTarget[] {
+    const cfg = remotePlan.sources?.[sourceId];
+    if (!cfg) { return []; }
+
+    const targets: RemoteEnergySourceTarget[] = [];
+    if (cfg.containerId) {
+        const container = Game.getObjectById(cfg.containerId as Id<StructureContainer>);
+        if (container &&
+            remoteEnergyAvailableAfterClaims(creep, container) > 0 &&
+            isRemoteEnergyTargetReachable(creep, container)) {
+            targets.push({ jobType: 'withdrawEnergy', target: container, fromDropped: false });
+        }
+    }
+
+    if (containersOnly) {
+        return targets;
+    }
+
+    const station = remoteSourceStationPosition(remotePlan, sourceId);
+    if (!station || creep.room.name !== station.roomName) {
+        return targets;
+    }
+
+    const dropped = creep.room.find(FIND_DROPPED_RESOURCES, {
+        filter: (resource) =>
+            resource.resourceType === RESOURCE_ENERGY &&
+            resource.amount >= droppedMinAmount &&
+            resource.pos.inRangeTo(station, 1) &&
+            remoteEnergyAvailableAfterClaims(creep, resource as Resource<RESOURCE_ENERGY>) > 0
+    }) as Resource<RESOURCE_ENERGY>[];
+
+    for (const resource of dropped) {
+        targets.push({ jobType: 'pickupEnergy', target: resource, fromDropped: true });
+    }
+
+    return targets;
+}
+
+function remoteSourceStationPosition(remotePlan: RemoteRoomPlan, sourceId: string): RoomPosition | null {
+    const cfg = remotePlan.sources?.[sourceId];
+    if (!cfg) { return null; }
+
+    if (cfg.containerId) {
+        const container = Game.getObjectById(cfg.containerId as Id<StructureContainer>);
+        if (container) { return container.pos; }
+    }
+
+    if (cfg.stationX !== undefined && cfg.stationY !== undefined) {
+        return new RoomPosition(cfg.stationX, cfg.stationY, remotePlan.roomName);
+    }
+
+    const source = Game.getObjectById(sourceId as Id<Source>);
+    return source?.pos ?? null;
+}
+
+function pickRemoteEnergySourceTarget(
+    creep: Creep,
+    targets: RemoteEnergySourceTarget[]
+): RemoteEnergySourceTarget | null {
+    if (targets.length === 0) { return null; }
+    const target = pickRemoteEnergyTarget(creep, targets.map(candidate => candidate.target));
+    return targets.find(candidate => candidate.target.id === target?.id) ?? null;
 }
 
 function remoteSourceContainerIds(remotePlan: RemoteRoomPlan): { [id: string]: true } {
@@ -3677,6 +3851,12 @@ function keepCurrentJob(
     const energyUsed = creep.store.getUsedCapacity(RESOURCE_ENERGY);
     const totalUsed = creep.store.getUsedCapacity();
 
+    if (shouldInterruptForEmergencyEnergyDelivery(context, creep, archetype, jobType, reservations, capabilities)) {
+        clearJob(creep);
+        creep.memory.interruptReason = 'emergency-refill';
+        return false;
+    }
+
     if (totalUsed > energyUsed && jobType !== 'depositResource') {
         clearJob(creep);
         creep.memory.interruptReason = 'deposit-resource';
@@ -3887,6 +4067,24 @@ function currentJobStillValid(
     return true;
 }
 
+function shouldInterruptForEmergencyEnergyDelivery(
+    context: RoomControllerContext,
+    creep: Creep,
+    archetype: CreepArchetype,
+    jobType: CreepJobType,
+    reservations: JobReservations,
+    capabilities: ReturnType<typeof getCreepCapabilities>
+): boolean {
+    if (!canEmergencyDeliverEnergy(context, creep, archetype, capabilities)) { return false; }
+    const spawnTarget = refillSpawnTarget(context, creep, reservations);
+    if (spawnTarget) { return jobType !== 'refillSpawn'; }
+
+    const towerTarget = refillTowerTarget(context, creep, reservations);
+    if (towerTarget) { return jobType !== 'refillTower'; }
+
+    return false;
+}
+
 function reserveCurrentJob(
     creep: Creep,
     jobType: CreepJobType,
@@ -3924,6 +4122,46 @@ function shouldInterruptForEnergyRefill(
     if (!roomNeedsCriticalEnergyRecovery(context)) { return false; }
     if (refillSpawnTarget(context, creep, reservations)) { return true; }
     return refillTowerTarget(context, creep, reservations) !== null;
+}
+
+function assignEmergencyEnergyDelivery(
+    context: RoomControllerContext,
+    creep: Creep,
+    archetype: CreepArchetype,
+    capabilities: ReturnType<typeof getCreepCapabilities>,
+    reservations: JobReservations
+): boolean {
+    if (!canEmergencyDeliverEnergy(context, creep, archetype, capabilities)) { return false; }
+
+    const spawnTarget = refillSpawnTarget(context, creep, reservations);
+    if (spawnTarget) {
+        reserveEnergySink(reservations, spawnTarget, Math.min(creep.store.getUsedCapacity(RESOURCE_ENERGY), spawnTarget.store.getFreeCapacity(RESOURCE_ENERGY)));
+        setJob(creep, 'refillSpawn', spawnTarget);
+        return true;
+    }
+
+    const towerTarget = refillTowerTarget(context, creep, reservations);
+    if (towerTarget) {
+        reserveEnergySink(reservations, towerTarget, Math.min(creep.store.getUsedCapacity(RESOURCE_ENERGY), towerTarget.store.getFreeCapacity(RESOURCE_ENERGY)));
+        setJob(creep, 'refillTower', towerTarget);
+        return true;
+    }
+
+    return false;
+}
+
+function canEmergencyDeliverEnergy(
+    context: RoomControllerContext,
+    creep: Creep,
+    archetype: CreepArchetype,
+    capabilities: ReturnType<typeof getCreepCapabilities>
+): boolean {
+    if (archetype === 'miner' || archetype === 'remoteMiner' || archetype === 'mineralMiner' || archetype === 'remoteHauler') {
+        return false;
+    }
+    if (capabilities.haul <= 0) { return false; }
+    if (creep.store.getUsedCapacity(RESOURCE_ENERGY) <= 0) { return false; }
+    return roomHasSpawnEnergyDemand(context);
 }
 
 function droppedResourceTarget(
@@ -4176,6 +4414,10 @@ function roomHasEnergyDemand(context: RoomControllerContext): boolean {
     return spawnEnergyPressure(context) > 0 || refillTowerTargets(context).length > 0;
 }
 
+function roomHasSpawnEnergyDemand(context: RoomControllerContext): boolean {
+    return spawnEnergyPressure(context) > 0;
+}
+
 function roomNeedsCriticalEnergyRecovery(context: RoomControllerContext): boolean {
     const roomMemory = context.room.memory;
     const wasActive = roomMemory.energyRecoveryActive === true;
@@ -4194,7 +4436,19 @@ function roomNeedsCriticalEnergyRecovery(context: RoomControllerContext): boolea
         roomMemory.energyRecoveryActive = true;
     }
 
+    roomMemory.energyRecoveryReason = energyRecoveryReason(context, roomMemory.energyRecoveryActive === true);
     return roomMemory.energyRecoveryActive === true;
+}
+
+function energyRecoveryReason(context: RoomControllerContext, active: boolean): EnergyRecoveryReason {
+    if (!active) { return 'none'; }
+
+    const spawnHeld = spawnEnergyRatio(context) < ENERGY_RECOVERY_EXIT_SPAWN_RATIO;
+    const towerHeld = context.structures.towers.some((tower) => towerEnergyRatio(tower) < ENERGY_RECOVERY_EXIT_TOWER_RATIO);
+    if (spawnHeld && towerHeld) { return 'spawn+tower'; }
+    if (spawnHeld) { return 'spawn'; }
+    if (towerHeld) { return 'tower'; }
+    return 'none';
 }
 
 function terminalWithdrawableEnergy(

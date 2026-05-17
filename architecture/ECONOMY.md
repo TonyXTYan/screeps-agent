@@ -90,6 +90,9 @@ For haulers/workers with free capacity:
 For haulers carrying energy but with free capacity & available drops:
   → Continue gathering dropped resources (skip spending phase)
 
+Emergency refill preemption:
+  → During spawn/extension pressure, energy-carrying local haulers and support creeps interrupt idle/deposit/withdraw/build/repair/upgrade work to refill spawn/extensions first, then low towers.
+
 Exclusive for workers (fallback if nothing above):
   4. Harvest from source (temporary fallback; reassigned once energy is loaded)
 ```

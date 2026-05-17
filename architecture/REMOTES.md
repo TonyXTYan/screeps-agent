@@ -103,8 +103,9 @@ Remote miners normally wait for a body that meets the source work demand. If a s
 
 ## Hauler Target Selection
 
-- Empty remote haulers prioritize dropped energy first.
-- After a dropped pickup, if still not full, remote haulers top up from the nearest source container first (overflow capture), then nearest containers/links.
+- Empty remote haulers prefer energy at their assigned source first: assigned container/station drops are selected before cross-source work.
+- Cross-source pickup is reserved for overflow: the assigned source must be effectively dry and the alternate source must have a large available pile/container.
+- After a dropped pickup, if still not full, remote haulers top up from assigned source containers first; overflow capture follows the same cross-source guard.
 - Remote haulers no longer require a 50% mining-site pickup threshold; they keep topping up toward full load unless far-pickup return logic triggers.
 - Candidate energy is reduced by in-flight remote-hauler claims before selection.
 - Per-target assignment is decongested with an access-tile-aware soft cap (up to 2 empty haulers per target).

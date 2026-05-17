@@ -51,6 +51,7 @@ type CreepJobType =
 
 type RemoteRoomMode = 'harvest' | 'reserve' | 'claim';
 type RemoteRouteHealth = 'healthy' | 'degraded';
+type EnergyRecoveryReason = 'none' | 'spawn' | 'tower' | 'spawn+tower';
 
 interface RemoteSourcePlan {
     sourceId: string;
@@ -251,6 +252,7 @@ interface RoomMemory {
     load?: RoomLoadMemory;
     plan?: RoomPlanMemory;
     energyRecoveryActive?: boolean;
+    energyRecoveryReason?: EnergyRecoveryReason;
     debug_tower?: boolean;
     debug_home?: boolean;
     debug_remotes?: boolean;

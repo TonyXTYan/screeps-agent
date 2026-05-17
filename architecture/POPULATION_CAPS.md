@@ -22,7 +22,8 @@ const rawDemand = sources.length * base + rclBonus + salvageBonus;
 
 // budget capped at 50% of capacity (BODY_BUDGET_RATIO=0.5, BODY_MIN_BUDGET=300)
 const haulerBudget = max(BODY_MIN_BUDGET, floor(energyCapacityAvailable * BODY_BUDGET_RATIO));
-const maxCarryPerHauler = 2 * floor(haulerBudget / 150) * CARRY_CAPACITY;
+const maxCarryFromBudget = 2 * floor(haulerBudget / 150) * CARRY_CAPACITY;
+const maxCarryPerHauler = min(MAX_CARRY_CAPACITY, maxCarryFromBudget);  // hard cap: 1000
 const maxCount = max(2, ceil(rawDemand / maxCarryPerHauler) + 1);
 ```
 
@@ -31,6 +32,7 @@ const maxCount = max(2, ceil(rawDemand / maxCarryPerHauler) + 1);
 - Hauler spawn gates on count AND capacity deficit (line 1422–1425)
 - Old small-body haulers caused overflow at RCL6 (see KNOWN_ISSUES.md); fixed by this formula
 - `haulerBudget` matches the spawn planner's `maxBudget` so demand and actual body size stay in sync
+- `MAX_CARRY_CAPACITY = 1000` hard-caps hauler (and worker) body builders regardless of energy budget
 
 ---
 

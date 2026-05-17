@@ -30,8 +30,8 @@ runSpawnPlanner()   → spawn creeps to fill measured deficits
 | Archetype | Body Strategy |
 |-----------|--------------|
 | `miner` | WORK-heavy, static (5W1C1M) or mobile (5W1C3M), scales down with energy |
-| `hauler` | CARRY+MOVE triples (2C1M per 150 energy), optional trailing WORK when budget allows |
-| `worker` | WORK×workRatio + CARRY + MOVE×ceil((workRatio+1)/2) per unit; MOVE count gives full road speed. workRatio 1→[W,C,M], 2→[W,W,C,M,M], 3→[W,W,W,C,M,M] |
+| `hauler` | CARRY+MOVE triples (2C1M per 150 energy), optional trailing WORK when budget allows; capped at 20 CARRY (1000 carry capacity) |
+| `worker` | WORK×workRatio + CARRY + MOVE×ceil((workRatio+1)/2) per unit; MOVE count gives full road speed. workRatio 1→[W,C,M], 2→[W,W,C,M,M], 3→[W,W,W,C,M,M]; capped at 20 CARRY (1000 carry capacity) |
 | `doctor` | Fixed templates with HEAL; WORK+CARRY for energy handling |
 | `mineralMiner` | Same body as static miner, assigned to mineral |
 | `remoteMiner` | Static (container) or mobile variant, WORK-heavy |
@@ -44,6 +44,8 @@ Body planning lives in `planBodyForArchetype()` in `creep.capabilities.ts`. Lega
 (`balanceSpec()` in `creep.roleBalance.ts`) is used only for emergency defenders.
 
 **Body budget cap:** All archetypes are planned against `max(BODY_MIN_BUDGET, floor(energyCapacityAvailable × BODY_BUDGET_RATIO))` rather than the raw `energyCapacityAvailable`. With `BODY_BUDGET_RATIO = 0.5` and `BODY_MIN_BUDGET = 300`, bodies target at most 50% of room energy capacity, so creeps can spawn with partial extension fill. Demand calculations (`desiredHaulerCapacity`, `desiredWorkerWork`) use the same capped budget so population counts stay consistent with actual body sizes. At RCL 8 the 50-part body limit typically binds first, so those bodies are unaffected.
+
+**Carry capacity cap:** Dynamic body builders (`hauler`, `remoteHauler`, `worker`) are hard-capped at `MAX_CARRY_CAPACITY = 1000` units (20 CARRY parts). This applies regardless of energy budget or room RCL. Fixed-template archetypes (miners, remoteMaintainer, doctor, etc.) are unaffected as their CARRY counts are already well below 20.
 
 ## Spawn Planning Priority
 

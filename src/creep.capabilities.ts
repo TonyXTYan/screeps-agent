@@ -18,6 +18,7 @@ export interface CreepCapabilities {
 
 export const BODY_BUDGET_RATIO = 0.5;
 export const BODY_MIN_BUDGET = 300;
+const MAX_CARRY_CAPACITY = 1000;
 
 const BODY_PART_COST: { [part in BodyPartConstant]: number } = {
     [MOVE]: 50,
@@ -169,8 +170,11 @@ export function planBodyForArchetype(
     if (archetype === 'hauler' || archetype === 'remoteHauler') {
         const body: BodyPartConstant[] = [];
         const reserved = archetype === 'remoteHauler' ? 150 : 0; // Reserve WORK+MOVE for remoteHauler
-        while (body.length + 3 <= 50 && bodyCost(body) + 150 + reserved <= energyBudget) {
+        const maxCarryParts = Math.floor(MAX_CARRY_CAPACITY / CARRY_CAPACITY);
+        let carryCount = 0;
+        while (body.length + 3 <= 50 && bodyCost(body) + 150 + reserved <= energyBudget && carryCount + 2 <= maxCarryParts) {
             body.push(CARRY, CARRY, MOVE);
+            carryCount += 2;
         }
         if (body.length > 0) {
             if (archetype === 'remoteHauler' && body.length + 2 <= 50) {
@@ -239,10 +243,13 @@ function buildWorkerBody(energyBudget: number, workRatio: number = 1): BodyPartC
     const moveCount = workRatio;
     const unitParts = workRatio + 1 + moveCount;
     const unitCost = workRatio * 100 + 50 + moveCount * 50;
-    while (body.length + unitParts <= 50 && bodyCost(body) + unitCost <= energyBudget) {
+    const maxCarryParts = Math.floor(MAX_CARRY_CAPACITY / CARRY_CAPACITY);
+    let carryCount = 0;
+    while (body.length + unitParts <= 50 && bodyCost(body) + unitCost <= energyBudget && carryCount + 1 <= maxCarryParts) {
         for (let i = 0; i < workRatio; i++) { body.push(WORK); }
         body.push(CARRY);
         for (let i = 0; i < moveCount; i++) { body.push(MOVE); }
+        carryCount++;
     }
     if (body.length > 0) { return body; }
     return selectLargestWithinBudget([[WORK, CARRY, MOVE]], energyBudget);

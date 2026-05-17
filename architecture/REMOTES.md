@@ -88,7 +88,7 @@ haulerCapacityDemand = min(
 
 - The **2500 cap** bounds distance-weighted demand for far remotes
 - **Max 2 haulers per source** regardless of distance
-- Body uses CARRY+MOVE as the core, with optional trailing WORK when budget allows
+- Body uses CARRY+MOVE triads + WORK+MOVE (unless minimal [CARRY, MOVE] fallback); WORK enables opportunistic remote maintenance
 - Scaled hauler bodies must still be useful: at least 600 energy, and up to 900 energy when needed to cover 40% of source demand.
 
 Remote miners normally wait for a body that meets the source work demand. If a source has zero active miner coverage, an emergency minimum miner is allowed so the source can restart.

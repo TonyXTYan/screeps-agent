@@ -168,11 +168,14 @@ export function planBodyForArchetype(
 
     if (archetype === 'hauler' || archetype === 'remoteHauler') {
         const body: BodyPartConstant[] = [];
-        while (body.length + 3 <= 50 && bodyCost(body) + 150 <= energyBudget) {
+        const reserved = archetype === 'remoteHauler' ? 150 : 0; // Reserve WORK+MOVE for remoteHauler
+        while (body.length + 3 <= 50 && bodyCost(body) + 150 + reserved <= energyBudget) {
             body.push(CARRY, CARRY, MOVE);
         }
         if (body.length > 0) {
-            if (bodyCost(body) + 150 <= energyBudget && body.length + 2 <= 50) {
+            if (archetype === 'remoteHauler' && body.length + 2 <= 50) {
+                body.push(WORK, MOVE); // Always add WORK for remoteHauler
+            } else if (archetype === 'hauler' && bodyCost(body) + 150 <= energyBudget && body.length + 2 <= 50) {
                 body.push(WORK, MOVE);
             }
             return body;

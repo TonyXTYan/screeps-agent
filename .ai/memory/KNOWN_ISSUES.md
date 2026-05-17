@@ -59,7 +59,7 @@ This file tracks known follow-up work that future agents should consider before 
 - `firstStoredResource()` exists in both `creep.jobRunner.ts` and `room.controller.ts`; consider consolidating once shared utilities exist.
 - `closest()` and `closestByRange()` in `room.controller.ts` overlap heavily.
 - `interruptReason` is written for observability but not consumed.
-- Remote hauler repair/build branches in `assignRemoteCreep()` rely on the optional trailing WORK part added by `planBodyForArchetype` (only when budget allows +100 energy). These branches do nothing if the hauler spawned without the WORK part.
+- Remote hauler repair/build branches rely on WORK part for opportunistic maintenance. All non-minimal remoteHauler bodies now include WORK+MOVE, enabling this feature reliably.
 - Remote room memory (plans, serialized paths, demand data) is never garbage-collected when a room is disabled. Over many enable/disable cycles, this accumulates stale memory.
 - `room.controller.ts` is 2,868 lines — a god module. Candidates for extraction: remote room logic (~400 lines), spawn planning (~250 lines), job assignment (~300 lines).
 

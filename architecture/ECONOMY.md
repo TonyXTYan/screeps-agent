@@ -35,7 +35,7 @@ runSpawnPlanner()   → spawn creeps to fill measured deficits
 | `doctor` | Fixed templates with HEAL; WORK+CARRY for energy handling |
 | `mineralMiner` | Same body as static miner, assigned to mineral |
 | `remoteMiner` | Static (container) or mobile variant, WORK-heavy |
-| `remoteHauler` | CARRY+MOVE triples, optional trailing WORK at higher budgets |
+| `remoteHauler` | CARRY+MOVE triples + WORK+MOVE (unless minimal [CARRY, MOVE] fallback) |
 | `remoteMaintainer` | WORK+CARRY+MOVE fixed templates |
 | `remoteScout` | 1–2 MOVE parts only |
 | `claimer` | CLAIM+MOVE pairs scaled to budget; min 1 part, reserve mode min 2 |

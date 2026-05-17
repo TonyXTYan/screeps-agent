@@ -87,7 +87,7 @@ remoteMining.status('W7N9', 'W8N9')  // one remote room
 4. Gradual road construction along discovered paths in non-owned rooms only.
 5. Spawning and assignment for:
    - `remoteMiner`
-   - `remoteHauler` (`CARRY`+`MOVE` core, optional trailing `WORK` at higher energy budgets)
+   - `remoteHauler` (`CARRY`+`MOVE` triads + `WORK`+`MOVE`, unless minimal `[CARRY, MOVE]` fallback)
    - `remoteScout` (overflow scouts wander to avoid blocking spawn exits)
    - `remoteMaintainer`
    - `claimer` for reserve mode (targeting at least 2 `CLAIM` parts)

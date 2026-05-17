@@ -1729,6 +1729,16 @@ function assignJob(context: RoomControllerContext, creep: Creep, reservations: J
             // Not full and there's ambient energy — fall through to top up from storage.
             // (energyWithdrawalTarget always returns storage for workers, so the "dump
             // partial then re-withdraw" pattern is never needed and only causes bouncing.)
+        } else if (archetype === 'hauler' &&
+                   creep.store.getFreeCapacity(RESOURCE_ENERGY) > 0 &&
+                   (context.sourcePlans.some(p => p.container &&
+                        creep.pos.getRangeTo(p.container) <= 3 &&
+                        p.container.store.getUsedCapacity(RESOURCE_ENERGY) > 0) ||
+                    context.structures.links.source.some(l =>
+                        creep.pos.getRangeTo(l) <= 3 &&
+                        l.store.getUsedCapacity(RESOURCE_ENERGY) > 0))) {
+            // Hauler at a source site with free capacity — fall through to drain the container/link
+            // before leaving, so the trip isn't wasted on a partial load.
         } else {
             assignEnergySpendingJob(context, creep, archetype, capabilities, reservations);
             return;

@@ -112,6 +112,9 @@ function harvestSource(creep: Creep): number {
     } else if (creep.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
         // harvest (work) + transfer (carry) are independent intent categories — both fire this tick
         offloadEnergyNearby(creep);
+    } else {
+        // carry is empty — relay container backlog into an adjacent link (parallel with harvest)
+        relayAdjacentContainerToLink(creep);
     }
     return code;
 }
@@ -490,6 +493,22 @@ function offloadEnergyNearby(creep: Creep): boolean {
 
     if (targets.length === 0) { return false; }
     return creep.transfer(targets[0], RESOURCE_ENERGY) === OK;
+}
+
+function relayAdjacentContainerToLink(creep: Creep): void {
+    const links = creep.pos.findInRange(FIND_STRUCTURES, 1, {
+        filter: (s) => s.structureType === STRUCTURE_LINK &&
+            (s as StructureLink).store.getFreeCapacity(RESOURCE_ENERGY) > 0
+    }) as StructureLink[];
+    if (links.length === 0) { return; }
+
+    const containers = creep.pos.findInRange(FIND_STRUCTURES, 1, {
+        filter: (s) => s.structureType === STRUCTURE_CONTAINER &&
+            (s as StructureContainer).store.getUsedCapacity(RESOURCE_ENERGY) > 0
+    }) as StructureContainer[];
+    if (containers.length === 0) { return; }
+
+    creep.withdraw(containers[0], RESOURCE_ENERGY);
 }
 
 function offloadResourceNearby(creep: Creep): boolean {

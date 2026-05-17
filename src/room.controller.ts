@@ -3957,6 +3957,20 @@ function energyWithdrawalTarget(
     const terminalTarget = context.structures.terminal && terminalAvailable > 0 ? context.structures.terminal : null;
 
     if (archetype === 'hauler' || archetype === 'remoteHauler') {
+        // If already at a source site (e.g. picking up dropped energy), drain its container/link
+        // before leaving — bypasses the min-pickup threshold since we're already there.
+        const nearbySourceContainer = context.sourcePlans
+            .map(p => p.container)
+            .find(c => c &&
+                creep.pos.getRangeTo(c) <= 3 &&
+                (c.store.getUsedCapacity(RESOURCE_ENERGY) - (reservations.resources[c.id] ?? 0)) > 0);
+        if (nearbySourceContainer) { return nearbySourceContainer; }
+
+        const nearbySourceLink = context.structures.links.source.find(l =>
+            creep.pos.getRangeTo(l) <= 3 &&
+            (l.store.getUsedCapacity(RESOURCE_ENERGY) - (reservations.resources[l.id] ?? 0)) > 0);
+        if (nearbySourceLink) { return nearbySourceLink; }
+
         const demandLinks = [...context.structures.links.hub, ...context.structures.links.controller, ...context.structures.links.sink]
             .filter((link) => link.store.getUsedCapacity(RESOURCE_ENERGY) > 0);
         // Primary: drain hub/controller/sink links so they always have capacity for incoming transfers.

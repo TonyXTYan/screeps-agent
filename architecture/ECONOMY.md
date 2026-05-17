@@ -31,7 +31,7 @@ runSpawnPlanner()   → spawn creeps to fill measured deficits
 |-----------|--------------|
 | `miner` | WORK-heavy, static (5W1C1M) or mobile (5W1C3M), scales down with energy |
 | `hauler` | CARRY+MOVE triples (2C1M per 150 energy), optional trailing WORK when budget allows |
-| `worker` | WORK:CARRY:MOVE at configurable `workRatio` (1–3 WORK per CARRY+MOVE pair) |
+| `worker` | WORK×workRatio + CARRY + MOVE×ceil((workRatio+1)/2) per unit; MOVE count gives full road speed. workRatio 1→[W,C,M], 2→[W,W,C,M,M], 3→[W,W,W,C,M,M] |
 | `doctor` | Fixed templates with HEAL; WORK+CARRY for energy handling |
 | `mineralMiner` | Same body as static miner, assigned to mineral |
 | `remoteMiner` | Static (container) or mobile variant, WORK-heavy |
@@ -81,7 +81,7 @@ For haulers/workers with free capacity:
      - Local haulers require at least 50% of their total carry capacity at the mineral site
   3. Withdraw from storage / structures:
      - Workers: storage-first whenever room storage has energy
-     - Haulers: source containers (at miner/mineral sites), then source links, then hub/controller/sink links
+     - Haulers: hub/controller/sink links first (drain them so runLinks always has a free receiver), then terminal, then source containers, then source links as overflow
      - For local haulers only, mining-site source containers/links are considered only if they hold at least 50% of hauler carry capacity
      - Terminal energy is available as a fallback withdrawal source with a reserve policy:
        - Keep reserve in normal mode: RCL6=5k, RCL7=10k, RCL8=50k
@@ -178,12 +178,16 @@ and assigned jobs in order, deducting from reservations to avoid pile-ups.
 
 ## Links
 
-Links are classified into groups by `room.structures.ts`:
-- **source** — near sources (≤2 range), send energy outward
-- **hub** — near storage/spawn (≤3 range), receive energy
-- **controller** — near controller (≤4 range), receive energy for upgrading
-- **sink** — near ≥3 extensions, receive energy for spawn refill
-- **other** — unclassified
+Links are classified into groups by `room.structures.ts`. **A link can belong to multiple groups simultaneously** if it is near multiple qualifying structures:
+- **source** — within range 2 of any source; sends energy outward
+- **hub** — within range 3 of storage or any spawn; receives energy
+- **controller** — within range 4 of the room controller; receives energy for upgrading
+- **sink** — within range 3 of ≥3 extensions; receives energy for spawn refill
+- **other** — matches none of the above
 
-`runLinks()` transfers energy from sources/hubs/other to receivers (sinks, hubs, controller links).
-Transfer threshold: 400 energy. Only hub links send when spawn pressure is zero.
+`runLinks()` transfers energy from senders (source links, hub links when spawn pressure=0, other links) to receivers (sink, hub, controller links). The sender list is deduplicated so multi-classified links are only processed once. Transfer threshold: 400 energy.
+
+**Hauler interaction with links:**
+- Haulers drain hub/controller/sink links first (primary pickup) to keep them ready for incoming transfers from `runLinks`.
+- Source containers and source links are fallback overflow — only picked if no demand links have energy.
+- This means the intended energy flow is: miner → source link → [runLinks] → hub/controller link → hauler → storage/spawn/tower.

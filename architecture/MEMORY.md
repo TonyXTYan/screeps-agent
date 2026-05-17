@@ -47,6 +47,7 @@ Memory
 │       remoteStandby?: boolean      — Remote standby miner flag
 │       remoteHaulerRenewAfterTrip?: boolean — Remote hauler must renew before next outbound trip
 │       remoteHaulerIdleUntil?: number — Tick until next remote-hauler recheck after no-job idle
+│       remoteHaulerLastPickupWasDropped?: boolean — Last selected pickup target was dropped energy; next assignment prioritizes local top-up containers
 │       remoteHaulerWanderX?: number — Home-idle wander target X for remote hauler
 │       remoteHaulerWanderY?: number — Home-idle wander target Y for remote hauler
 │       remoteHaulerWanderUntil?: number — Tick until remote-hauler wander target refresh

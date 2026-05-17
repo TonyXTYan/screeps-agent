@@ -103,11 +103,13 @@ Remote miners normally wait for a body that meets the source work demand. If a s
 
 ## Hauler Target Selection
 
-- Empty remote haulers select from source containers first, then dropped energy, then links.
-- Remote mining-site targets (source containers) must have at least 50% of the hauler carry capacity available before selection.
+- Empty remote haulers prioritize dropped energy first.
+- After a dropped pickup, if still not full, remote haulers top up from the nearest source container first (overflow capture), then nearest containers/links.
+- Remote haulers no longer require a 50% mining-site pickup threshold; they keep topping up toward full load unless far-pickup return logic triggers.
 - Candidate energy is reduced by in-flight remote-hauler claims before selection.
 - Per-target assignment is decongested with an access-tile-aware soft cap (up to 2 empty haulers per target).
 - If a hauler remains stuck on one tile for 4+ ticks while on `withdrawEnergy`/`pickupEnergy`, it temporarily avoids its current target and retargets.
+- If the selected pickup target is path-length far (>100 steps) and the hauler is already at least 75% full, it returns home instead of detouring for more.
 - Remote haulers still attempt pass-by maintenance while moving: if they have a WORK part and energy, they opportunistically build/repair targets already within range 3 without detouring from haul jobs.
 
 ## Path Caching
@@ -168,9 +170,10 @@ Remote maintainers (not miners, not claimers) can renew at the home spawn:
 - Travels home, queues at spawn, returns to work when above stop threshold
 
 ### Remote Hauler Cycle
-- Default cycle: travel to remote room → gather energy/resources → return to home room → deposit to storage (terminal/emergency sinks only when storage unavailable/full) → renew at home spawn until TTL > 1400 → repeat.
+- Default cycle: travel to remote room → gather energy/resources and top up toward full load → return to home room → deposit to storage (terminal/emergency sinks only when storage unavailable/full) → repeat.
+- Post-trip renew is conditional: after a delivery trip, renew only if `TTL < 1000`, and renew until `TTL > 1400`.
 - If no remote pickup targets are found, the hauler returns home and idles there for a short recheck window instead of idling in the remote room.
-- During this no-job idle window, the hauler wanders more than 3 tiles away from the home spawn and only enters renew mode when TTL drops below 500.
+- During this no-job idle window, the hauler wanders at least 6 tiles away from the home spawn and only enters renew mode when TTL drops below 500 (renews to >1400 once started).
 
 ### Miner Replacement (Standby Dispatch)
 - Remote miners do not renew at the home spawn

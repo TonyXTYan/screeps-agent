@@ -250,6 +250,7 @@ interface RoomMemory {
     structures?: RoomStructureMemory;
     load?: RoomLoadMemory;
     plan?: RoomPlanMemory;
+    energyRecoveryActive?: boolean;
     debug_tower?: boolean;
     debug_home?: boolean;
     debug_remotes?: boolean;

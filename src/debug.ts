@@ -627,10 +627,12 @@ function printHomeCreepStatus(homeRoom: string): void {
             s => s.structureType === STRUCTURE_TOWER
         ) as StructureTower[];
         const lowTowers = towers.filter(t => t.store.getUsedCapacity(RESOURCE_ENERGY) / t.store.getCapacity(RESOURCE_ENERGY) < 0.55);
-        const needsRecovery = room.find(FIND_STRUCTURES).some(s =>
-            s.structureType === STRUCTURE_SPAWN || s.structureType === STRUCTURE_EXTENSION
-        ) && (room.energyAvailable < room.energyCapacityAvailable * 0.5 || lowTowers.length > 0);
-        parts.push(`recovery=${needsRecovery ? 'YES' : 'no'}`);
+        const spawnExtensionPressure = room.find(FIND_STRUCTURES)
+            .filter((s) => s.structureType === STRUCTURE_SPAWN || s.structureType === STRUCTURE_EXTENSION)
+            .reduce((total, structure) => total + (structure as StructureSpawn | StructureExtension).store.getFreeCapacity(RESOURCE_ENERGY), 0);
+        const hasEnergyDemand = spawnExtensionPressure > 0 || lowTowers.length > 0;
+        parts.push(`demand=${hasEnergyDemand ? 'YES' : 'no'}`);
+        parts.push(`recoveryPull=${room.memory.energyRecoveryActive ? 'YES' : 'no'}`);
         if (parts.length > 0) {
             enStr += '  ' + parts.join('  ');
         }

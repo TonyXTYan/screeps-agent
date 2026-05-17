@@ -81,6 +81,10 @@ interface JobReservations {
 
 const TOWER_RESERVE_RATIO = 0.7;
 const TOWER_RECOVERY_RATIO = 0.55;
+const ENERGY_RECOVERY_ENTER_SPAWN_RATIO = 0.85;
+const ENERGY_RECOVERY_EXIT_SPAWN_RATIO = 0.95;
+const ENERGY_RECOVERY_ENTER_TOWER_RATIO = TOWER_RECOVERY_RATIO;
+const ENERGY_RECOVERY_EXIT_TOWER_RATIO = TOWER_RESERVE_RATIO;
 const TERMINAL_RESERVE_RCL6 = 5000;
 const TERMINAL_RESERVE_RCL7 = 10000;
 const TERMINAL_RESERVE_RCL8 = 50000;
@@ -1802,7 +1806,7 @@ function assignJob(context: RoomControllerContext, creep: Creep, reservations: J
         }
 
 
-        if ((archetype === 'hauler' || archetype === 'worker') && roomNeedsEnergyRecovery(context)) {
+        if ((archetype === 'hauler' || archetype === 'worker') && roomNeedsCriticalEnergyRecovery(context)) {
             const spawnTarget = refillSpawnTarget(context, creep, reservations);
             if (spawnTarget) {
                 const withdrawalTarget = energyWithdrawalTarget(context, creep, archetype, reservations);
@@ -1816,7 +1820,8 @@ function assignJob(context: RoomControllerContext, creep: Creep, reservations: J
         if (archetype === 'hauler' &&
             context.structures.storage &&
             terminalEnergyReserveDeficit(context, reservations) > 0 &&
-            !roomNeedsEnergyRecovery(context)) {
+            !roomNeedsCriticalEnergyRecovery(context) &&
+            !roomHasEnergyDemand(context)) {
             const storageReserved = reservations.resources[context.structures.storage.id] ?? 0;
             const storageAvailable = context.structures.storage.store.getUsedCapacity(RESOURCE_ENERGY) - storageReserved;
             if (storageAvailable > 0) {
@@ -3766,7 +3771,7 @@ function currentJobStillValid(
         }
 
         if (storeTarget.structureType === STRUCTURE_TERMINAL) {
-            const available = terminalWithdrawableEnergy(context, reservations, roomNeedsEnergyRecovery(context));
+            const available = terminalWithdrawableEnergy(context, reservations, roomNeedsCriticalEnergyRecovery(context));
             return creep.store.getFreeCapacity(RESOURCE_ENERGY) > 0 && available > 0;
         }
 
@@ -3877,6 +3882,7 @@ function shouldInterruptForEnergyRefill(
 ): boolean {
     if (archetype === 'miner' || archetype === 'mineralMiner' ||
         (archetype === 'worker' && context.structures.storage)) { return false; }
+    if (!roomNeedsCriticalEnergyRecovery(context)) { return false; }
     if (refillSpawnTarget(context, creep, reservations)) { return true; }
     return refillTowerTarget(context, creep, reservations) !== null;
 }
@@ -3964,7 +3970,7 @@ function energyDepositTarget(
     if (context.structures.terminal &&
         context.structures.terminal.store.getFreeCapacity(RESOURCE_ENERGY) > 0 &&
         terminalEnergyReserveDeficit(context, reservations) > 0 &&
-        !roomNeedsEnergyRecovery(context)) {
+        !roomHasEnergyDemand(context)) {
         return context.structures.terminal;
     }
 
@@ -4038,7 +4044,7 @@ function energyWithdrawalTarget(
             if (!isHauler) { return true; }
             return available >= haulerMinPickup;
         });
-    const allowTerminalReserveBreak = roomNeedsEnergyRecovery(context);
+    const allowTerminalReserveBreak = roomNeedsCriticalEnergyRecovery(context);
     const terminalAvailable = terminalWithdrawableEnergy(context, reservations, allowTerminalReserveBreak);
     const terminalTarget = context.structures.terminal && terminalAvailable > 0 ? context.structures.terminal : null;
 
@@ -4127,8 +4133,29 @@ function terminalEnergyReserveTarget(rcl: number): number {
     return 0;
 }
 
-function roomNeedsEnergyRecovery(context: RoomControllerContext): boolean {
+function roomHasEnergyDemand(context: RoomControllerContext): boolean {
     return spawnEnergyPressure(context) > 0 || refillTowerTargets(context).length > 0;
+}
+
+function roomNeedsCriticalEnergyRecovery(context: RoomControllerContext): boolean {
+    const roomMemory = context.room.memory;
+    const wasActive = roomMemory.energyRecoveryActive === true;
+
+    const spawnRatio = spawnEnergyRatio(context);
+    const hasLowTower = context.structures.towers.some((tower) => towerEnergyRatio(tower) < ENERGY_RECOVERY_ENTER_TOWER_RATIO);
+    const towersRecovered = context.structures.towers.every((tower) => towerEnergyRatio(tower) >= ENERGY_RECOVERY_EXIT_TOWER_RATIO);
+    const shouldEnter = spawnRatio < ENERGY_RECOVERY_ENTER_SPAWN_RATIO || hasLowTower;
+    const shouldExit = spawnRatio >= ENERGY_RECOVERY_EXIT_SPAWN_RATIO && towersRecovered;
+
+    if (wasActive) {
+        if (shouldExit) {
+            roomMemory.energyRecoveryActive = false;
+        }
+    } else if (shouldEnter) {
+        roomMemory.energyRecoveryActive = true;
+    }
+
+    return roomMemory.energyRecoveryActive === true;
 }
 
 function terminalWithdrawableEnergy(

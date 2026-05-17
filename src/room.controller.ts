@@ -3142,21 +3142,23 @@ function remotePlanHasDegradedRoute(remotePlan: RemoteRoomPlan | undefined): boo
 
 function hasIdleRemoteHauler(creeps: Creep[], remoteRoom: string): boolean {
     const room = Game.rooms[remoteRoom];
+    let foundIdleHauler = false;
+    for (const creep of creeps) {
+        if (ensureArchetype(creep) !== 'remoteHauler') { continue; }
+        if (creep.memory.remoteRoom !== remoteRoom) { continue; }
+        if (creep.store.getUsedCapacity() > 0) { continue; }
+        if (room && creep.room.name === remoteRoom) { foundIdleHauler = true; break; }
+        if (!room && creep.room.name === creep.memory.homeRoom && !creep.spawning) { foundIdleHauler = true; break; }
+    }
+    if (!foundIdleHauler) { return false; }
     if (room) {
         const containersWithEnergy = room.find(FIND_STRUCTURES, {
             filter: s => s.structureType === STRUCTURE_CONTAINER &&
                 (s as StructureContainer).store.getUsedCapacity(RESOURCE_ENERGY) > 0
         });
-        if (containersWithEnergy.length > 0) { return false; }
+        if (containersWithEnergy.length > 0) { return true; }
     }
-    for (const creep of creeps) {
-        if (ensureArchetype(creep) !== 'remoteHauler') { continue; }
-        if (creep.memory.remoteRoom !== remoteRoom) { continue; }
-        if (creep.store.getUsedCapacity() > 0) { continue; }
-        if (room && creep.room.name === remoteRoom) { return true; }
-        if (!room && creep.room.name === creep.memory.homeRoom && !creep.spawning) { return true; }
-    }
-    return false;
+    return foundIdleHauler;
 }
 
 function remoteHaulerMinPickup(creep: Creep): number {

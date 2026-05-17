@@ -19,8 +19,9 @@ import { acquireRenewSpawn, nearestSpawn } from './spawn.renewal';
 const DOCTOR_EMERGENCY_HITS_RATIO = 0.35;
 const DOCTOR_THREAT_RADIUS = 4;
 const HOME_RENEW_MIN_BODY_COST = 1000;
-const HOME_RENEW_START_TTL = 500;
+const HOME_RENEW_START_TTL = 250;
 const HOME_RENEW_STOP_TTL = 1300;
+const HOME_RENEW_CRITICAL_TTL = 120;
 const STANDBY_MINER_PARK_MIN_RANGE = 2;
 const STANDBY_MINER_PARK_MAX_RANGE = 4;
 const DEBUG_PATH_SCAN_INTERVAL = 25;
@@ -468,6 +469,16 @@ function tryRenewHomeCreep(creep: Creep): boolean {
 
     const homeRoomName = creep.memory.homeRoom ?? creep.room.name;
     if (creep.room.name !== homeRoomName) { return false; }
+    const room = Game.rooms[homeRoomName];
+    if (!room) { return false; }
+
+    const renewBlockedByEconomy =
+        room.memory.energyRecoveryActive === true ||
+        room.energyAvailable < Math.floor(room.energyCapacityAvailable * 0.9);
+    if (renewBlockedByEconomy && ttl > HOME_RENEW_CRITICAL_TTL) {
+        creep.memory.renewing = false;
+        return false;
+    }
 
     if (!creep.memory.renewing && ttl <= HOME_RENEW_START_TTL) {
         creep.memory.renewing = true;
@@ -477,17 +488,18 @@ function tryRenewHomeCreep(creep: Creep): boolean {
     }
     if (!creep.memory.renewing) { return false; }
 
-    const room = Game.rooms[homeRoomName];
-    if (!room) { return false; }
-
     const spawn = acquireRenewSpawn(creep, room);
 
     if (!spawn) {
-        const anySpawn = nearestSpawn(creep, room);
-        if (anySpawn && !creep.pos.isNearTo(anySpawn)) {
-            creep.moveTo(anySpawn, { range: 1, visualizePathStyle: { stroke: '#f5f57a' } });
+        if (ttl <= HOME_RENEW_CRITICAL_TTL) {
+            const anySpawn = nearestSpawn(creep, room);
+            if (anySpawn && !creep.pos.isNearTo(anySpawn)) {
+                creep.moveTo(anySpawn, { range: 1, visualizePathStyle: { stroke: '#f5f57a' } });
+            }
+            return true;
         }
-        return true;
+        creep.memory.renewing = false;
+        return false;
     }
 
     if (!creep.pos.isNearTo(spawn)) {

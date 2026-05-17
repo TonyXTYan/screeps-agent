@@ -10,7 +10,7 @@ Use this as the first stop before editing code.
 
 ## Tick Flow
 
-- `src/main.ts` — Screeps `loop()` entry point, standby miner parking (no standby renew), hostile flee/retreat, debug hooks
+- `src/main.ts` — Screeps `loop()` entry point, standby miner parking (no standby renew), hostile flee/retreat, home renew gating (economy/recovery-aware with critical-TTL override), debug hooks
 - `src/creep.memoryManagement.ts` — dead creep memory cleanup and fallback role/remote initialization
 - `src/memoryAudit.ts` — memory consistency audit (runs on deploy when commit hash changes)
 - `src/env.ts` — exports `BUILD_COMMIT` from build-injected git hash

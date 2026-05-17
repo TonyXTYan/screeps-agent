@@ -566,7 +566,10 @@ function printHomeCreepStatus(homeRoom: string): void {
         const storeInfo = storeCap === 0
             ? '--'
             : `${creep.store.getUsedCapacity(RESOURCE_ENERGY)}/${storeCap}`;
-        const jobLabel = statusLabels[creep.memory.jobType ?? ''] ?? creep.memory.jobType ?? '-';
+        const isRenewing = creep.memory.renewing === true;
+        const jobLabel = isRenewing
+            ? 'renewing'
+            : (statusLabels[creep.memory.jobType ?? ''] ?? creep.memory.jobType ?? '-');
         const src = (creep.memory.assignedSourceId ?? creep.memory.sourceId ?? '').slice(-8);
         const w = creep.getActiveBodyparts(WORK);
         const c = creep.getActiveBodyparts(CARRY);

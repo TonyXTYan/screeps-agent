@@ -173,6 +173,7 @@ Remote maintainers (not miners, not claimers) can renew at the home spawn:
 ### Remote Hauler Cycle
 - Default cycle: travel to remote room → gather energy/resources and top up toward full load → return to home room → deposit to storage (terminal/emergency sinks only when storage unavailable/full) → repeat.
 - Post-trip renew is conditional: after a delivery trip, renew only if `TTL < 1000`, and renew until `TTL > 1400`.
+- Home-room energy pressure can defer starting a new remote-hauler renew cycle, but once a renew cycle starts the hauler waits next to a spawn and continues renewing until `TTL > 1400`.
 - If no remote pickup targets are found, the hauler returns home and idles there for a short recheck window instead of idling in the remote room.
 - During this no-job idle window, the hauler wanders at least 6 tiles away from the home spawn and only enters renew mode when TTL drops below 500 (renews to >1400 once started).
 

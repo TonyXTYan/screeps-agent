@@ -135,7 +135,7 @@ const REMOTE_SPAWN_MIN_ENERGY_RATIO = 0.5;
 const REMOTE_HAULER_ABSOLUTE_MIN_COST = 600;
 const REMOTE_HAULER_USEFUL_MIN_COST = 900;
 const REMOTE_HAULER_MIN_DEMAND_RATIO = 0.4;
-const REMOTE_MAINTAINER_MIN_COST = 450;
+const REMOTE_MAINTAINER_MIN_COST = 500;
 const REMOTE_CONTAINER_CRITICAL_REPAIR_THRESHOLD = 0.25;
 const REMOTE_MINER_REPAIR_THRESHOLD = 0.5;
 const REMOTE_MINER_REPAIR_RANGE = 3;
@@ -1339,7 +1339,7 @@ function manageRemoteRenewal(
 ): boolean {
     const ttl = creep.ticksToLive;
     if (!ttl) { return false; }
-    if (archetype === 'remoteMiner' || archetype === 'remoteHauler') {
+    if (archetype === 'remoteMiner' || archetype === 'remoteMaintainer') {
         creep.memory.remoteRenewing = false;
         return false;
     }

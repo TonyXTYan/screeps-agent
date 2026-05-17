@@ -185,9 +185,9 @@ export function planBodyForArchetype(
 
     if (archetype === 'remoteMaintainer') {
         return selectLargestWithinBudget([
-            [WORK, WORK, WORK, WORK, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE],
-            [WORK, WORK, CARRY, CARRY, MOVE, MOVE, MOVE],
-            [WORK, CARRY, MOVE]
+            [WORK, WORK, WORK, WORK, CARRY, CARRY, CARRY, CARRY, CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE],
+            [WORK, WORK, WORK, CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE],
+            [WORK, WORK, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE]
         ], energyBudget);
     }
 

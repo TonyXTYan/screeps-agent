@@ -741,7 +741,12 @@ function assignRemoteHaulerCycle(
     const full = creep.store.getFreeCapacity() === 0;
 
     if (totalUsed > 0) {
-        if (!full && !creep.memory.remoteHaulerReturning && creep.room.name === remoteRoom) {
+        const workParts = creep.getActiveBodyparts(WORK);
+        const freeCapacity = creep.store.getFreeCapacity();
+        // Skip top-up when free capacity ≤ WORK parts: opportunistic repair burns exactly
+        // what the top-up picks up each tick, leaving the creep stuck at that threshold.
+        const worthTopping = freeCapacity > 0 && (workParts === 0 || freeCapacity > workParts);
+        if (worthTopping && !creep.memory.remoteHaulerReturning && creep.room.name === remoteRoom) {
             const followDroppedTopUp = creep.memory.remoteHaulerLastPickupWasDropped === true &&
                 creep.memory.jobType !== 'pickupEnergy';
             const source = findRemoteEnergySource(creep, remotePlan, {

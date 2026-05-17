@@ -977,6 +977,23 @@ function assignRemoteHaulerDelivery(creep: Creep, homeRoom: string): void {
 
     const structures = getRoomStructures(creep.room);
     const resource = firstStoredResource(creep.store);
+
+    if (resource === RESOURCE_ENERGY) {
+        const refillTarget = closest(creep, [...structures.spawns, ...structures.extensions]
+            .filter((structure) => structure.store.getFreeCapacity(RESOURCE_ENERGY) > 0));
+        if (refillTarget) {
+            setJob(creep, 'refillSpawn', refillTarget);
+            return;
+        }
+
+        const towerTarget = closest(creep, structures.towers
+            .filter((tower) => towerEnergyRatio(tower) < TOWER_RECOVERY_RATIO));
+        if (towerTarget) {
+            setJob(creep, 'refillTower', towerTarget);
+            return;
+        }
+    }
+
     const storage = structures.storage;
     if (storage && resource && storage.store.getFreeCapacity(resource) > 0) {
         if (resource === RESOURCE_ENERGY) {

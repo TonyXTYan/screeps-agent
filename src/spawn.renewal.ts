@@ -3,13 +3,21 @@ const reservedSpawnIds: { [spawnId: string]: boolean } = {};
 const reservedSpawnOwner: { [spawnId: string]: string } = {};
 const renewSpawnByCreepName: { [creepName: string]: string } = {};
 
-export function reserveRenewSpawns(creeps: Creep[], freeSpawns: StructureSpawn[]): { [spawnId: string]: boolean } {
+export function reserveRenewSpawns(
+    creeps: Creep[],
+    freeSpawns: StructureSpawn[],
+    maxReservations: number = Infinity
+): { [spawnId: string]: boolean } {
     refreshRenewReservations();
     const reserved: { [spawnId: string]: boolean } = {};
+    if (maxReservations <= 0) { return reserved; }
+    let reservedCount = 0;
     for (const creep of creeps) {
+        if (reservedCount >= maxReservations) { break; }
         const spawn = acquireRenewSpawnFrom(creep, freeSpawns);
-        if (spawn) {
+        if (spawn && !reserved[spawn.id]) {
             reserved[spawn.id] = true;
+            reservedCount++;
         }
     }
     return reserved;

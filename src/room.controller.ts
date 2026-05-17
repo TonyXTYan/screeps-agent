@@ -2233,7 +2233,14 @@ function runSpawnPlanner(context: RoomControllerContext): void {
     const allFreeSpawns = context.structures.spawns.filter((s) => !s.spawning);
     if (allFreeSpawns.length === 0) { return; }
 
-    const renewalReservedSpawnIds = reserveRenewSpawns(renewalDemandCreepsForRoom(context.room.name), allFreeSpawns);
+    // When multiple spawns are free, keep at least one unreserved for spawn planning
+    // so long renew queues do not starve replacement/deficit spawns.
+    const maxRenewReservations = allFreeSpawns.length > 1 ? allFreeSpawns.length - 1 : allFreeSpawns.length;
+    const renewalReservedSpawnIds = reserveRenewSpawns(
+        renewalDemandCreepsForRoom(context.room.name),
+        allFreeSpawns,
+        maxRenewReservations
+    );
     const freeSpawns = allFreeSpawns.filter((spawn) => !renewalReservedSpawnIds[spawn.id]);
     if (freeSpawns.length === 0) { return; }
 

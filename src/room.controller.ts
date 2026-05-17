@@ -4693,6 +4693,14 @@ function resumePrimaryEnergyJob(
             clearPrimaryJob(creep);
             return false;
         }
+        if (shouldRepairWithCreeps(context) && context.repairTargets.length > 0) {
+            const primaryRemaining = remainingRepairProgress(structure, reservations);
+            const best = repairTargetFor(creep, context.repairTargets, reservations, capabilities.repair);
+            if (best && best.id !== structure.id && remainingRepairProgress(best, reservations) > primaryRemaining * 2) {
+                clearPrimaryJob(creep);
+                return false;
+            }
+        }
         reserveRepairProgress(reservations, structure, capabilities.repair);
         setJob(creep, 'repair', structure);
         return true;

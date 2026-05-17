@@ -112,6 +112,7 @@ Remote miners normally wait for a body that meets the source work demand. If a s
 - If a hauler remains stuck on one tile for 4+ ticks while on `withdrawEnergy`/`pickupEnergy`, it temporarily avoids its current target and retargets.
 - If the selected pickup target is path-length far (>100 steps) and the hauler is already at least 75% full, it returns home instead of detouring for more.
 - Remote haulers still attempt pass-by maintenance while moving: if they have a WORK part and energy, they opportunistically build/repair targets already within range 3 without detouring from haul jobs.
+- Remote maintainers keep their current road/container construction target to avoid two-tick oscillation between equal-priority sites, and only choose a new target when the current one is no longer a valid construction site.
 
 ## Path Caching
 

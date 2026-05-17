@@ -259,7 +259,7 @@ export function assignRemoteCreep(creep: Creep): boolean {
     }
 
     const remoteBuildSite = shouldBuildRemoteInfrastructure(creep, archetype, remotePlan)
-        ? closestRemoteInfrastructureSite(creep, archetype === 'remoteMaintainer')
+        ? preferredRemoteInfrastructureSite(creep, archetype, closestRemoteInfrastructureSite(creep, archetype === 'remoteMaintainer'))
         : null;
     if (remoteBuildSite) {
         setJob(creep, 'build', remoteBuildSite);
@@ -726,6 +726,30 @@ function assignStandbyRemoteMiner(creep: Creep, homeRoom: string, remoteRoom: st
         });
     }
     return true;
+}
+
+function preferredRemoteInfrastructureSite(
+    creep: Creep,
+    archetype: CreepArchetype,
+    selectedSite: ConstructionSite | null
+): ConstructionSite | null {
+    if (archetype !== 'remoteMaintainer') { return selectedSite; }
+
+    const currentSite = currentRemoteInfrastructureBuildSite(creep);
+    if (currentSite) { return currentSite; }
+    return selectedSite;
+}
+
+function currentRemoteInfrastructureBuildSite(creep: Creep): ConstructionSite | null {
+    if (creep.memory.jobType !== 'build') { return null; }
+    const targetId = creep.memory.jobTargetId;
+    if (!targetId) { return null; }
+
+    const site = Game.getObjectById(targetId as Id<ConstructionSite>);
+    if (!site) { return null; }
+    if (site.progress >= site.progressTotal) { return null; }
+    if (site.structureType !== STRUCTURE_ROAD && site.structureType !== STRUCTURE_CONTAINER) { return null; }
+    return site;
 }
 
 function assignRemoteHaulerCycle(

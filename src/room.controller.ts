@@ -156,6 +156,9 @@ export function run(room: Room): void {
     updatePlanAssignments(context);
     rememberLoad(context);
     rememberPlans(context);
+    // Refresh hysteresis state once per tick so force-pull logic and debug reflect
+    // current room energy conditions even when no branch queries it later.
+    roomNeedsCriticalEnergyRecovery(context);
     runLinks(context);
     reportPassiveInfrastructure(context);
     assignJobs(context);

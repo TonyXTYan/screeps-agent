@@ -125,6 +125,7 @@ const MAX_REMOTE_HAULERS_PER_SOURCE = 2;
 const REMOTE_HAULER_POST_TRIP_RENEW_START_TTL = 1000;
 const REMOTE_HAULER_RENEW_START_TTL = 500;
 const REMOTE_HAULER_RENEW_STOP_TTL = 1400;
+const REMOTE_HAULER_RENEW_CRITICAL_TTL = 80;
 const REMOTE_HAULER_IDLE_RECHECK_TICKS = 75;
 const REMOTE_HAULER_WANDER_TICKS = 35;
 const REMOTE_HAULER_WANDER_MIN_RANGE = 6;
@@ -815,6 +816,14 @@ function manageRemoteHaulerRenewal(creep: Creep, homeRoomName: string, forceRene
     const ttl = creep.ticksToLive;
     if (!ttl) { return false; }
 
+    const homeRoom = Game.rooms[homeRoomName];
+    if (homeRoom && shouldDeferRemoteHaulerRenewal(homeRoom, ttl)) {
+        // Home room still needs energy: clear renew intents so haulers resume hauling/refill work.
+        creep.memory.remoteRenewing = false;
+        creep.memory.remoteHaulerRenewAfterTrip = undefined;
+        return false;
+    }
+
     if (!creep.memory.remoteRenewing && (forceRenew || ttl <= REMOTE_HAULER_RENEW_START_TTL)) {
         creep.memory.remoteRenewing = true;
     }
@@ -829,7 +838,6 @@ function manageRemoteHaulerRenewal(creep: Creep, homeRoomName: string, forceRene
         return true;
     }
 
-    const homeRoom = Game.rooms[homeRoomName];
     if (!homeRoom) {
         setTravelJob(creep, homeRoomName);
         return true;
@@ -837,6 +845,11 @@ function manageRemoteHaulerRenewal(creep: Creep, homeRoomName: string, forceRene
 
     const spawn = acquireRenewSpawn(creep, homeRoom);
     if (!spawn) {
+        if (ttl > REMOTE_HAULER_RENEW_CRITICAL_TTL) {
+            creep.memory.remoteRenewing = false;
+            creep.memory.remoteHaulerRenewAfterTrip = undefined;
+            return false;
+        }
         const waitTarget = nearestSpawn(creep, homeRoom);
         if (waitTarget) {
             if (!creep.pos.isNearTo(waitTarget)) {
@@ -863,6 +876,12 @@ function manageRemoteHaulerRenewal(creep: Creep, homeRoomName: string, forceRene
 
     creep.memory.remoteRenewing = false;
     return false;
+}
+
+function shouldDeferRemoteHaulerRenewal(homeRoom: Room, ttl: number): boolean {
+    if (ttl <= REMOTE_HAULER_RENEW_CRITICAL_TTL) { return false; }
+    if (homeRoom.memory.energyRecoveryActive === true) { return true; }
+    return homeRoom.energyAvailable < homeRoom.energyCapacityAvailable;
 }
 
 function assignRemoteHaulerHomeIdle(creep: Creep, homeRoomName: string): boolean {

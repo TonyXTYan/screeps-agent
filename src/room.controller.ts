@@ -140,6 +140,7 @@ const REMOTE_MINER_STUCK_REPLAN_TICKS = 8;
 const REMOTE_MINER_NO_PROGRESS_REPLAN_TICKS = 18;
 const REMOTE_MINER_OSCILLATION_REPLAN_TICKS = 4;
 const REMOTE_HOME_RECOVERY_STORED_ENERGY = 500;
+const REMOTE_SPAWN_AVAIL_CHECK_MAX_STORED = 5000;
 const REMOTE_THROTTLE_STORED_ENERGY = 1;
 const REMOTE_SPAWN_MIN_ENERGY_RATIO = 0.5;
 const REMOTE_HAULER_ABSOLUTE_MIN_COST = 600;
@@ -2079,7 +2080,9 @@ function remoteSpawnRecoveryBlockReason(
     if (hasStorage && storedEnergy(context) < REMOTE_HOME_RECOVERY_STORED_ENERGY) {
         return 'home recovery stored<' + REMOTE_HOME_RECOVERY_STORED_ENERGY;
     }
-    if (energyCapacity > 0 && availableEnergy < energyCapacity * REMOTE_SPAWN_MIN_ENERGY_RATIO) {
+    const stored = hasStorage ? storedEnergy(context) : 0;
+    if (energyCapacity > 0 && availableEnergy < energyCapacity * REMOTE_SPAWN_MIN_ENERGY_RATIO &&
+        stored < REMOTE_SPAWN_AVAIL_CHECK_MAX_STORED) {
         return 'home recovery energy<' + Math.ceil(REMOTE_SPAWN_MIN_ENERGY_RATIO * 100) + '% remaining=' + availableEnergy;
     }
     return null;
@@ -2636,7 +2639,7 @@ function remoteSpawnRequest(
                     totalRoomHaulers < 2 * numSources &&
                     countRemoteHaulersForSource(homeFleet, roomName, sourceId) +
                         pendingRemoteArchetypeCount(pending, 'remoteHauler', roomName, sourceId) < MAX_REMOTE_HAULERS_PER_SOURCE &&
-                    !hasIdleRemoteHauler(homeFleet, roomName) &&
+                    !hasIdleRemoteHauler(homeFleet, roomName, sourceId) &&
                     !pending.some(r => r.archetype === 'remoteHauler' && r.remoteRoom === roomName && r.sourceId === sourceId)) {
                     const request: SpawnRequest = {
                         archetype: 'remoteHauler',
@@ -3226,12 +3229,13 @@ function remotePlanHasDegradedRoute(remotePlan: RemoteRoomPlan | undefined): boo
     return false;
 }
 
-function hasIdleRemoteHauler(creeps: Creep[], remoteRoom: string): boolean {
+function hasIdleRemoteHauler(creeps: Creep[], remoteRoom: string, sourceId?: string): boolean {
     const room = Game.rooms[remoteRoom];
     let foundIdleHauler = false;
     for (const creep of creeps) {
         if (ensureArchetype(creep) !== 'remoteHauler') { continue; }
         if (creep.memory.remoteRoom !== remoteRoom) { continue; }
+        if (sourceId && (creep.memory.assignedSourceId ?? creep.memory.sourceId) !== sourceId) { continue; }
         if (creep.store.getUsedCapacity() > 0) { continue; }
         if (room && creep.room.name === remoteRoom) { foundIdleHauler = true; break; }
         if (!room && creep.room.name === creep.memory.homeRoom && !creep.spawning) { foundIdleHauler = true; break; }

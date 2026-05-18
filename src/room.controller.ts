@@ -81,6 +81,7 @@ interface JobReservations {
 
 const TOWER_RESERVE_RATIO = 0.7;
 const TOWER_RECOVERY_RATIO = 0.55;
+const TOWER_HAULER_DEPOSIT_RATIO = 0.9;
 const ENERGY_RECOVERY_ENTER_SPAWN_RATIO = 0.85;
 const ENERGY_RECOVERY_EXIT_SPAWN_RATIO = 0.95;
 const ENERGY_RECOVERY_ENTER_TOWER_RATIO = TOWER_RECOVERY_RATIO;
@@ -4349,13 +4350,18 @@ function energyDepositTarget(
     context: RoomControllerContext,
     creep: Creep,
     reservations: JobReservations
-): StructureStorage | StructureTerminal | StructureContainer | null {
+): StructureStorage | StructureTerminal | StructureContainer | StructureTower | null {
     if (context.structures.terminal &&
         context.structures.terminal.store.getFreeCapacity(RESOURCE_ENERGY) > 0 &&
         terminalEnergyReserveDeficit(context, reservations) > 0 &&
         !roomHasEnergyDemand(context)) {
         return context.structures.terminal;
     }
+
+    const towerTarget = closest(creep, context.structures.towers
+        .filter(t => towerEnergyRatio(t) < TOWER_HAULER_DEPOSIT_RATIO &&
+            t.store.getFreeCapacity(RESOURCE_ENERGY) > (reservations.energySinks[t.id] ?? 0)));
+    if (towerTarget) { return towerTarget; }
 
     if (context.structures.storage && context.structures.storage.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
         return context.structures.storage;

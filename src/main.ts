@@ -90,7 +90,8 @@ export function loop(): void {
     debug.installDebugHelpers();
     installMoveDebugHook();
     if (Game.cpu.bucket >= 10000) {
-        console.log('main: ✅ .time=' + Game.time + ', cpu.bucket=' + Game.cpu.bucket + ', generationPixel=' + Game.cpu.generatePixel());
+        const pixelResult = typeof Game.cpu.generatePixel === 'function' ? Game.cpu.generatePixel() : 'n/a';
+        console.log('main: ✅ .time=' + Game.time + ', cpu.bucket=' + Game.cpu.bucket + ', generationPixel=' + pixelResult);
     }
 
     

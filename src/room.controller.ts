@@ -4162,11 +4162,15 @@ function shouldInterruptForEmergencyEnergyDelivery(
     capabilities: ReturnType<typeof getCreepCapabilities>
 ): boolean {
     if (!canEmergencyDeliverEnergy(context, creep, archetype, capabilities)) { return false; }
+
     const spawnTarget = refillSpawnTarget(context, creep, reservations);
-    if (spawnTarget) { return jobType !== 'refillSpawn'; }
+    const spawnFull = spawnEnergyRatio(context) >= ENERGY_RECOVERY_EXIT_SPAWN_RATIO;
+    if (spawnTarget && !spawnFull) { return jobType !== 'refillSpawn'; }
 
     const towerTarget = refillTowerTarget(context, creep, reservations);
     if (towerTarget) { return jobType !== 'refillTower'; }
+
+    if (spawnTarget) { return jobType !== 'refillSpawn'; }
 
     return false;
 }
@@ -4220,7 +4224,8 @@ function assignEmergencyEnergyDelivery(
     if (!canEmergencyDeliverEnergy(context, creep, archetype, capabilities)) { return false; }
 
     const spawnTarget = refillSpawnTarget(context, creep, reservations);
-    if (spawnTarget) {
+    const spawnFull = spawnEnergyRatio(context) >= ENERGY_RECOVERY_EXIT_SPAWN_RATIO;
+    if (spawnTarget && !spawnFull) {
         reserveEnergySink(reservations, spawnTarget, Math.min(creep.store.getUsedCapacity(RESOURCE_ENERGY), spawnTarget.store.getFreeCapacity(RESOURCE_ENERGY)));
         setJob(creep, 'refillSpawn', spawnTarget);
         return true;
@@ -4230,6 +4235,12 @@ function assignEmergencyEnergyDelivery(
     if (towerTarget) {
         reserveEnergySink(reservations, towerTarget, Math.min(creep.store.getUsedCapacity(RESOURCE_ENERGY), towerTarget.store.getFreeCapacity(RESOURCE_ENERGY)));
         setJob(creep, 'refillTower', towerTarget);
+        return true;
+    }
+
+    if (spawnTarget) {
+        reserveEnergySink(reservations, spawnTarget, Math.min(creep.store.getUsedCapacity(RESOURCE_ENERGY), spawnTarget.store.getFreeCapacity(RESOURCE_ENERGY)));
+        setJob(creep, 'refillSpawn', spawnTarget);
         return true;
     }
 
@@ -4247,7 +4258,7 @@ function canEmergencyDeliverEnergy(
     }
     if (capabilities.haul <= 0) { return false; }
     if (creep.store.getUsedCapacity(RESOURCE_ENERGY) <= 0) { return false; }
-    return roomHasSpawnEnergyDemand(context);
+    return roomHasSpawnEnergyDemand(context) || refillTowerTargets(context).length > 0;
 }
 
 function droppedResourceTarget(

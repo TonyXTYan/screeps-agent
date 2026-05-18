@@ -85,6 +85,8 @@ const ENERGY_RECOVERY_ENTER_SPAWN_RATIO = 0.85;
 const ENERGY_RECOVERY_EXIT_SPAWN_RATIO = 0.95;
 const ENERGY_RECOVERY_ENTER_TOWER_RATIO = TOWER_RECOVERY_RATIO;
 const ENERGY_RECOVERY_EXIT_TOWER_RATIO = TOWER_RESERVE_RATIO;
+// Spawn fill ratio at which haulers yield spawn priority to tower refill
+const TOWER_REFILL_SPAWN_YIELD_RATIO = 0.90;
 const TERMINAL_RESERVE_RCL6 = 5000;
 const TERMINAL_RESERVE_RCL7 = 10000;
 const TERMINAL_RESERVE_RCL8 = 50000;
@@ -4097,7 +4099,7 @@ function currentJobStillValid(
         const remaining = (storeTarget.store.getUsedCapacity(resource) ?? 0) - (reservations.resources[storeTarget.id] ?? 0);
         if (remaining <= 0) { return false; }
         const archetype = ensureArchetype(creep);
-        if (archetype === 'hauler' &&
+        if ((archetype === 'hauler' || archetype === 'worker') &&
             resource !== RESOURCE_ENERGY &&
             target instanceof StructureContainer) {
             return remaining >= haulerMiningSiteMinPickup(creep);
@@ -4164,7 +4166,7 @@ function shouldInterruptForEmergencyEnergyDelivery(
     if (!canEmergencyDeliverEnergy(context, creep, archetype, capabilities)) { return false; }
 
     const spawnTarget = refillSpawnTarget(context, creep, reservations);
-    const spawnFull = spawnEnergyRatio(context) >= ENERGY_RECOVERY_EXIT_SPAWN_RATIO;
+    const spawnFull = spawnEnergyRatio(context) >= TOWER_REFILL_SPAWN_YIELD_RATIO;
     if (spawnTarget && !spawnFull) { return jobType !== 'refillSpawn'; }
 
     const towerTarget = refillTowerTarget(context, creep, reservations);
@@ -4224,7 +4226,7 @@ function assignEmergencyEnergyDelivery(
     if (!canEmergencyDeliverEnergy(context, creep, archetype, capabilities)) { return false; }
 
     const spawnTarget = refillSpawnTarget(context, creep, reservations);
-    const spawnFull = spawnEnergyRatio(context) >= ENERGY_RECOVERY_EXIT_SPAWN_RATIO;
+    const spawnFull = spawnEnergyRatio(context) >= TOWER_REFILL_SPAWN_YIELD_RATIO;
     if (spawnTarget && !spawnFull) {
         reserveEnergySink(reservations, spawnTarget, Math.min(creep.store.getUsedCapacity(RESOURCE_ENERGY), spawnTarget.store.getFreeCapacity(RESOURCE_ENERGY)));
         setJob(creep, 'refillSpawn', spawnTarget);
@@ -4258,7 +4260,9 @@ function canEmergencyDeliverEnergy(
     }
     if (capabilities.haul <= 0) { return false; }
     if (creep.store.getUsedCapacity(RESOURCE_ENERGY) <= 0) { return false; }
-    return roomHasSpawnEnergyDemand(context) || refillTowerTargets(context).length > 0;
+    if (roomHasSpawnEnergyDemand(context)) { return true; }
+    // Tower-only demand: only interrupt haulers, not workers mid-build
+    return archetype === 'hauler' && refillTowerTargets(context).length > 0;
 }
 
 function droppedResourceTarget(

@@ -85,6 +85,8 @@ const ENERGY_RECOVERY_ENTER_SPAWN_RATIO = 0.85;
 const ENERGY_RECOVERY_EXIT_SPAWN_RATIO = 0.95;
 const ENERGY_RECOVERY_ENTER_TOWER_RATIO = TOWER_RECOVERY_RATIO;
 const ENERGY_RECOVERY_EXIT_TOWER_RATIO = TOWER_RESERVE_RATIO;
+// Workers only drop non-hauling work to emergency-refill spawns when critically low
+const WORKER_EMERGENCY_SPAWN_RATIO = 0.1;
 // Spawn fill ratio at which haulers yield spawn priority to tower refill
 const TOWER_REFILL_SPAWN_YIELD_RATIO = 0.90;
 const TERMINAL_RESERVE_RCL6 = 5000;
@@ -4260,6 +4262,9 @@ function canEmergencyDeliverEnergy(
     }
     if (capabilities.haul <= 0) { return false; }
     if (creep.store.getUsedCapacity(RESOURCE_ENERGY) <= 0) { return false; }
+    if (archetype === 'worker') {
+        return spawnEnergyRatio(context) < WORKER_EMERGENCY_SPAWN_RATIO;
+    }
     if (roomHasSpawnEnergyDemand(context)) { return true; }
     // Tower-only demand: only interrupt haulers, not workers mid-build
     return archetype === 'hauler' && refillTowerTargets(context).length > 0;

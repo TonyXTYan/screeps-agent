@@ -4446,9 +4446,11 @@ function energyWithdrawalTarget(
             (l.store.getUsedCapacity(RESOURCE_ENERGY) - (reservations.resources[l.id] ?? 0)) >= haulerMinPickup);
         if (nearbySourceLink) { return nearbySourceLink; }
 
+        const sourceIds = new Set(context.structures.links.source.map(l => l.id));
         const demandLinks = [...context.structures.links.hub, ...context.structures.links.controller, ...context.structures.links.sink]
-            .filter((link) => link.store.getUsedCapacity(RESOURCE_ENERGY) > 0);
+            .filter((link) => !sourceIds.has(link.id) && link.store.getUsedCapacity(RESOURCE_ENERGY) > 0);
         // Primary: drain hub/controller/sink links so they always have capacity for incoming transfers.
+        // Exclude source links even if dual-classified — they use the min-pickup threshold below.
         // Fallback to source containers/links only when link chain can't keep up (overflow).
         return closest(creep, demandLinks) ??
                terminalTarget ??

@@ -6,7 +6,7 @@ A TypeScript Screeps AI bot that manages a colony economy — source mining, hau
 upgrading, remote harvesting, and defense. Bundled via Rollup into `dist/main.js` and pushed to the
 Screeps server via `grunt-screeps`.
 
-## Source Map (22 modules)
+## Source Map (23 modules)
 
 ```
 src/
@@ -21,7 +21,8 @@ src/
   creep.harvest.ts         Legacy direct-harvest helper
   creep.roleBalance.ts     Legacy body planner (defender only)
 
-  room.controller.ts       Main economic controller (~3100 lines)
+  room.context.ts          Room snapshot/context assembly and source/mineral plan derivation
+  room.controller.ts       Main economic orchestration, job assignment, spawn planning, remotes
   room.structures.ts       Structure discovery, link classification
 
   tower.basics.ts          Tower attack/heal/repair
@@ -80,7 +81,7 @@ src/
 ```
 Room state
     ↓
-RoomController builds context (structures, sources, creeps, sites, ...)
+room.context builds context (structures, sources, creeps, sites, plans, ...)
     ↓
 Measure capabilities & demand
     ↓

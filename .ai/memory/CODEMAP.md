@@ -15,7 +15,8 @@ Use this as the first stop before editing code.
 - `src/memoryAudit.ts` — memory consistency audit (runs on deploy when commit hash changes)
 - `src/env.ts` — exports `BUILD_COMMIT` from build-injected git hash
 - `src/creep.populationControl.ts` — emergency defender spawning before economic spawn planning
-- `src/room.controller.ts` — main room-level economic controller (room plans, remotes, spawn planning, job assignment)
+- `src/room.context.ts` — builds the per-tick room context consumed by the room controller, including sources, minerals, creeps, dropped resources, construction/repair targets, and source/mineral plans
+- `src/room.controller.ts` — main room-level economic orchestrator (room plans, remotes, spawn planning, job assignment)
 - `src/spawn.renewal.ts` — per-tick spawn reservation helper for renew actions
 - `src/tower.basics.ts` — tower attack, heal, and repair behavior
 - `src/creep.jobRunner.ts` — executes assigned jobs before legacy role fallback
@@ -38,7 +39,7 @@ Use this as the first stop before editing code.
 
 ## Core Economy
 
-- Source/mineral planning — `src/room.controller.ts`
+- Source/mineral context planning — `src/room.context.ts`; assignment/spawn decisions that consume those plans still live in `src/room.controller.ts`
 - Link classification — `src/room.structures.ts`
 - Spawn demand selection — `src/room.controller.ts`; multiple free spawns share a pending-request ledger with planned bodies so in-flight creeps count toward capacity and per-source/per-role caps.
 - Home room priority gate (blocks remote spawns when home requests pending, throttles remotes under low stored/spawn energy, and rejects uneconomic scaled remote bodies) — `src/room.controller.ts`
@@ -59,7 +60,7 @@ Use this as the first stop before editing code.
 - Job type union — `src/types.d.ts`
 - Archetype union (worker, miner, hauler, doctor, claimer, defender, remoteMiner, remoteHauler, remoteMaintainer, remoteScout, mineralMiner) — `src/types.d.ts`
 - Room plan, load, and `energyRecoveryReason` memory — `src/types.d.ts`
-- Runtime Memory writes for structures/load/plans — `src/room.controller.ts`, `src/room.structures.ts`
+- Runtime Memory writes for structures/load/plans — `src/room.controller.ts`, `src/room.structures.ts`; per-tick context snapshots are assembled in `src/room.context.ts`
 
 ## Repair Utilities (Shared)
 

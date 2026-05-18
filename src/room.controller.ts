@@ -1,26 +1,11 @@
 import { BODY_BUDGET_RATIO, BODY_MIN_BUDGET, MAX_CARRY_CAPACITY, bodyCost, ensureArchetype, getBodyCapabilities, getCreepCapabilities, planBodyForArchetype } from './creep.capabilities';
 import { clearJob } from './creep.jobRunner';
-import { getRoomStructures, RoomStructureCache } from './room.structures';
-import { repairStructureFilter, wallRampartRepairCap } from './role.doctor';
+import { getRoomStructures } from './room.structures';
+import { wallRampartRepairCap } from './role.doctor';
 import { findHostiles, isHostile } from './hostileUtils';
 import { acquireRenewSpawn, nearestSpawn, reserveRenewSpawns } from './spawn.renewal';
-
-interface RoomControllerContext {
-    room: Room;
-    structures: RoomStructureCache;
-    sources: Source[];
-    mineral: Mineral | undefined;
-    creeps: Creep[];
-    droppedEnergy: Resource<RESOURCE_ENERGY>[];
-    droppedResources: Resource<ResourceConstant>[];
-    tombstones: Tombstone[];
-    ruins: Ruin[];
-    constructionSites: ConstructionSite[];
-    repairTargets: AnyStructure[];
-    injuredCreeps: Creep[];
-    sourcePlans: SourcePlan[];
-    mineralPlan: MineralPlan | null;
-}
+import { buildContext, sourceWorkDemand } from './room.context';
+import type { RoomControllerContext, SourcePlan, MineralPlan } from './room.context';
 
 interface SpawnRequest {
     archetype: CreepArchetype;
@@ -48,25 +33,6 @@ interface ResourceTarget {
     amount: number;
 }
 
-interface SourcePlan {
-    source: Source;
-    container: StructureContainer | null;
-    link: StructureLink | null;
-    requiredWork: number;
-    assignedWork: number;
-    staticMining: boolean;
-}
-
-interface MineralPlan {
-    mineral: Mineral;
-    extractor: StructureExtractor | undefined;
-    container: StructureContainer | null;
-    link: StructureLink | null;
-    requiredWork: number;
-    assignedWork: number;
-    staticMining: boolean;
-}
-
 interface JobReservations {
     resources: { [targetId: string]: number };
     dropped: { [targetId: string]: number };
@@ -89,7 +55,6 @@ const TERMINAL_RESERVE_RCL6 = 5000;
 const TERMINAL_RESERVE_RCL7 = 10000;
 const TERMINAL_RESERVE_RCL8 = 50000;
 
-const MINERAL_WORK_DEMAND = 5;
 const LINK_TRANSFER_THRESHOLD = 200;
 const BUILD_RESERVATION_TICKS = 10;
 const REPAIR_RESERVATION_TICKS = 5;
@@ -1051,48 +1016,6 @@ function assignRemoteHaulerDelivery(creep: Creep, homeRoom: string): void {
     }
 
     setJob(creep, 'idle', structures.spawns[0] ?? creep.room.controller ?? structures.storage);
-}
-
-function buildContext(room: Room): RoomControllerContext {
-    const structures = getRoomStructures(room);
-    const sources = room.find(FIND_SOURCES);
-    const minerals = room.find(FIND_MINERALS);
-    const creeps = room.find(FIND_MY_CREEPS);
-    const droppedResources = room.find(FIND_DROPPED_RESOURCES, {
-        filter: (resource) => resource.amount > 0
-    }) as Resource<ResourceConstant>[];
-    const droppedEnergy = room.find(FIND_DROPPED_RESOURCES, {
-        filter: (resource) => resource.resourceType === RESOURCE_ENERGY && resource.amount >= 50
-    }) as Resource<RESOURCE_ENERGY>[];
-    const tombstones = room.find(FIND_TOMBSTONES, {
-        filter: (tombstone) => totalStoredResources(tombstone.store) > 0
-    });
-    const ruins = room.find(FIND_RUINS, {
-        filter: (ruin) => totalStoredResources(ruin.store) > 0
-    });
-    const constructionSites = room.find(FIND_MY_CONSTRUCTION_SITES);
-    const rcl = room.controller?.level ?? 0;
-    const repairTargets = room.find(FIND_STRUCTURES, { filter: (s) => repairStructureFilter(s as AnyStructure, rcl) });
-    const injuredCreeps = room.find(FIND_MY_CREEPS, { filter: (creep) => creep.hits < creep.hitsMax });
-    const sourcePlans = buildSourcePlans(sources, structures);
-    const mineralPlan = minerals[0] ? buildMineralPlan(minerals[0], structures) : null;
-
-    return {
-        room,
-        structures,
-        sources,
-        mineral: minerals[0],
-        creeps,
-        droppedEnergy,
-        droppedResources,
-        tombstones,
-        ruins,
-        constructionSites,
-        repairTargets,
-        injuredCreeps,
-        sourcePlans,
-        mineralPlan
-    };
 }
 
 function initialiseRoomPlan(room: Room): void {
@@ -4548,49 +4471,12 @@ function terminalEnergyReserveDeficit(context: RoomControllerContext, reservatio
     return Math.max(0, reserveTarget - projectedEnergy);
 }
 
-function buildSourcePlans(sources: Source[], structures: RoomStructureCache): SourcePlan[] {
-    return sources.map((source) => {
-        const container = closestByRange(source, structures.containers.filter((structure) => structure.pos.getRangeTo(source) <= 1));
-        const link = closestByRange(source, structures.links.source.filter((structure) => structure.pos.getRangeTo(source) <= 2));
-        return {
-            source,
-            container,
-            link,
-            requiredWork: sourceWorkDemand(source),
-            assignedWork: 0,
-            staticMining: container !== null && link === null
-        };
-    });
-}
-
-function buildMineralPlan(mineral: Mineral, structures: RoomStructureCache): MineralPlan {
-    let container = closestByRange(mineral, structures.containers.filter((structure) => structure.pos.getRangeTo(mineral) <= 1));
-    if (!container && mineral.room) {
-        const allContainers = mineral.room.find(FIND_STRUCTURES).filter((s) => s.structureType === STRUCTURE_CONTAINER) as StructureContainer[];
-        container = closestByRange(mineral, allContainers.filter((c) => c.pos.getRangeTo(mineral) <= 1));
-    }
-    const link = closestByRange(mineral, [...structures.links.hub, ...structures.links.other].filter((structure) => structure.pos.getRangeTo(mineral) <= 2));
-    return {
-        mineral,
-        extractor: structures.extractor,
-        container,
-        link,
-        requiredWork: MINERAL_WORK_DEMAND,
-        assignedWork: 0,
-        staticMining: container !== null
-    };
-}
-
 function totalSourcePlanWorkDemand(sourcePlans: SourcePlan[]): number {
     let demand = 0;
     for (const sourcePlan of sourcePlans) {
         demand += sourcePlan.requiredWork;
     }
     return demand;
-}
-
-function sourceWorkDemand(source: Source): number {
-    return Math.ceil(source.energyCapacity / ENERGY_REGEN_TIME / HARVEST_POWER);
 }
 
 function sourceSpawnDeficit(context: RoomControllerContext, pendingSourceIds: Set<string> = new Set()): SourcePlan | null {

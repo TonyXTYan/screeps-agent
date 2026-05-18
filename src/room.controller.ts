@@ -1852,12 +1852,12 @@ function assignJob(context: RoomControllerContext, creep: Creep, reservations: J
                    creep.store.getFreeCapacity(RESOURCE_ENERGY) > 0 &&
                    (context.sourcePlans.some(p => p.container &&
                         creep.pos.getRangeTo(p.container) <= 3 &&
-                        p.container.store.getUsedCapacity(RESOURCE_ENERGY) > 0) ||
+                        p.container.store.getUsedCapacity(RESOURCE_ENERGY) >= haulerMiningSiteMinPickup(creep)) ||
                     context.structures.links.source.some(l =>
                         creep.pos.getRangeTo(l) <= 3 &&
-                        l.store.getUsedCapacity(RESOURCE_ENERGY) > 0))) {
-            // Hauler at a source site with free capacity — fall through to drain the container/link
-            // before leaving, so the trip isn't wasted on a partial load.
+                        l.store.getUsedCapacity(RESOURCE_ENERGY) >= haulerMiningSiteMinPickup(creep)))) {
+            // Hauler at a source site with free capacity — fall through to top up from the container/link
+            // before leaving, but only if it has enough to meet the min-pickup threshold.
         } else {
             assignEnergySpendingJob(context, creep, archetype, capabilities, reservations);
             return;
@@ -4432,18 +4432,18 @@ function energyWithdrawalTarget(
     const terminalTarget = context.structures.terminal && terminalAvailable > 0 ? context.structures.terminal : null;
 
     if (archetype === 'hauler' || archetype === 'remoteHauler') {
-        // If already at a source site (e.g. picking up dropped energy), drain its container/link
-        // before leaving — bypasses the min-pickup threshold since we're already there.
+        // If already at a source site (e.g. picking up dropped energy), top up from the container/link
+        // before leaving — but only if it meets the min-pickup threshold, to avoid draining trickles.
         const nearbySourceContainer = context.sourcePlans
             .map(p => p.container)
             .find(c => c &&
                 creep.pos.getRangeTo(c) <= 3 &&
-                (c.store.getUsedCapacity(RESOURCE_ENERGY) - (reservations.resources[c.id] ?? 0)) > 0);
+                (c.store.getUsedCapacity(RESOURCE_ENERGY) - (reservations.resources[c.id] ?? 0)) >= haulerMinPickup);
         if (nearbySourceContainer) { return nearbySourceContainer; }
 
         const nearbySourceLink = context.structures.links.source.find(l =>
             creep.pos.getRangeTo(l) <= 3 &&
-            (l.store.getUsedCapacity(RESOURCE_ENERGY) - (reservations.resources[l.id] ?? 0)) > 0);
+            (l.store.getUsedCapacity(RESOURCE_ENERGY) - (reservations.resources[l.id] ?? 0)) >= haulerMinPickup);
         if (nearbySourceLink) { return nearbySourceLink; }
 
         const demandLinks = [...context.structures.links.hub, ...context.structures.links.controller, ...context.structures.links.sink]

@@ -1875,13 +1875,14 @@ function assignJob(context: RoomControllerContext, creep: Creep, reservations: J
             return;
         }
 
-        const mineralContainer = mineralContainerWithdrawalTarget(context, creep, archetype, reservations);
-        if (mineralContainer) {
-            reserveResourceTarget(reservations, mineralContainer.target.id, Math.min(creep.store.getFreeCapacity(), mineralContainer.amount));
-            setResourceJob(creep, 'withdrawResource', mineralContainer.target, mineralContainer.resource);
-            return;
+        if (archetype === 'hauler') {
+            const mineralContainer = mineralContainerWithdrawalTarget(context, creep, archetype, reservations);
+            if (mineralContainer) {
+                reserveResourceTarget(reservations, mineralContainer.target.id, Math.min(creep.store.getFreeCapacity(), mineralContainer.amount));
+                setResourceJob(creep, 'withdrawResource', mineralContainer.target, mineralContainer.resource);
+                return;
+            }
         }
-
 
         if ((archetype === 'hauler' || archetype === 'worker') && roomNeedsCriticalEnergyRecovery(context)) {
             const spawnTarget = refillSpawnTarget(context, creep, reservations);
@@ -1911,6 +1912,15 @@ function assignJob(context: RoomControllerContext, creep: Creep, reservations: J
         if (withdrawalTarget) {
             setJob(creep, 'withdrawEnergy', withdrawalTarget);
             return;
+        }
+
+        if (archetype === 'worker') {
+            const mineralContainer = mineralContainerWithdrawalTarget(context, creep, archetype, reservations);
+            if (mineralContainer) {
+                reserveResourceTarget(reservations, mineralContainer.target.id, Math.min(creep.store.getFreeCapacity(), mineralContainer.amount));
+                setResourceJob(creep, 'withdrawResource', mineralContainer.target, mineralContainer.resource);
+                return;
+            }
         }
     }
 
@@ -1969,6 +1979,13 @@ function assignWorkerPartialEnergyWork(
             setJob(creep, 'repair', repairTarget);
             return true;
         }
+    }
+
+    if (capabilities.upgrade > 0 && context.room.controller && shouldReserveUpgrade(context, reservations)) {
+        reservations.upgraderWork += capabilities.upgrade;
+        rememberPrimaryJob(creep, 'upgrade', context.room.controller);
+        setJob(creep, 'upgrade', context.room.controller);
+        return true;
     }
 
     return false;
@@ -4293,7 +4310,7 @@ function mineralContainerWithdrawalTarget(
 
     const remaining = (container.store.getUsedCapacity(resource) ?? 0) - (reservations.resources[container.id] ?? 0);
     if (remaining <= 0) { return null; }
-    if (archetype === 'hauler' && remaining < haulerMiningSiteMinPickup(creep)) { return null; }
+    if (remaining < haulerMiningSiteMinPickup(creep)) { return null; }
 
     return { target: container, resource, amount: remaining };
 }

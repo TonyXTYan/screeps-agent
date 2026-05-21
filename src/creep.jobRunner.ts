@@ -1,3 +1,5 @@
+import { wallRampartRepairCap } from './role.doctor';
+
 export function run(creep: Creep): boolean {
     if (honorTrafficYieldRequest(creep)) {
         creep.memory.lastJobResult = OK;
@@ -231,7 +233,11 @@ function build(creep: Creep): number {
 function repair(creep: Creep): number {
     if (creep.store.getUsedCapacity(RESOURCE_ENERGY) === 0) { return ERR_NOT_ENOUGH_RESOURCES; }
     const target = getTarget<AnyStructure>(creep);
-    if (!target || target.hits >= target.hitsMax) { return ERR_INVALID_TARGET; }
+    if (!target) { return ERR_INVALID_TARGET; }
+    const rcl = creep.room.controller?.level ?? 0;
+    const isDefense = target.structureType === STRUCTURE_WALL || target.structureType === STRUCTURE_RAMPART;
+    const maxHits = isDefense ? Math.min(wallRampartRepairCap(rcl), target.hitsMax) : target.hitsMax;
+    if (target.hits >= maxHits) { return ERR_INVALID_TARGET; }
 
     const code = creep.repair(target);
     if (code === ERR_NOT_IN_RANGE) {
@@ -423,16 +429,25 @@ function opportunisticRemoteHaulerWork(creep: Creep, jobType: CreepJobType): voi
         return;
     }
 
+    const rcl = creep.room.controller?.level ?? 0;
     const repairs = creep.pos.findInRange(FIND_STRUCTURES, 3, {
-        filter: (structure) => structure.hits < structure.hitsMax
+        filter: (structure) => {
+            const isDefense = structure.structureType === STRUCTURE_WALL || structure.structureType === STRUCTURE_RAMPART;
+            const cap = isDefense ? Math.min(wallRampartRepairCap(rcl), structure.hitsMax) : structure.hitsMax;
+            return structure.hits < cap;
+        }
     }) as AnyStructure[];
     if (repairs.length === 0) { return; }
 
     let best = repairs[0];
-    let bestRatio = best.hits / Math.max(1, best.hitsMax);
+    const capFor = (s: AnyStructure) => {
+        const isDefense = s.structureType === STRUCTURE_WALL || s.structureType === STRUCTURE_RAMPART;
+        return isDefense ? Math.min(wallRampartRepairCap(rcl), s.hitsMax) : s.hitsMax;
+    };
+    let bestRatio = best.hits / Math.max(1, capFor(best));
     let bestRange = creep.pos.getRangeTo(best);
     for (const candidate of repairs) {
-        const ratio = candidate.hits / Math.max(1, candidate.hitsMax);
+        const ratio = candidate.hits / Math.max(1, capFor(candidate));
         const range = creep.pos.getRangeTo(candidate);
         if (ratio < bestRatio || (ratio === bestRatio && range < bestRange)) {
             best = candidate;

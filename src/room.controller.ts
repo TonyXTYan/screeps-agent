@@ -2075,6 +2075,13 @@ function assignEnergySpendingJob(
         }
     }
 
+    if (capabilities.upgrade > 0 && context.room.controller) {
+        reservations.upgraderWork += capabilities.upgrade;
+        rememberPrimaryJob(creep, 'upgrade', context.room.controller);
+        setJob(creep, 'upgrade', context.room.controller);
+        return;
+    }
+
     if (capabilities.repair > 0 && context.repairTargets.length > 0 && shouldRepairWithCreeps(context)) {
         const repairTarget = repairTargetFor(creep, context.repairTargets, reservations, capabilities.repair);
         if (repairTarget) {
@@ -2083,13 +2090,6 @@ function assignEnergySpendingJob(
             setJob(creep, 'repair', repairTarget);
             return;
         }
-    }
-
-    if (capabilities.upgrade > 0 && context.room.controller) {
-        reservations.upgraderWork += capabilities.upgrade;
-        rememberPrimaryJob(creep, 'upgrade', context.room.controller);
-        setJob(creep, 'upgrade', context.room.controller);
-        return;
     }
 
     const sink = energyDepositTarget(context, creep, reservations);

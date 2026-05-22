@@ -7,7 +7,7 @@ import * as roleManual from './role.manual';
 import * as creepMemoryManagement from './creep.memoryManagement';
 import * as creepJobRunner from './creep.jobRunner';
 import * as populationControl from './creep.populationControl';
-import * as roomController from './room.controller';
+import * as roomController from './room/index';
 import * as towerBasics from './tower.basics';
 import * as memoryAudit from './memoryAudit';
 import * as debug from './debug';

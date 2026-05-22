@@ -1,5 +1,5 @@
-import { isHostile } from './hostileUtils';
-import { acquireRenewSpawn, nearestSpawn } from './spawn.renewal';
+import { isHostile } from '../combat/hostiles';
+import { acquireRenewSpawn, nearestSpawn } from '../renewal/spawn';
 
 const DEFENDER_RENEW_REQUEST = 800;
 const DEFENDER_RENEW_FULL = 1000;

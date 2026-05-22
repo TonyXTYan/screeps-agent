@@ -6,72 +6,91 @@ A TypeScript Screeps AI bot that manages a colony economy — source mining, hau
 upgrading, remote harvesting, and defense. Bundled via Rollup into `dist/main.js` and pushed to the
 Screeps server via `grunt-screeps`.
 
-## Source Map (22 modules)
+## Source Map (28 modules)
 
 ```
 src/
-  main.ts                  Entry point — Screeps calls loop() every tick
-  env.ts                   BUILD_COMMIT from git hash (injected by rollup banner)
-  hostileUtils.ts          Shared hostile detection helpers (`isHostile`, `findHostiles`)
+  main.ts                         Entry point — Screeps calls loop() every tick
+  env.ts                          BUILD_COMMIT from git hash (injected by rollup banner)
+  types.d.ts                      All Memory extensions and type unions
 
-  creep.capabilities.ts    Body → capability derivation, archetype inference, body planning
-  creep.jobRunner.ts       Job execution dispatch (19 job types)
-  creep.memoryManagement.ts Dead creep cleanup, fallback role assignment
-  creep.populationControl.ts Emergency defender spawning
-  creep.harvest.ts         Legacy direct-harvest helper
-  creep.roleBalance.ts     Legacy body planner (defender only)
+  constants/                      Shared constants (body ratios, danger ticks)
+  utils/                          Shared helpers (path, creep targeting)
 
-  room.controller.ts       Main economic controller (~3100 lines)
-  room.structures.ts       Structure discovery, link classification
+  combat/
+    hostiles.ts                   Hostile detection (isHostile, findHostiles)
+    flee.ts                       Non-combat creep flee/retreat from hostiles
+    heal.ts                       Emergency combat healing logic
+    defender.ts                   Defender combat behavior
 
-  tower.basics.ts          Tower attack/heal/repair
+  jobs/
+    runner.ts                     Job execution dispatch (19 job types)
 
-  role.harvester.ts        Legacy harvester fallback
-  role.builder.ts          Legacy builder fallback
-  role.upgrader.ts         Legacy upgrader fallback
-  role.doctor.ts           Legacy doctor fallback + shared repair utilities
-  role.defender.ts         Defender combat behavior
-  role.manual.ts           Manual-control stub
+  creeps/
+    capabilities.ts               Body → capability derivation, archetype inference, body planning
+    memory.ts                     Dead creep cleanup, fallback role assignment
+    harvest.ts                    Legacy direct-harvest helper
+    population.ts                 Emergency defender spawning
+    roleBalance.ts                Legacy body planner (defender only)
+    roles/                        Legacy fallback state machines
+      builder.ts, harvester.ts, upgrader.ts, doctor.ts, manual.ts
 
-  memoryAudit.ts           Memory consistency audit (runs on deploy)
-  debug.ts                 Console debug helpers
-  spawn.renewal.ts         Per-tick renew-spawn reservation helper
-  types.d.ts               All Memory extensions and type unions
+  room/
+    controller.ts                 Main economic controller
+    structures.ts                 Structure discovery, link classification
+
+  renewal/
+    home.ts                       Home creep renewal logic
+    remote.ts                     Remote creep renewal (in room/controller.ts)
+    standby.ts                    Standby miner parking
+    spawn.ts                      Per-tick renew-spawn reservation helper
+
+  tower/
+    basics.ts                     Tower attack/heal/repair
+
+  console/
+    api.ts                        Console helpers (remoteMining, debug, runMemoryAudit)
+
+  debug/
+    index.ts                      Console debug output (tickAutoDebug, tickRemoteCreepLog)
+    paths.ts                      Debug path visualization
+
+  audit/
+    memory.ts                     Memory consistency audit (runs on deploy)
 ```
 
-## Tick Loop (main.ts)
+## Tick Loop (main.ts — 77 lines, thin orchestrator)
+
+The `loop()` function has been extracted into focused modules. Combat logic lives in `src/combat/`, console APIs in `src/console/`, debug path hooks in `src/debug/paths.ts`, and renewal logic in `src/renewal/`.
 
 ```
 ┌─────────────────────────────────────────────┐
 │ loop() — called by Screeps every tick       │
 ├─────────────────────────────────────────────┤
-│ 1. Refresh debug-path state                 │
-│ 2. Install console helpers (once)           │
-│ 3. Log tick, generate pixel if bucket ≥10k  │
+│ 1. refreshDebugPathScan() — debug/paths.ts  │
+│ 2. installConsoleHelpers() — console/api.ts │
+│ 3. installDebugHelpers() — debug/index.ts   │
+│ 4. installMoveDebugHook() — debug/paths.ts  │
+│ 5. Log tick, generate pixel if bucket ≥10k  │
 ├─────────────────────────────────────────────┤
-│ 4. creepMemoryManagement.run()              │
-│    - Delete dead creep memory               │
-│    - Restore remote assignments for orphans │
-│    - Assign fallback roles                  │
+│ 6. creepMemoryManagement.run()              │
+│ 7. memoryAudit.runFullAudit() on code change│
 ├─────────────────────────────────────────────┤
-│ 5. memoryAudit.runIfBuildChanged()          │
-│    - Full consistency audit on new deploy   │
-│    - Skipped if CPU bucket < 500            │
-├─────────────────────────────────────────────┤
-│ 6. For each owned room:                     │
+│ 8. For each owned room:                     │
 │    a. populationControl.checkDefenders()    │
 │    b. roomController.run()                  │
 │    c. towerBasics.run()                     │
 ├─────────────────────────────────────────────┤
-│ 7. For each non-spawning creep:             │
+│ 9. For each non-spawning creep:             │
 │    a. Assign remote jobs if remoteRoom set  │
-│    b. Try to renew standby miners           │
+│    b. tryRenewStandbyMiner() — renewal/     │
 │    c. Run defender combat (bypasses jobs)   │
-│    d. Flee hostiles (or emergency heal)     │
-│    e. creepJobRunner.run() — execute job    │
-│    f. Fallback: role.harvester/builder/...  │
+│    d. fleeFromHostiles() — combat/flee.ts   │
+│    e. tryRenewHomeCreep() — renewal/home.ts │
+│    f. creepJobRunner.run() — jobs/runner.ts │
+│    g. Fallback: legacy role handlers        │
 ├─────────────────────────────────────────────┤
-│ 8. debug.tickRemoteCreepLog() — periodic    │
+│ 10. debug.tickRemoteCreepLog() / tickAutoDebug()│
 └─────────────────────────────────────────────┘
 ```
 

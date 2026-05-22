@@ -1,4 +1,4 @@
-import * as roleHarvester from './role.harvester';
+import * as roleHarvester from '../creeps/roles/harvester';
 
 export const specification: { [role: string]: number[] } = {
     harvester: [1, 1, 1, 0, 0, 0, 0, 0],

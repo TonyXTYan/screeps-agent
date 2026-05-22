@@ -1,3 +1,5 @@
+import { BODY_BUDGET_RATIO, BODY_MIN_BUDGET, MAX_CARRY_CAPACITY } from '../constants';
+
 export interface CreepCapabilities {
     move: number;
     work: number;
@@ -15,10 +17,6 @@ export interface CreepCapabilities {
     upgrade: number;
     reserve: number;
 }
-
-export const BODY_BUDGET_RATIO = 0.5;
-export const BODY_MIN_BUDGET = 300;
-export const MAX_CARRY_CAPACITY = 1000;
 
 const BODY_PART_COST: { [part in BodyPartConstant]: number } = {
     [MOVE]: 50,

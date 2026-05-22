@@ -1,9 +1,11 @@
-import { BODY_BUDGET_RATIO, BODY_MIN_BUDGET, MAX_CARRY_CAPACITY, bodyCost, ensureArchetype, getBodyCapabilities, getCreepCapabilities, planBodyForArchetype } from './creep.capabilities';
-import { clearJob } from './creep.jobRunner';
-import { getRoomStructures, RoomStructureCache } from './room.structures';
-import { repairStructureFilter, wallRampartRepairCap } from './role.doctor';
-import { findHostiles, isHostile } from './hostileUtils';
-import { acquireRenewSpawn, nearestSpawn, reserveRenewSpawns } from './spawn.renewal';
+import { BODY_BUDGET_RATIO, BODY_MIN_BUDGET, MAX_CARRY_CAPACITY, REMOTE_DANGER_TICKS } from '../constants';
+import { bodyCost, ensureArchetype, getBodyCapabilities, getCreepCapabilities, planBodyForArchetype } from '../creeps/capabilities';
+import { clearJob } from '../jobs/runner';
+import { getRoomStructures, RoomStructureCache } from './structures';
+import { repairStructureFilter, wallRampartRepairCap } from '../creeps/roles/doctor';
+import { findHostiles, isHostile } from '../combat/hostiles';
+import { acquireRenewSpawn, nearestSpawn, reserveRenewSpawns } from '../renewal/spawn';
+import { mirrorExitPositionIntoRoom } from '../utils/path';
 
 interface RoomControllerContext {
     room: Room;
@@ -98,7 +100,7 @@ const MINERAL_WORK_DEMAND = 5;
 const LINK_TRANSFER_THRESHOLD = 200;
 const BUILD_RESERVATION_TICKS = 10;
 const REPAIR_RESERVATION_TICKS = 5;
-const REMOTE_DANGER_TICKS = 1500;
+
 const REMOTE_PATH_REFRESH_INTERVAL = 5000;
 const REMOTE_INACCESSIBLE_RETRY_TICKS = 500;
 const REMOTE_CONTAINER_REROUTE_FREEZE_TICKS = 150;
@@ -1584,14 +1586,6 @@ function remoteEntryPositions(homeRoom: Room, remoteRoomName: string): RoomPosit
         if (mirrored) { entries.push(mirrored); }
     }
     return entries;
-}
-
-function mirrorExitPositionIntoRoom(exit: RoomPosition, roomName: string): RoomPosition | null {
-    if (exit.x === 0) { return new RoomPosition(49, exit.y, roomName); }
-    if (exit.x === 49) { return new RoomPosition(0, exit.y, roomName); }
-    if (exit.y === 0) { return new RoomPosition(exit.x, 49, roomName); }
-    if (exit.y === 49) { return new RoomPosition(exit.x, 0, roomName); }
-    return null;
 }
 
 function bestRemoteEntryRoute(entries: RoomPosition[], station: RoomPosition, blockedPos?: RoomPosition): PathFinderPath | null {

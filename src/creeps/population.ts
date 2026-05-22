@@ -1,6 +1,7 @@
-import * as creepRoleBalance from './creep.roleBalance';
-import { BODY_BUDGET_RATIO, BODY_MIN_BUDGET, bodyCost } from './creep.capabilities';
-import { isHostile } from './hostileUtils';
+import * as creepRoleBalance from '../creeps/roleBalance';
+import { BODY_BUDGET_RATIO, BODY_MIN_BUDGET } from '../constants';
+import { bodyCost } from '../creeps/capabilities';
+import { isHostile } from '../combat/hostiles';
 
 const DEFENDER_SPAWN_ATTEMPT_INTERVAL = 5;
 

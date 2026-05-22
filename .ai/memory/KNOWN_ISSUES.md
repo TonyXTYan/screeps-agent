@@ -70,7 +70,7 @@ This file tracks known follow-up work that future agents should consider before 
 - `interruptReason` is written for observability but not consumed.
 - Remote hauler repair/build branches rely on WORK part for opportunistic maintenance. All non-minimal remoteHauler bodies now include WORK+MOVE, enabling this feature reliably.
 - Remote room memory (plans, serialized paths, demand data) is never garbage-collected when a room is disabled. Over many enable/disable cycles, this accumulates stale memory.
-- `room.controller.ts` is 2,868 lines — a god module. Candidates for extraction: remote room logic (~400 lines), spawn planning (~250 lines), job assignment (~300 lines).
+- (Fixed) `room/controller.ts` was 2,868 lines — a god module. Refactored into folder-based modules: `room/`, `combat/`, `jobs/`, `creeps/`, `renewal/`, `tower/`, `console/`, `debug/`, `audit/`, `utils/`, `constants/`. `main.ts` reduced from 572 to 77 lines. Duplicated utility functions consolidated into `utils/path.ts` and `utils/creep.ts`.
 
 ## Deferred By Strategy
 

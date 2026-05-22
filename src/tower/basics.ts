@@ -1,5 +1,5 @@
-import { repairStructureFilter } from './role.doctor';
-import { isHostile } from './hostileUtils';
+import { repairStructureFilter } from '../creeps/roles/doctor';
+import { isHostile } from '../combat/hostiles';
 
 const DEFENSE_CRITICAL_HITS = 10_000;
 const DEFENSE_CRITICAL_MIN_ENERGY = 0.5;

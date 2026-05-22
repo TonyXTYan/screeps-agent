@@ -1,5 +1,5 @@
-import { ensureArchetype } from './creep.capabilities';
-import { getRoomStructures } from './room.structures';
+import { ensureArchetype } from '../creeps/capabilities';
+import { getRoomStructures } from '../room/structures';
 
 const DEBUG_CREEP_INTERVAL = 10;
 let debugCreepsLastPrintedAt: number | undefined;

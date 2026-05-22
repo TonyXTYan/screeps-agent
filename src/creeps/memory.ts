@@ -1,4 +1,4 @@
-import { ensureArchetype } from './creep.capabilities';
+import { ensureArchetype } from '../creeps/capabilities';
 
 export function run(): void {
     const spawningNames = creepsCurrentlySpawning();

@@ -76,8 +76,8 @@ haulerCapacityDemand = min(
 
 - **Behavior and policy overview:** `architecture/OVERVIEW.md` and `architecture/ECONOMY.md` (spawning priorities, population model)
 - **Known issues & fixes:** `.ai/memory/KNOWN_ISSUES.md` (hauler/worker overflow fixes)
-- **Spawn planning logic:** `src/room.controller.ts:1377–1576` (`chooseSpawnRequest()` and `remoteSpawnRequest()`)
-- **Population control:** `src/creep.populationControl.ts` (emergency defenders)
+- **Spawn planning logic:** `src/room/controller.ts:1377–1576` (`chooseSpawnRequest()` and `remoteSpawnRequest()`)
+- **Population control:** `src/creeps/population.ts` (emergency defenders)
 - **Economic architecture:** `architecture/ECONOMY.md` (spawn planning priority list)
 - **Remote architecture:** `architecture/REMOTES.md` (remote creep flow)
 

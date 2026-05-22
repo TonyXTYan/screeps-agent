@@ -1,6 +1,6 @@
-import * as creepHarvest from './creep.harvest';
-import * as roleDoctor from './role.doctor';
-import * as towerBasics from './tower.basics';
+import * as creepHarvest from '../harvest';
+import * as roleDoctor from './doctor';
+import * as towerBasics from '../../tower/basics';
 
 export function energyTargets(creep: Creep): EnergyStructure[] {
     return creep.room.find(FIND_STRUCTURES, {

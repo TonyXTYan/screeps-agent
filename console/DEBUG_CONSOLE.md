@@ -1,6 +1,6 @@
 # Debug Console Guide
 
-Debug helpers are exposed on `globalThis.debug` from `src/debug.ts`. These are independent of remote mining operations and work for any room.
+Debug helpers are exposed on `globalThis.debug` from `src/debug/index.ts`. These are independent of remote mining operations and work for any room.
 
 ## Functions
 

@@ -90,7 +90,7 @@ Attack always proceeds regardless of energy level.
 | 7   | 300,000   |
 | 8   | Infinity  |
 
-From `wallRampartRepairCap()` in `role.doctor.ts`.
+From `wallRampartRepairCap()` in `src/repairs/policy.ts`.
 
 ### Tower under-siege override
 
@@ -132,7 +132,11 @@ if (creep.memory.role === 'defender') { roleDefender.run(creep); continue; }
 ```
 This gives defenders immediate combat/renewal behavior and bypasses economic job assignment.
 
-## Layer 3: Non-Combat Flee (main.ts)
+## Layer 3: Non-Combat Flee (combat/flee.ts)
+
+`combat/flee.ts` orchestrates this flow, with emergency-heal targeting in
+`combat/emergencyHealing.ts` and remote/home-retreat + edge-nudge routing in
+`combat/remoteRetreat.ts`.
 
 ### Flee behavior
 

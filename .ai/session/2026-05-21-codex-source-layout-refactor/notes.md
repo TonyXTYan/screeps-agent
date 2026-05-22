@@ -1,0 +1,180 @@
+# Source Layout Refactor Notes
+
+## 2026-05-21
+
+Goal: move the codebase toward domain-based source structure without changing runtime behavior.
+
+Completed slices:
+
+- Split `src/main.ts` down to tick orchestration.
+- Moved build-change detection to `src/bootstrap/codeChange.ts`.
+- Moved global console helpers to `src/bootstrap/consoleApi.ts`.
+- Moved remote debug path visualization hook to `src/debug/pathVisuals.ts`.
+- Moved hostile flee/remote retreat/emergency heal behavior to `src/combat/flee.ts`.
+- Moved home renew gating and standby remote-miner parking to `src/creeps/renewal.ts`.
+- Moved job movement, `travelRoom`, and stuck recovery from `src/creep.jobRunner.ts` to `src/creeps/jobs/movement.ts`.
+- Moved job memory setters, resource/travel jobs, and primary-job resume memory to `src/creeps/jobs/memory.ts`.
+- Moved shared repair policy from legacy `role.doctor.ts` to `src/repairs/policy.ts`; legacy doctor re-exports the policy for compatibility.
+- Moved remote path serialization/distance/station-selection helpers to `src/rooms/remotes/pathing.ts`.
+- Moved remote road-site placement helpers to `src/rooms/remotes/roads.ts`.
+- Moved remote fleet counts and standby-replacement helpers to `src/rooms/remotes/fleet.ts`.
+- Moved shared Store/resource helper functions to `src/resources/store.ts`; preserved the room controller's non-energy-preferred selection behavior via `firstStoredResourcePreferNonEnergy`.
+- Moved room-controller interfaces to `src/rooms/controllerTypes.ts`.
+- Moved closest-target selection helpers to `src/utils/selection.ts`.
+- Moved heal-target prioritization helpers to `src/combat/healing.ts`.
+- Moved local source/mineral planning and source assignment helpers to `src/rooms/planning/sources.ts`.
+- Moved job reservation accounting helpers to `src/rooms/jobs/reservations.ts`.
+- Moved construction/repair/upgrade target ranking and upgrade reservation policy to `src/rooms/jobs/work.ts`.
+- Moved room energy pressure/refill/terminal reserve helpers to `src/rooms/energy.ts`.
+- Moved link transfer and receiver/sender selection helpers to `src/rooms/links.ts`.
+- Moved remote hauler energy target selection and cross-source overflow rules to `src/rooms/remotes/energy.ts`.
+- Moved current/pending spawn capability accounting and renewal-demand helpers to `src/rooms/spawning/accounting.ts`.
+- Moved spawn body minimum checks and legacy role mapping to `src/rooms/spawning/bodyPolicy.ts`.
+- Moved the dedicated remote-hauler pickup/delivery/post-trip-renew/home-idle cycle to `src/rooms/remotes/haulerCycle.ts`.
+- Moved the deterministic string hash helper to `src/utils/hash.ts`.
+- Moved generic non-hauler remote renewal to `src/rooms/remotes/renewal.ts`.
+- Moved remote road/container build eligibility and target selection to `src/rooms/remotes/infrastructure.ts`.
+- Moved remote miner station stall tracking and route-health mutation to `src/rooms/remotes/minerStation.ts`.
+- Moved standby remote-miner source handoff and pre-positioning to `src/rooms/remotes/standbyMiner.ts`.
+- Moved the remote creep assignment wrapper to `src/rooms/remotes/assignment.ts`.
+- Moved remote room scouting, danger marking, source/path/container/road planning, and remote hauler capacity demand updates to `src/rooms/remotes/planning.ts`.
+- Moved spawn loop, local spawn request selection, and spawn demand helpers to `src/rooms/spawning/planner.ts`.
+- Moved local resource pickup, salvage withdrawal, energy withdraw/deposit, and mining-site target selection to `src/rooms/jobs/targets.ts`.
+- Moved local creep job assignment, current-job retention, primary-job resume, and emergency refill interrupts to `src/rooms/jobs/assignment.ts`.
+- Moved `mineralReadyToMine()` from spawn planning to `src/rooms/planning/sources.ts` so spawning and local job assignment share the same planning helper.
+- Moved current-job retention, reservation carry-forward, and interrupt policy to `src/rooms/jobs/current.ts`.
+- Moved static source/mineral memory setters and clear helper to `src/rooms/planning/sources.ts`.
+- Moved worker/hauler energy spending, partial-energy worker jobs, and primary build/repair/upgrade resume to `src/rooms/jobs/energyWork.ts`.
+- Moved remote spawn request selection to `src/rooms/spawning/remote.ts`.
+- Moved remote spawn gates, remote minimum body checks, and remote skip logging to `src/rooms/spawning/remotePolicy.ts`.
+- Moved job side effects (remote-hauler pass-by build/repair, adjacent offload/link relay, and HEAL-part auto-healing) to `src/creeps/jobs/sideEffects.ts`.
+- Moved remote debug status rendering and owned-room enumeration to `src/debug/remoteStatus.ts`, leaving `src/debug.ts` as the console API/tick cadence/home-status wrapper.
+- Moved traffic-yield request handling and priority negotiation from `src/creeps/jobs/movement.ts` to `src/creeps/jobs/traffic.ts`.
+- Moved remote source allocation/details and dropped-resource debug sections to `src/debug/remoteSources.ts`.
+- Moved remote scout pack accounting, non-scout assignment checks, and visible-room crowd checks to `src/rooms/remotes/scouts.ts`.
+- Moved remote maintainer presence, infrastructure demand, and degraded-route demand checks to `src/rooms/remotes/maintenance.ts`.
+- Moved remote energy claim accounting, access-slot scoring, and reachability checks to `src/rooms/remotes/energyClaims.ts`.
+- Split remote energy source-target enumeration and cross-source target selection helpers into `src/rooms/remotes/energyTargets.ts`, leaving `src/rooms/remotes/energy.ts` as orchestration and target-path gating.
+- Split role-specific remote scout/miner/maintainer/fallback routing into `src/rooms/remotes/assignmentRoles.ts`, leaving `src/rooms/remotes/assignment.ts` as assignment orchestration and shared remote-plan/travel/build/claimer flow.
+- Split memory audit room/remote-plan cleanup and valid source/remote key helpers into `src/memoryAuditRooms.ts`, and creep-memory cleanup/source-dedupe helpers into `src/memoryAuditCreeps.ts`, leaving `src/memoryAudit.ts` as audit orchestration.
+- Split remote-hauler home-side delivery, renew loop, and home-idle wander helpers into `src/rooms/remotes/haulerHome.ts`, leaving `src/rooms/remotes/haulerCycle.ts` as pickup/return/top-up orchestration.
+- Split local spawn demand math/request policy into `src/rooms/spawning/requestSelection.ts`, leaving `src/rooms/spawning/planner.ts` focused on spawn loop/execution and pending-request accounting integration.
+- Split job-type execution handlers and job-clear policy into `src/creeps/jobs/execution.ts`, leaving `src/creep.jobRunner.ts` as orchestration/dispatch and side-effect hooks.
+- Split `src/creeps/jobs/execution.ts` by execution domain: harvest/mineral handlers in `src/creeps/jobs/executionHarvest.ts`, transfer/withdraw/pickup/deposit handlers in `src/creeps/jobs/executionTransfer.ts`, build/repair/upgrade/heal/controller/idle handlers in `src/creeps/jobs/executionWork.ts`, target/station resolvers in `src/creeps/jobs/executionTargets.ts`, and dispatch/clear policy kept in `src/creeps/jobs/execution.ts`.
+- Split remote creep-status line formatting/nav/path labels/per-target claim tagging into `src/debug/remoteStatusLines.ts`, leaving `src/debug/remoteStatus.ts` as remote debug orchestration and source-section integration.
+- Split home creep-status/mineral-status debug rendering into `src/debug/homeStatus.ts`, leaving `src/debug.ts` as debug API and tick orchestration.
+- Moved overflow remote-scout wander routing to `src/rooms/remotes/scoutOverflow.ts`.
+- Moved current-job target validity and resource/work guards to `src/rooms/jobs/validity.ts`.
+- Moved remote per-source coverage, station caps, replacement horizons, and idle-hauler detection to `src/rooms/remotes/coverage.ts`.
+- Moved room-edge recovery, exit targeting, forced exit steps, and random escape nudges to `src/creeps/jobs/edgeNavigation.ts`.
+- Split strategic body planning (`planBodyForArchetype` and builders) into `src/creeps/bodyPlans.ts`, leaving `src/creep.capabilities.ts` focused on capability derivation and archetype inference.
+- Split remote target/nav/path debug label helpers into `src/debug/remoteStatusNav.ts`, leaving `src/debug/remoteStatusLines.ts` focused on per-creep status line assembly and sorting.
+- Split home-room mineral/extractor/container debug section rendering into `src/debug/homeStatusMineral.ts`, leaving `src/debug/homeStatus.ts` focused on home creep-status line rendering and energy-demand summary.
+- Split remote miner/maintainer role handlers into `src/rooms/remotes/assignmentRoleMiner.ts` and `src/rooms/remotes/assignmentRoleMaintainer.ts`, leaving `src/rooms/remotes/assignmentRoles.ts` focused on remote scout/fallback assignment and role-handler exports.
+- Consolidated duplicated emergency refill decision policy into `src/rooms/jobs/current.ts` (`desiredEmergencyEnergyDelivery`), so both current-job interruption and new assignment use one shared selection rule.
+- Split local energy gather/withdraw/deposit target selection into `src/rooms/jobs/energyTargets.ts`, leaving `src/rooms/jobs/targets.ts` focused on dropped-resource/salvage/mineral-container resource targeting.
+- Split `src/types.d.ts` into domain declarations under `src/types/` (`shared.d.ts`, `roomPlans.d.ts`, `memory.d.ts`) to separate unions, room-plan interfaces, and memory extensions.
+- Split energy-work build/repair/upgrade/refill assignment helpers into `src/rooms/jobs/energyWorkAssignment.ts`, leaving `src/rooms/jobs/energyWork.ts` focused on energy-spending orchestration and primary-job resume checks.
+- Split remote-hauler home delivery routing/sink selection into `src/rooms/remotes/haulerHomeDelivery.ts`, leaving `src/rooms/remotes/haulerHome.ts` focused on renew/home-idle/wander behavior.
+- Split haul/resource acquisition assignment policy into `src/rooms/jobs/assignmentHauling.ts`, leaving `src/rooms/jobs/assignment.ts` focused on assignment orchestration and non-hauling role branches.
+- Split shared emergency energy-delivery decision/interrupt/assignment policy into `src/rooms/jobs/emergencyEnergy.ts`, leaving `src/rooms/jobs/current.ts` focused on current-job retention/reservation carry-forward and `src/rooms/jobs/assignment.ts` focused on assignment orchestration.
+- Split source-assignment/static-mining memory helpers into `src/rooms/jobs/sourceAssignment.ts`, leaving `src/rooms/planning/sources.ts` focused on source/mineral planning plus source demand/coverage accounting.
+- Split remote source debug rendering into `src/debug/remoteSourceSummary.ts` and `src/debug/remoteSourceDetails.ts`, leaving `src/debug/remoteSources.ts` as section orchestration.
+- Split room-exit targeting and forced exit-step pathing into `src/creeps/jobs/edgeExitPathing.ts`, leaving `src/creeps/jobs/edgeNavigation.ts` focused on room-edge recovery and edge sidestep/escape behavior.
+- Split harvest-mode remote spawn demand logic into `src/rooms/spawning/remoteHarvest.ts`, leaving `src/rooms/spawning/remote.ts` focused on remote-mode orchestration.
+- Split remote spawn minimum-cost policy into `src/rooms/spawning/remotePolicyCost.ts` and shared remote spawn policy predicates/helpers into `src/rooms/spawning/remotePolicyShared.ts`, leaving `src/rooms/spawning/remotePolicy.ts` focused on recovery/throttle gates and skip logging orchestration.
+- Split harvest-mode per-source remote spawn demand and standby replacement logic into `src/rooms/spawning/remoteHarvestSourceDemand.ts`, leaving `src/rooms/spawning/remoteHarvest.ts` focused on harvest-mode orchestration.
+- Split shared remote energy target-picking helpers into `src/rooms/remotes/remoteEnergyTargetPicker.ts`, leaving `src/rooms/remotes/energyTargets.ts` focused on source target enumeration and cross-source selection policy.
+- Split remote source path/container/road planning and demand updates into `src/rooms/remotes/remotePlanningSources.ts`, leaving `src/rooms/remotes/planning.ts` focused on remote-room planning orchestration (visibility/danger/defaults).
+- Split remote source route-health mutation and station-failure policy into `src/rooms/remotes/remoteRouteHealth.ts`, leaving `src/rooms/remotes/minerStation.ts` focused on miner stall/no-progress detection and station-route update orchestration.
+- Split memory-audit duplicate source-assignment and orphaned-source cleanup into `src/memoryAuditSourceAssignments.ts`, and invalid remote/home creep-memory cleanup into `src/memoryAuditRemoteMemory.ts`, leaving `src/memoryAuditCreeps.ts` focused on stale travel cleanup plus helper re-exports.
+- Split spawn planner pending-spawn snapshot and spawn name/memory assembly into `src/rooms/spawning/spawnRequestHelpers.ts`, leaving `src/rooms/spawning/planner.ts` focused on spawn loop orchestration and energy/body gate decisions.
+- Split room context construction and room plan/load snapshot updates into `src/rooms/controllerState.ts`, leaving `src/room.controller.ts` as orchestration entrypoint.
+- Split remote standby replacement/source-target helpers into `src/rooms/remotes/fleetStandby.ts`, leaving `src/rooms/remotes/fleet.ts` focused on home-room fleet enumeration and role counts.
+- Split remote per-source container/drop target enumeration and source-energy accounting into `src/rooms/remotes/energySourceTargets.ts`, leaving `src/rooms/remotes/energyTargets.ts` focused on assigned-source/cross-source target selection policy.
+- Split room load snapshot memory writes and passive infrastructure reporting into `src/rooms/controllerLoad.ts`, leaving `src/rooms/controllerState.ts` focused on room context build and room-plan state updates.
+- Split remote workforce coverage/replacement projections into `src/rooms/remotes/remoteCoverageProjections.ts` and source station/static-mining policy into `src/rooms/remotes/remoteSourceStations.ts`, leaving `src/rooms/remotes/coverage.ts` as compatibility exports.
+- Split critical ally heal targeting and retreat-heal helpers into `src/combat/emergencyHealing.ts`, and remote danger marking/home-retreat/edge-nudge helpers into `src/combat/remoteRetreat.ts`, leaving `src/combat/flee.ts` focused on hostile-flee orchestration.
+- Split home creep-status line formatting/target labels into `src/debug/homeStatusLine.ts` and home energy/recovery summary formatting into `src/debug/homeEnergySummary.ts`, leaving `src/debug/homeStatus.ts` focused on home debug orchestration.
+- Split remote creep status-line construction (status/pathing/claim/nav tags) into `src/debug/remoteStatusLineBuilder.ts`, leaving `src/debug/remoteStatusLines.ts` focused on collection and sort orchestration.
+- Split room link classification policy into `src/rooms/linkGroups.ts` and structure-memory refresh/change-detection policy into `src/rooms/structureMemoryCache.ts`, leaving `src/room.structures.ts` focused on structure discovery and cache orchestration.
+- Split cross-room `travelRoom` routing into `src/creeps/jobs/movementTravelRoom.ts`, generic move-to-target behavior into `src/creeps/jobs/movementTargets.ts`, and stuck/reset helpers into `src/creeps/jobs/movementStuck.ts`, leaving `src/creeps/jobs/movement.ts` as compatibility exports.
+- Split remote hauler renew-cycle policy into `src/rooms/remotes/haulerHomeRenewal.ts` and home idle/wander targeting into `src/rooms/remotes/haulerHomeIdle.ts`, leaving `src/rooms/remotes/haulerHome.ts` as compatibility exports.
+
+Verification:
+
+- `npm run build` passed after both extraction slices.
+- `npm run build` also passed after the room remote utility and resource helper extractions.
+- `npm run build` passed after the controller type, selection/healing, source-planning, and reservation extractions.
+- `npm run build` passed after the room energy and link transfer extractions.
+- `npm run build` passed after the remote energy targeting extraction.
+- `npm run build` passed after the job-memory and local work-target policy extractions.
+- `npm run build` passed after the remote fleet accounting extraction.
+- `npm run build` passed after the spawn accounting and body-policy extractions.
+- `npm run build` passed after the remote-hauler cycle extraction.
+- `npm run build` passed after the remote renewal, infrastructure, miner-station, and standby-miner extractions.
+- `npm run build` passed after the remote assignment and remote room-planning extractions.
+- `npm run build` passed after the spawn planner extraction.
+- `npm run build` passed after the local job target-selection extraction.
+- `npm run build` passed after the local job assignment extraction.
+- `npm run build` passed after the current-job retention extraction.
+- `npm run build` passed after the energy-work assignment extraction.
+- `npm run build` passed after the remote spawn extraction.
+- `npm run build` passed after the remote spawn policy extraction.
+- `npm run build` passed after the job side-effects extraction.
+- `npm run build` passed after the remote debug status extraction.
+- `npm run build` passed after the job traffic-yield extraction.
+- `npm run build` passed after the remote source debug-section extraction.
+- `npm run build` passed after the remote scout accounting extraction.
+- `npm run build` passed after the remote maintainer demand extraction.
+- `npm run build` passed after the remote energy claim/access extraction.
+- `npm run build` passed after the remote energy target-selection helper extraction (`energyTargets.ts`).
+- `npm run build` passed after the remote assignment role-routing helper extraction (`assignmentRoles.ts`).
+- `npm run build` passed after the memory-audit helper extraction (`memoryAuditRooms.ts` + `memoryAuditCreeps.ts`).
+- `npm run build` passed after the remote-hauler home helper extraction (`haulerHome.ts`).
+- `npm run build` passed after the spawn request-selection helper extraction (`requestSelection.ts`).
+- `npm run build` passed after the job execution-handler extraction (`creeps/jobs/execution.ts`).
+- `npm run build` passed after the execution-domain split (`executionHarvest.ts`, `executionTransfer.ts`, `executionWork.ts`, `executionTargets.ts`).
+- `npm run build` passed after the remote status line-format extraction (`remoteStatusLines.ts`).
+- `npm run build` passed after the home-status debug extraction (`homeStatus.ts`).
+- `npm run build` passed after the remote scout overflow extraction.
+- `npm run build` passed after the current-job validity extraction.
+- `npm run build` passed after the remote coverage extraction.
+- `npm run build` passed after the movement edge-navigation extraction.
+- `npm run build` passed after the strategic body-planning extraction (`creeps/bodyPlans.ts`).
+- `npm run build` passed after the remote nav/path debug-label extraction (`debug/remoteStatusNav.ts`).
+- `npm run build` passed after the home mineral-status debug extraction (`debug/homeStatusMineral.ts`).
+- `npm run build` passed after the remote assignment-role extraction (`assignmentRoleMiner.ts` + `assignmentRoleMaintainer.ts`).
+- `npm run build` passed after emergency-refill policy deduplication between `jobs/current.ts` and `jobs/assignment.ts`.
+- `npm run build` passed after local energy-target policy extraction (`jobs/energyTargets.ts`).
+- `npm run build` passed after type declaration domain split (`types/shared.d.ts`, `types/roomPlans.d.ts`, `types/memory.d.ts`).
+- `npm run build` passed after energy-work assignment helper extraction (`jobs/energyWorkAssignment.ts`).
+- `npm run build` passed after remote-hauler home delivery extraction (`remotes/haulerHomeDelivery.ts`).
+- `npm run build` passed after haul/resource assignment extraction (`jobs/assignmentHauling.ts`).
+- `npm run build` passed after emergency-energy policy extraction (`jobs/emergencyEnergy.ts`).
+- `npm run build` passed after source-assignment helper extraction (`jobs/sourceAssignment.ts`).
+- `npm run build` passed after remote source debug-section split (`debug/remoteSourceSummary.ts` + `debug/remoteSourceDetails.ts`).
+- `npm run build` passed after edge-exit pathing extraction (`creeps/jobs/edgeExitPathing.ts`).
+- `npm run build` passed after remote harvest-mode spawn extraction (`spawning/remoteHarvest.ts`).
+- `npm run build` passed after remote spawn policy split (`spawning/remotePolicyCost.ts` + `spawning/remotePolicyShared.ts`).
+- `npm run build` passed after harvest per-source spawn-demand extraction (`spawning/remoteHarvestSourceDemand.ts`).
+- `npm run build` passed after remote energy target-picker extraction (`remotes/remoteEnergyTargetPicker.ts`).
+- `npm run build` passed after remote source-planning extraction (`remotes/remotePlanningSources.ts`).
+- `npm run build` passed after remote route-health extraction (`remotes/remoteRouteHealth.ts`).
+- `npm run build` passed after memory-audit creep cleanup split (`memoryAuditSourceAssignments.ts` + `memoryAuditRemoteMemory.ts`).
+- `npm run build` passed after spawn planner helper extraction (`spawning/spawnRequestHelpers.ts`).
+- `npm run build` passed after room controller-state extraction (`rooms/controllerState.ts`).
+- `npm run build` passed after remote standby-helper extraction (`remotes/fleetStandby.ts`).
+- `npm run build` passed after remote source-target enumeration split (`remotes/energySourceTargets.ts`).
+- `npm run build` passed after room load-state extraction (`rooms/controllerLoad.ts`).
+- `npm run build` passed after remote coverage policy split (`remotes/remoteCoverageProjections.ts` + `remotes/remoteSourceStations.ts`).
+- `npm run build` passed after combat flee split (`combat/emergencyHealing.ts` + `combat/remoteRetreat.ts`).
+- `npm run build` passed after home debug split (`debug/homeStatusLine.ts` + `debug/homeEnergySummary.ts`).
+- `npm run build` passed after remote status-line split (`debug/remoteStatusLineBuilder.ts`).
+- `npm run build` passed after room structure split (`rooms/linkGroups.ts` + `rooms/structureMemoryCache.ts`).
+- `npm run build` passed after movement split (`creeps/jobs/movementTravelRoom.ts` + `creeps/jobs/movementTargets.ts` + `creeps/jobs/movementStuck.ts`).
+- `npm run build` passed after remote hauler-home split (`remotes/haulerHomeRenewal.ts` + `remotes/haulerHomeIdle.ts`).
+
+Remaining high-value refactor targets:
+
+- Split remaining large modules such as `src/rooms/remotes/remotePlanningSources.ts`, `src/rooms/jobs/energyTargets.ts`, and `src/rooms/energy.ts` by responsibility once behavior stabilizes.

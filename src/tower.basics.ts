@@ -1,4 +1,4 @@
-import { repairStructureFilter } from './role.doctor';
+import { repairStructureFilter } from './repairs/policy';
 import { isHostile } from './hostileUtils';
 
 const DEFENSE_CRITICAL_HITS = 10_000;
@@ -118,5 +118,4 @@ export function tryFillTowerUnderSiege(creep: Creep): boolean {
 
     return transferCode === OK;
 }
-
 

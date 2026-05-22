@@ -40,7 +40,7 @@ runSpawnPlanner()   → spawn creeps to fill measured deficits
 | `remoteScout` | 1–2 MOVE parts only |
 | `claimer` | CLAIM+MOVE pairs scaled to budget; min 1 part, reserve mode min 2 |
 
-Body planning lives in `planBodyForArchetype()` in `creep.capabilities.ts`. Legacy body planning
+Body planning lives in `planBodyForArchetype()` in `creeps/bodyPlans.ts`. Legacy body planning
 (`balanceSpec()` in `creep.roleBalance.ts`) is used only for emergency defenders.
 
 **Body budget cap:** All archetypes are planned against `max(BODY_MIN_BUDGET, floor(energyCapacityAvailable × BODY_BUDGET_RATIO))` rather than the raw `energyCapacityAvailable`. With `BODY_BUDGET_RATIO = 0.5` and `BODY_MIN_BUDGET = 300`, bodies target at most 50% of room energy capacity, so creeps can spawn with partial extension fill. Demand calculations (`desiredHaulerCapacity`, `desiredWorkerWork`) use the same capped budget so population counts stay consistent with actual body sizes. At RCL 8 the 50-part body limit typically binds first, so those bodies are unaffected.
@@ -49,7 +49,7 @@ Body planning lives in `planBodyForArchetype()` in `creep.capabilities.ts`. Lega
 
 ## Spawn Planning Priority
 
-`chooseSpawnRequest()` in `room.controller.ts` selects the next creep to spawn:
+`chooseSpawnRequest()` in `src/rooms/spawning/planner.ts` selects the next creep to spawn:
 
 ```
 1. Emergency worker          → if no creeps exist (recovery)
@@ -61,7 +61,7 @@ Body planning lives in `planBodyForArchetype()` in `creep.capabilities.ts`. Lega
 7. Worker work capacity      → work deficit
 8. Mineral miner             → if mineral ready (extractor exists, container exists, mineral.mineralAmount > 0)
 9. Claim target              → configured claimTargets
-10. Remote creeps            → via remoteSpawnRequest() (see REMOTES.md)
+10. Remote creeps            → via remoteSpawnRequest() orchestration in `src/rooms/spawning/remote.ts` with harvest-mode flow in `src/rooms/spawning/remoteHarvest.ts` and per-source/standby demand in `src/rooms/spawning/remoteHarvestSourceDemand.ts` (see REMOTES.md)
 ```
 
 **Gates**:
@@ -135,7 +135,7 @@ Each tick the runner:
 1. Dispatches to the correct handler based on `jobType`
 2. Stores `lastJobResult` in creep memory
 3. Clears the job if the result is terminal (target gone, energy depleted, done)
-4. Runs `opportunisticHealNearby()` for non-heal jobs (HEAL parts auto-heal nearby creeps)
+4. Runs job side effects from `src/creeps/jobs/sideEffects.ts`: remote-hauler pass-by build/repair for non-build/repair jobs, and `opportunisticHealNearby()` for non-heal jobs
 
 ## Source Miner Lifecycle
 
@@ -166,7 +166,7 @@ Remote miners do not renew at the home spawn. Instead, handoff replacement uses 
 ## Job Reservation System
 
 To prevent multiple creeps targeting the same resource (e.g., three haulers all going for the same
-dropped energy), `room.controller.ts` builds a `JobReservations` object each tick:
+dropped energy), `src/rooms/jobs/assignment.ts` builds a `JobReservations` object each tick:
 
 ```
 Reservations track:
@@ -183,10 +183,19 @@ Reservations track:
 
 Creeps are sorted by archetype priority (miner=1, mineralMiner=2, hauler=3, doctor=4, worker=5)
 and assigned jobs in order, deducting from reservations to avoid pile-ups.
+Current-job retention and reservation carry-forward live in `src/rooms/jobs/current.ts`.
+Emergency refill interruption/assignment policy lives in `src/rooms/jobs/emergencyEnergy.ts`.
+Miner source assignment and static-mining memory helpers live in `src/rooms/jobs/sourceAssignment.ts`.
+Current-job target validity and resource/work guards live in `src/rooms/jobs/validity.ts`.
+Worker/hauler energy spending, partial-energy worker jobs, and primary build/repair/upgrade resume live in
+`src/rooms/jobs/energyWork.ts`.
+Local energy gather/withdraw/deposit target selection lives in `src/rooms/jobs/energyTargets.ts`.
+Local resource pickup, salvage withdrawal, and mining-site resource target selection live in
+`src/rooms/jobs/targets.ts`.
 
 ## Links
 
-Links are classified into groups by `room.structures.ts`. **A link can belong to multiple groups simultaneously** if it is near multiple qualifying structures:
+Links are classified into groups by `src/rooms/linkGroups.ts` (called by `room.structures.ts`). **A link can belong to multiple groups simultaneously** if it is near multiple qualifying structures:
 - **source** — within range 2 of any source; sends energy outward
 - **hub** — within range 3 of storage or any spawn; receives energy
 - **controller** — within range 4 of the room controller; receives energy for upgrading

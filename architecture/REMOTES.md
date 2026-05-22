@@ -55,7 +55,9 @@ sources?: {
 
 ## Remote Spawn Flow
 
-`remoteSpawnRequest()` runs per remote room in spawn priority order:
+`remoteSpawnRequest()` in `src/rooms/spawning/remote.ts` orchestrates per-remote mode flow, with
+harvest-mode demand flow in `src/rooms/spawning/remoteHarvest.ts` and per-source/standby demand in
+`src/rooms/spawning/remoteHarvestSourceDemand.ts`:
 
 ```
 For each configured remote room:
@@ -74,6 +76,22 @@ Remote spawning is conservative when the home room is under pressure:
 - If stored energy is below 2k, or available spawn/extension energy is below 50%, only scouts, zero-coverage emergency remote miners without source-less standby debt, and degraded-route maintainers are allowed.
 - If stored energy is below 5k, new income-consuming remote spawns are limited to the first enabled harvest remote.
 - Remote haulers are also suppressed while existing haulers for that remote show route congestion.
+
+Remote room discovery, danger marking, and remote planning orchestration live in
+`src/rooms/remotes/planning.ts`. Source path planning, container-site placement, road-site
+placement scheduling, and per-source hauler capacity demand updates live in
+`src/rooms/remotes/remotePlanningSources.ts`.
+Per-source remote workforce coverage, replacement horizons, and idle-hauler detection live in
+`src/rooms/remotes/remoteCoverageProjections.ts`. Source station/static-mining policy and miner
+slot-capping helpers live in `src/rooms/remotes/remoteSourceStations.ts`; `src/rooms/remotes/coverage.ts`
+is kept as compatibility exports. Home-room fleet enumeration and role-count helpers live in
+`src/rooms/remotes/fleet.ts`; standby-replacement helpers live in `src/rooms/remotes/fleetStandby.ts`.
+Remote miner station stall tracking lives in `src/rooms/remotes/minerStation.ts`; route-health mutation
+and station-failure handling live in `src/rooms/remotes/remoteRouteHealth.ts`.
+Per-creep remote assignment orchestration (shared remote plan checks, remote travel gating, infrastructure
+build assignment, and claimer assignment) lives in `src/rooms/remotes/assignment.ts`; role-specific
+remote scout/miner/maintainer/fallback routing helpers live in `src/rooms/remotes/assignmentRoles.ts`;
+overflow remote-scout wander routing lives in `src/rooms/remotes/scoutOverflow.ts`.
 
 ## Hauler Capacity Model
 
@@ -103,6 +121,18 @@ Remote miners normally wait for a body that meets the source work demand. If a s
 
 ## Hauler Target Selection
 
+Remote energy target orchestration (`findRemoteEnergySource`, target-path gating, stuck-target retarget
+memory) lives in `src/rooms/remotes/energy.ts`; per-source container/drop target enumeration and
+source-energy accounting live in `src/rooms/remotes/energySourceTargets.ts`; assigned-source container
+preference and cross-source overflow selection live in `src/rooms/remotes/energyTargets.ts`; target
+claim/access checks live in `src/rooms/remotes/energyClaims.ts`; shared target-picking helpers live in
+`src/rooms/remotes/remoteEnergyTargetPicker.ts`; remote-hauler pickup/return/top-up orchestration lives in
+`src/rooms/remotes/haulerCycle.ts`; home-side delivery helpers live in
+`src/rooms/remotes/haulerHomeDelivery.ts`; renew-cycle helpers live in
+`src/rooms/remotes/haulerHomeRenewal.ts`; home-idle/wander helpers live in
+`src/rooms/remotes/haulerHomeIdle.ts` (with compatibility exports in
+`src/rooms/remotes/haulerHome.ts`).
+
 - Empty remote haulers prefer energy at their assigned source first: assigned container/station drops are selected before cross-source work.
 - Cross-source pickup is reserved for overflow: the assigned source must be effectively dry and the alternate source must have a large available pile/container.
 - After a dropped pickup, if still not full, remote haulers top up from assigned source containers first; overflow capture follows the same cross-source guard.
@@ -111,7 +141,7 @@ Remote miners normally wait for a body that meets the source work demand. If a s
 - Per-target assignment is decongested with an access-tile-aware soft cap (up to 2 empty haulers per target).
 - If a hauler remains stuck on one tile for 4+ ticks while on `withdrawEnergy`/`pickupEnergy`, it temporarily avoids its current target and retargets.
 - If the selected pickup target is path-length far (>100 steps) and the hauler is already at least 75% full, it returns home instead of detouring for more.
-- Remote haulers still attempt pass-by maintenance while moving: if they have a WORK part and energy, they opportunistically build/repair targets already within range 3 without detouring from haul jobs.
+- Remote haulers still attempt pass-by maintenance while moving: if they have a WORK part and energy, `src/creeps/jobs/sideEffects.ts` opportunistically builds/repairs targets already within range 3 without detouring from haul jobs.
 - Remote maintainers keep their current road/container construction target to avoid two-tick oscillation between equal-priority sites, and only choose a new target when the current one is no longer a valid construction site.
 
 ## Path Caching
@@ -134,6 +164,9 @@ harvest range, the source route is marked `degraded` and its cached path is pres
 placement instead of clearing the source assignment or making the miner source-less standby. The route
 returns to `healthy` when a miner reaches harvest range or harvests successfully.
 
+Remote path serialization and station selection live in `src/rooms/remotes/pathing.ts`; miner station
+stall tracking and route-health mutation live in `src/rooms/remotes/minerStation.ts`.
+
 ## Infrastructure Placement
 
 ### Containers
@@ -148,6 +181,10 @@ to `REMOTE_DEGRADED_MAX_UNFINISHED_ROAD_SITES` (8). Road placement prioritizes r
 tiles, swamp tiles, the latest stall tile, then the remaining cached path via `roadCursor`. Tiles
 `1` and `48` are valid corridor road positions; true room borders `0` and `49` are skipped. Roads are
 **skipped in owned rooms** so manual base layouts are preserved.
+
+Road/container construction-site targeting for remote creeps lives in `src/rooms/remotes/infrastructure.ts`;
+bulk road-site placement mechanics live in `src/rooms/remotes/roads.ts`, scheduled by
+`src/rooms/remotes/planning.ts`.
 
 ## Danger Handling
 
@@ -171,6 +208,10 @@ Remote maintainers (not miners, not claimers) can renew at the home spawn:
 - Creep switches to `remoteRenewing = true` below start threshold
 - Travels home, queues at spawn, returns to work when above stop threshold
 
+Generic non-hauler remote renewal lives in `src/rooms/remotes/renewal.ts`; the remote-hauler-specific
+post-trip renew cycle lives in `src/rooms/remotes/haulerHomeRenewal.ts` and is orchestrated by
+`src/rooms/remotes/haulerCycle.ts`.
+
 ### Remote Hauler Cycle
 - Default cycle: travel to remote room → gather energy/resources and top up toward full load → return to home room → deposit to storage (terminal/emergency sinks only when storage unavailable/full) → repeat.
 - Post-trip renew is conditional: after a delivery trip, renew only if `TTL < 1000`, and renew until `TTL > 1400`.
@@ -187,6 +228,9 @@ Remote maintainers (not miners, not claimers) can renew at the home spawn:
 - Source-less standby miners are reassigned to uncovered accessible sources before idling at home
 - While incumbent is alive, standby pre-positions in the remote room near the mining site (range 4-10)
 - Once the incumbent dies, standby is promoted and takes over that source
+
+Standby replacement helper logic lives in `src/rooms/remotes/fleetStandby.ts`; standby miner source
+handoff and pre-positioning live in `src/rooms/remotes/standbyMiner.ts`.
 
 ## Console API
 

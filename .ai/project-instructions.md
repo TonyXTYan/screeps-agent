@@ -31,12 +31,13 @@ This is a Screeps bot written in TypeScript, bundled by Rollup into a single `di
 **Module groups:**
 
 - `src/creep.*.ts` — shared systems that run once per tick across all creeps:
-  - `creep.capabilities.ts` — derives capabilities from body parts, infers archetypes, plans bodies per archetype
+  - `creep.capabilities.ts` — derives capabilities from body parts and infers archetypes
   - `creep.jobRunner.ts` — executes assigned jobs (`harvestSource`, `withdrawEnergy`, `build`, `repair`, `upgrade`, remotes, minerals, idle, etc.)
   - `creep.populationControl.ts` — emergency defender spawning when hostiles are present
   - `creep.memoryManagement.ts` — clears dead creep memory; assigns fallback roles to unassigned creeps
   - `creep.harvest.ts` — shared harvest logic used by all roles when they need energy; handles source selection, container fallback, and source load balancing
   - `creep.roleBalance.ts` — legacy role body balancing utilities, still used for defender bodies
+- `src/creeps/bodyPlans.ts` — strategic body planner (`planBodyForArchetype`) used by spawn planning
 
 - `src/env.ts` — exports `BUILD_COMMIT` from the build-time injected git hash (via rollup `output.banner`)
 - `src/memoryAudit.ts` — memory consistency audit that runs once on deploy (commit hash change); cleans orphaned rooms, stale remote plans, invalid creep assignments; reports duplicate source assignments
@@ -61,11 +62,11 @@ This is a Screeps bot written in TypeScript, bundled by Rollup into a single `di
   - `wallRampartRepairCap(rcl)` — imported by `room.controller` for repair-job validity checks
   - `repairJob(creep)` — called by `role.builder` and `role.harvester` as legacy fallback behavior
 - `creep.harvest.ts` is imported by every role that needs to collect energy.
-- `creep.capabilities.planBodyForArchetype(archetype, energy, opts)` is the current strategic body planner.
+- `creeps/bodyPlans.planBodyForArchetype(archetype, energy, opts)` is the current strategic body planner.
 - `creep.roleBalance.balanceSpec(spec, energy)` is a legacy body scaler still used by emergency defenders.
 - Clearing a creep's memory is done via `delete Memory.creeps[creep.name]` (not `creep.memory = undefined`).
 
-**Custom types** are in `src/types.d.ts`: extends `CreepMemory`, `RoomMemory`, `SpawnMemory` with bot-specific fields, declares `console`, and defines the `EnergyStructure` union type.
+**Custom types** are in `src/types/*.d.ts`: `shared.d.ts` defines unions/constants, `roomPlans.d.ts` defines room/plan memory structures, and `memory.d.ts` extends `CreepMemory`, `RoomMemory`, `SpawnMemory`, plus root `Memory`.
 
 **Toolchain:**
 - TypeScript 6, `"moduleResolution": "Bundler"`, `"types": ["screeps"]` (required — Screeps globals aren't in the default lib)

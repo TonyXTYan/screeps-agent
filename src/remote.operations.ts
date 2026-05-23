@@ -2535,18 +2535,25 @@ function bestRemoteSourceContainer(creep: Creep, remotePlan: RemoteRoomPlan): St
  * Garbage-collects stale memory for disabled remote rooms.
  * Called from room.controller.run() to prevent unbounded memory growth
  * when a room is enabled/disabled repeatedly over many ticks.
+ *
+ * Looks at room.memory.plan.remoteRooms for entries with enabled=false
+ * (set via the `disable` console command), then prunes their block in Memory.rooms.
  */
 export function garbageCollectDisabledRemotes(room: Room): void {
-    const disabledRemotes = room.memory.disabledRemoteRooms;
-    if (!disabledRemotes || disabledRemotes.length === 0) { return; }
+    const remotePlans = room.memory.plan?.remoteRooms;
+    if (!remotePlans) { return; }
 
-    for (const remoteRoom of disabledRemotes) {
-        const mem = Memory.rooms?.[remoteRoom];
+    // Throttle: only run every 500 ticks per room (divisible by home room index for spreading).
+    const homeIdx = parseInt(room.name.match(/\d+/)?.[0] ?? '0', 10);
+    if (Game.time % 500 !== homeIdx) { return; }
+
+    const gcKeys = ['plan', 'remotePaths', 'sourceDemand'];
+    for (const remoteName in remotePlans) {
+        const plan = remotePlans[remoteName];
+        if (plan.enabled) { continue; }
+
+        const mem = Memory.rooms?.[remoteName];
         if (!mem) { continue; }
-        delete mem.plan;
-        delete mem.remotePaths;
-        delete mem.sourceDemand;
-        // Clean up per-remote creep assignment memory that was restored by memoryManagement
-        // but is now stale for a disabled room.
+        for (const key of gcKeys) { delete mem[key as keyof typeof mem]; }
     }
 }

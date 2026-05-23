@@ -26,6 +26,7 @@ const HOME_RENEW_CRITICAL_TTL = 120;
 const STANDBY_MINER_PARK_MIN_RANGE = 2;
 const STANDBY_MINER_PARK_MAX_RANGE = 4;
 const DEBUG_PATH_SCAN_INTERVAL = 25;
+let _legacyFallbackLoggedThisTick = false;
 const REMOTE_RETREAT_DANGER_TICKS = 1500;
 const DEFAULT_ROLE_PATH_STYLE = {
     fill: 'transparent',
@@ -80,6 +81,7 @@ function detectCodeChange(): boolean {
 }
 
 export function loop(): void {
+    _legacyFallbackLoggedThisTick = false;
     if (debugPathsLastScannedAt !== undefined && Game.time < debugPathsLastScannedAt) {
         debugPathsLastScannedAt = undefined;
     }
@@ -130,11 +132,14 @@ export function loop(): void {
         if (creep.memory.role === 'doctor') { roleDoctor.run(creep); }
         if (creep.memory.role === 'manual') { roleManual.run(creep); }
 
-        // Log fallback rate for legacy role retirement planning.
+        // Log fallback rate for legacy role retirement planning (throttled to 1/tick).
         const arch = creep.memory.archetype ?? null;
         const hadJob = creep.memory.jobType != null;
         if (!hadJob && arch !== 'remoteMiner' && arch !== 'remoteHauler' && arch !== 'remoteMaintainer') {
-            console.log(`LEGACY_FALLBACK: ${creep.name} archetype=${arch} role=${creep.memory.role}`);
+            if (!_legacyFallbackLoggedThisTick) {
+                _legacyFallbackLoggedThisTick = true;
+                console.log(`LEGACY_FALLBACK: ${creep.name} archetype=${arch} role=${creep.memory.role}`);
+            }
         }
     }
 

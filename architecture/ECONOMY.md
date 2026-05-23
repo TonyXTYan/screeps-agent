@@ -40,8 +40,7 @@ runSpawnPlanner()   → spawn creeps to fill measured deficits
 | `remoteScout` | 1–2 MOVE parts only |
 | `claimer` | CLAIM+MOVE pairs scaled to budget; min 1 part, reserve mode min 2 |
 
-Body planning lives in `planBodyForArchetype()` in `creep.capabilities.ts`. Legacy body planning
-(`balanceSpec()` in `creep.roleBalance.ts`) is used only for emergency defenders.
+Body planning lives in `planBodyForArchetype()` in `creep.capabilities.ts`, which handles all archetypes including defenders with 5 candidate bodies (140–480 energy, always including at least 1 MOVE part).
 
 **Body budget cap:** All archetypes are planned against `max(BODY_MIN_BUDGET, floor(energyCapacityAvailable × BODY_BUDGET_RATIO))` rather than the raw `energyCapacityAvailable`. With `BODY_BUDGET_RATIO = 0.5` and `BODY_MIN_BUDGET = 300`, bodies target at most 50% of room energy capacity, so creeps can spawn with partial extension fill. Demand calculations (`desiredHaulerCapacity`, `desiredWorkerWork`) use the same capped budget so population counts stay consistent with actual body sizes. At RCL 8 the 50-part body limit typically binds first, so those bodies are unaffected.
 

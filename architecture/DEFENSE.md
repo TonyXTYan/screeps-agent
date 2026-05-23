@@ -108,8 +108,9 @@ If room has armed hostiles:
   1. Count current defenders in room
   2. Target defenders = ceil(hostile_count × 1.5)
   3. If below target every 5 ticks:
-     a. Use balanceSpec() defender body (TOUGH+MOVE+ATTACK+RANGED_ATTACK)
-     b. Minimum body: [TOUGH, MOVE, ATTACK] at 300 energy
+     a. Use planBodyForArchetype('defender', cappedEnergy) — selects from 5 templates
+        at energy levels 140 / 290 / 300 / 350 / 480 (ATTACK+RANGED_ATTACK+TOUGH+MOVE mix)
+     b. Minimum body: [ATTACK, TOUGH, MOVE] at 140 energy
      c. Spawn with role = 'defender', attacking = true, homeRoom = room.name
 ```
 

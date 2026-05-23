@@ -21,7 +21,7 @@ src/
   creep.harvest.ts         Legacy direct-harvest helper
   creep.roleBalance.ts     Legacy body planner (defender only)
 
-  room.controller.ts       Main economic controller (~3100 lines)
+  room.controller.ts       Main economic controller (~5243 lines)
   room.structures.ts       Structure discovery, link classification
 
   tower.basics.ts          Tower attack/heal/repair
@@ -54,9 +54,9 @@ src/
 │    - Restore remote assignments for orphans │
 │    - Assign fallback roles                  │
 ├─────────────────────────────────────────────┤
-│ 5. memoryAudit.runIfBuildChanged()          │
+│ 5. memoryAudit.runFullAudit()               │
 │    - Full consistency audit on new deploy   │
-│    - Skipped if CPU bucket < 500            │
+│    - Skipped if CPU bucket < 0              │
 ├─────────────────────────────────────────────┤
 │ 6. For each owned room:                     │
 │    a. populationControl.checkDefenders()    │

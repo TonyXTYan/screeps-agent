@@ -1,4 +1,5 @@
-import { wallRampartRepairCap } from './role.doctor';
+import { wallRampartRepairCap } from './repair.rules';
+import { firstStoredResource, mostCriticalCreep, nudgeFromRoomEdge } from './utils.shared';
 
 export function run(creep: Creep): boolean {
     if (honorTrafficYieldRequest(creep)) {
@@ -465,7 +466,7 @@ function opportunisticHealNearby(creep: Creep): void {
     const adjacent = creep.pos.findInRange(FIND_MY_CREEPS, 1, {
         filter: c => c.hits < c.hitsMax
     });
-    const adjacentTarget = mostCriticalByRatio(creep, adjacent);
+    const adjacentTarget = mostCriticalCreep(creep, adjacent);
     if (adjacentTarget) {
         creep.heal(adjacentTarget);
         return;
@@ -474,33 +475,10 @@ function opportunisticHealNearby(creep: Creep): void {
     const ranged = creep.pos.findInRange(FIND_MY_CREEPS, 3, {
         filter: c => c.hits < c.hitsMax
     });
-    const rangedTarget = mostCriticalByRatio(creep, ranged);
+    const rangedTarget = mostCriticalCreep(creep, ranged);
     if (rangedTarget) {
         creep.rangedHeal(rangedTarget);
     }
-}
-
-function mostCriticalByRatio(creep: Creep, targets: Creep[]): Creep | null {
-    if (targets.length === 0) { return null; }
-
-    let best = targets[0];
-    let bestRatio = best.hits / Math.max(1, best.hitsMax);
-    let bestMissing = best.hitsMax - best.hits;
-    let bestRange = creep.pos.getRangeTo(best);
-    for (const target of targets) {
-        const ratio = target.hits / Math.max(1, target.hitsMax);
-        const missing = target.hitsMax - target.hits;
-        const range = creep.pos.getRangeTo(target);
-        if (ratio < bestRatio ||
-            (ratio === bestRatio && missing > bestMissing) ||
-            (ratio === bestRatio && missing === bestMissing && range < bestRange)) {
-            best = target;
-            bestRatio = ratio;
-            bestMissing = missing;
-            bestRange = range;
-        }
-    }
-    return best;
 }
 
 function offloadEnergyNearby(creep: Creep): boolean {
@@ -637,15 +615,6 @@ function wanderRandomAdjacent(creep: Creep): boolean {
     return false;
 }
 
-function firstStoredResource(store: StoreDefinition): ResourceConstant | null {
-    for (const resourceName in store) {
-        const resource = resourceName as ResourceConstant;
-        if (store.getUsedCapacity(resource) > 0) {
-            return resource;
-        }
-    }
-    return null;
-}
 
 function mineralDepleted(creep: Creep): boolean {
     const id = creep.memory.jobTargetId;
@@ -673,44 +642,6 @@ function updateTravelStuckMemory(creep: Creep): void {
     creep.memory.travelLastX = creep.pos.x;
     creep.memory.travelLastY = creep.pos.y;
     creep.memory.travelLastRoom = creep.room.name;
-}
-
-function nudgeFromRoomEdge(creep: Creep): boolean {
-    if (creep.pos.x === 0 && creep.pos.y === 0) {
-        creep.move(BOTTOM_RIGHT);
-        return true;
-    }
-    if (creep.pos.x === 0 && creep.pos.y === 49) {
-        creep.move(TOP_RIGHT);
-        return true;
-    }
-    if (creep.pos.x === 49 && creep.pos.y === 0) {
-        creep.move(BOTTOM_LEFT);
-        return true;
-    }
-    if (creep.pos.x === 49 && creep.pos.y === 49) {
-        creep.move(TOP_LEFT);
-        return true;
-    }
-
-    if (creep.pos.x === 0) {
-        creep.move(RIGHT);
-        return true;
-    }
-    if (creep.pos.x === 49) {
-        creep.move(LEFT);
-        return true;
-    }
-    if (creep.pos.y === 0) {
-        creep.move(BOTTOM);
-        return true;
-    }
-    if (creep.pos.y === 49) {
-        creep.move(TOP);
-        return true;
-    }
-
-    return false;
 }
 
 function isOnRequestedExitEdge(creep: Creep, exitDir: number): boolean {

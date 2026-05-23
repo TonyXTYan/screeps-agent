@@ -23,7 +23,9 @@ Use this as the first stop before editing code.
 ## Shared Utilities
 
 - Hostile detection is centralized in `src/hostileUtils.ts` (`isHostile`, `findHostiles`) and used by `main.ts`, `room.controller.ts`, `tower.basics.ts`, `creep.populationControl.ts`, and `role.defender.ts`.
-- `firstStoredResource(store)` — duplicated in `creep.jobRunner.ts` and `room.controller.ts`.
+- `firstStoredResource(store)` — shared utility in `src/utils.shared.ts` (prefers non-energy resources).
+- `nudgeFromRoomEdge(creep)` — shared utility in `src/utils.shared.ts` (moves creeps off room edges).
+- `mostCriticalCreep(creep, candidates)` — shared utility in `src/utils.shared.ts` (selects lowest health ratio creep).
 - `closest()` / `closestByRange()` — overlap in `room.controller.ts`.
 - `spawn.renewal.ts` — shared `acquireRenewSpawn()` / `nearestSpawn()` helper used by home, remote, and defender renew flows.
 

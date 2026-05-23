@@ -1,4 +1,4 @@
-import { repairStructureFilter } from './role.doctor';
+import { repairStructureFilter } from './repair.rules';
 import { isHostile } from './hostileUtils';
 
 const DEFENSE_CRITICAL_HITS = 10_000;

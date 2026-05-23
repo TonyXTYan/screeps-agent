@@ -1,9 +1,10 @@
 import { BODY_BUDGET_RATIO, BODY_MIN_BUDGET, MAX_CARRY_CAPACITY, bodyCost, ensureArchetype, getBodyCapabilities, getCreepCapabilities, planBodyForArchetype } from './creep.capabilities';
 import { clearJob } from './creep.jobRunner';
 import { getRoomStructures, RoomStructureCache } from './room.structures';
-import { repairStructureFilter, wallRampartRepairCap } from './role.doctor';
+import { repairStructureFilter, wallRampartRepairCap } from './repair.rules';
 import { findHostiles, isHostile } from './hostileUtils';
 import { acquireRenewSpawn, nearestSpawn, reserveRenewSpawns } from './spawn.renewal';
+import { firstStoredResource } from './utils.shared';
 
 interface RoomControllerContext {
     room: Room;
@@ -5014,17 +5015,6 @@ function totalStoredResources(store: StoreDefinition): number {
         total += store.getUsedCapacity(resourceName as ResourceConstant);
     }
     return total;
-}
-
-function firstStoredResource(store: StoreDefinition): ResourceConstant | null {
-    let fallback: ResourceConstant | null = null;
-    for (const resourceName in store) {
-        const resource = resourceName as ResourceConstant;
-        if (store.getUsedCapacity(resource) <= 0) { continue; }
-        if (resource !== RESOURCE_ENERGY) { return resource; }
-        fallback = resource;
-    }
-    return fallback;
 }
 
 function firstStoredNonEnergyResource(store: StoreDefinition): ResourceConstant | null {

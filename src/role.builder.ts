@@ -40,8 +40,13 @@ export function run(creep: Creep): void {
                     creep.moveTo(spawn, { visualizePathStyle: { stroke: '#fafafa' } });
                 }
             } else {
-                console.log('role.builder: ' + creep.name + ' not doing anything, erasing his memory💾');
-                delete Memory.creeps[creep.name];
+                // Guard: don't delete memory of remote creeps that fell through to legacy fallback
+                if (!creep.memory.remoteRoom && !creep.memory.homeRoom) {
+                    console.log('role.builder: ' + creep.name + ' not doing anything, erasing his memory💾');
+                    delete Memory.creeps[creep.name];
+                } else {
+                    console.log('role.builder: ' + creep.name + ' idle but has remote/home room, preserving memory');
+                }
             }
         }
     } else {

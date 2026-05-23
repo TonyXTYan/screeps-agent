@@ -15,6 +15,7 @@ import { findHostiles, isHostile } from './hostileUtils';
 import { bodyCost } from './creep.capabilities';
 import { BUILD_COMMIT } from './env';
 import { acquireRenewSpawn, nearestSpawn } from './spawn.renewal';
+import { mostCriticalCreep, nudgeFromRoomEdge } from './utils.shared';
 
 const DOCTOR_EMERGENCY_HITS_RATIO = 0.35;
 const DOCTOR_THREAT_RADIUS = 4;
@@ -311,7 +312,7 @@ function fleeFromHostiles(creep: Creep): boolean {
     } else if (creep.memory.homeRoom && creep.room.name !== creep.memory.homeRoom) {
         creep.moveTo(new RoomPosition(25, 25, creep.memory.homeRoom), { visualizePathStyle: { stroke: '#ff4d4d' } });
     } else {
-        nudgeFromEdge(creep);
+        nudgeFromRoomEdge(creep);
     }
     return true;
 }
@@ -400,62 +401,6 @@ function mostCriticalInRange(creep: Creep, range: number): Creep | null {
     if (injured.length === 0) { return null; }
 
     return mostCriticalCreep(creep, injured);
-}
-
-function mostCriticalCreep(creep: Creep, injured: Creep[]): Creep | null {
-    if (injured.length === 0) { return null; }
-    let best = injured[0];
-    let bestRatio = best.hits / Math.max(1, best.hitsMax);
-    let bestMissing = best.hitsMax - best.hits;
-    let bestRange = creep.pos.getRangeTo(best);
-    for (const target of injured) {
-        const ratio = target.hits / Math.max(1, target.hitsMax);
-        const missing = target.hitsMax - target.hits;
-        const range = creep.pos.getRangeTo(target);
-        if (ratio < bestRatio ||
-            (ratio === bestRatio && missing > bestMissing) ||
-            (ratio === bestRatio && missing === bestMissing && range < bestRange)) {
-            best = target;
-            bestRatio = ratio;
-            bestMissing = missing;
-            bestRange = range;
-        }
-    }
-    return best;
-}
-
-function nudgeFromEdge(creep: Creep): void {
-    if (creep.pos.x === 0 && creep.pos.y === 0) {
-        creep.move(BOTTOM_RIGHT);
-        return;
-    }
-    if (creep.pos.x === 0 && creep.pos.y === 49) {
-        creep.move(TOP_RIGHT);
-        return;
-    }
-    if (creep.pos.x === 49 && creep.pos.y === 0) {
-        creep.move(BOTTOM_LEFT);
-        return;
-    }
-    if (creep.pos.x === 49 && creep.pos.y === 49) {
-        creep.move(TOP_LEFT);
-        return;
-    }
-    if (creep.pos.x === 0) {
-        creep.move(RIGHT);
-        return;
-    }
-    if (creep.pos.x === 49) {
-        creep.move(LEFT);
-        return;
-    }
-    if (creep.pos.y === 0) {
-        creep.move(BOTTOM);
-        return;
-    }
-    if (creep.pos.y === 49) {
-        creep.move(TOP);
-    }
 }
 
 function tryRenewHomeCreep(creep: Creep): boolean {

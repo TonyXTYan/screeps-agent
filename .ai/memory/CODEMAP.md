@@ -15,7 +15,8 @@ Use this as the first stop before editing code.
 - `src/memoryAudit.ts` — memory consistency audit (runs on deploy when commit hash changes)
 - `src/env.ts` — exports `BUILD_COMMIT` from build-injected git hash
 - `src/creep.populationControl.ts` — emergency defender spawning before economic spawn planning
-- `src/room.controller.ts` — main room-level economic controller (room plans, remotes, spawn planning, job assignment)
+- `src/room.controller.ts` — main room-level economic controller (spawn planning, job assignment)
+- `src/remote.operations.ts` — remote room operations: scouting, road placement, energy targeting, hauler cycle, standby miners, counting utilities
 - `src/spawn.renewal.ts` — per-tick spawn reservation helper for renew actions
 - `src/tower.basics.ts` — tower attack, heal, and repair behavior
 - `src/creep.jobRunner.ts` — executes assigned jobs before legacy role fallback
@@ -65,13 +66,13 @@ Use this as the first stop before editing code.
 
 ## Repair Utilities (Shared)
 
-`src/role.doctor.ts` exports strategic repair helpers used across the codebase:
+`src/repair.rules.ts` exports strategic repair helpers used across the codebase:
 
 - `repairStructureFilter(structure, rcl)` — RCL-staged hit-cap filter for walls/ramparts; imported by `tower.basics.ts` and `room.controller.ts`
 - `wallRampartRepairCap(rcl)` — returns the hit cap for the given RCL; imported by `room.controller.ts`
-- `repairJob(creep)` / `repairTargetToRepair(creep)` — used by legacy fallback roles
+- `role.doctor.ts` still provides `repairJob(creep)` / `repairTargetToRepair(creep)` for legacy fallback roles
 
-Wall/rampart hit caps live in `wallRampartRepairCap()`. Tower energy thresholds (dynamic peace/combat gates) live in `tower.basics.ts`. To change staged caps, edit `role.doctor.ts` and update `architecture/DEFENSE.md`.
+Wall/rampart hit caps live in `wallRampartRepairCap()`. Tower energy thresholds (dynamic peace/combat gates) live in `tower.basics.ts`. To change staged caps, edit `repair.rules.ts` and update `architecture/DEFENSE.md`.
 
 ## Legacy Compatibility
 
@@ -83,7 +84,7 @@ Wall/rampart hit caps live in `wallRampartRepairCap()`. Tower energy thresholds 
 - Manual role stub — `src/role.manual.ts`
 
 Legacy role files should not be the primary path for new strategic behavior.
-**Warning**: legacy roles (`harvester`, `builder`) can delete creep memory (`delete Memory.creeps[creep.name]`) when idle. See `KNOWN_ISSUES.md`.
+Legacy roles (`harvester`, `builder`) have a guard against deleting memory of remote creeps that fall through to legacy fallback (checks `!creep.memory.remoteRoom && !creep.memory.homeRoom`). See `KNOWN_ISSUES.md` for remaining concerns.
 
 ## Common Edit Paths
 
@@ -112,7 +113,7 @@ Changing remote behavior:
 
 1. Update `architecture/REMOTES.md`.
 2. Update `RemoteRoomPlan` in `src/types.d.ts` if the config changes.
-3. Update `updateRemoteRoomPlans()`, `remoteSpawnRequest()`, and `assignRemoteCreep()` in `src/room.controller.ts`.
+3. Update `updateRemoteRoomPlans()` and `assignRemoteCreep()` in `src/remote.operations.ts`; spawn planning is in `src/room.controller.ts`.
 4. Update console-facing docs in `console/REMOTE_MINING_CONSOLE.md` if API behavior or defaults change.
 5. Keep expansion opt-in through Memory.
 

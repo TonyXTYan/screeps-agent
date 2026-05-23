@@ -6,13 +6,16 @@ A TypeScript Screeps AI bot that manages a colony economy — source mining, hau
 upgrading, remote harvesting, and defense. Bundled via Rollup into `dist/main.js` and pushed to the
 Screeps server via `grunt-screeps`.
 
-## Source Map (22 modules)
+## Source Map (25 modules)
 
 ```
 src/
   main.ts                  Entry point — Screeps calls loop() every tick
   env.ts                   BUILD_COMMIT from git hash (injected by rollup banner)
   hostileUtils.ts          Shared hostile detection helpers (`isHostile`, `findHostiles`)
+  utils.shared.ts          Shared utilities (`firstStoredResource`, `nudgeFromRoomEdge`, `mostCriticalCreep`)
+  repair.rules.ts          Repair rules (`wallRampartRepairCap`, `repairStructureFilter`)
+  remote.operations.ts     Remote room operations (scouting, roads, haulers, miners, energy targets)
 
   creep.capabilities.ts    Body → capability derivation, archetype inference, body planning
   creep.jobRunner.ts       Job execution dispatch (19 job types)
@@ -21,7 +24,7 @@ src/
   creep.harvest.ts         Legacy direct-harvest helper
   creep.roleBalance.ts     Legacy body planner (defender only)
 
-  room.controller.ts       Main economic controller (~5243 lines)
+  room.controller.ts       Main economic controller (~2,837 lines; spawn planning, job assignment)
   room.structures.ts       Structure discovery, link classification
 
   tower.basics.ts          Tower attack/heal/repair
@@ -29,7 +32,7 @@ src/
   role.harvester.ts        Legacy harvester fallback
   role.builder.ts          Legacy builder fallback
   role.upgrader.ts         Legacy upgrader fallback
-  role.doctor.ts           Legacy doctor fallback + shared repair utilities
+  role.doctor.ts           Legacy doctor fallback (no longer exports shared utilities)
   role.defender.ts         Defender combat behavior
   role.manual.ts           Manual-control stub
 

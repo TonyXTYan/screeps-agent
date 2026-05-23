@@ -15,7 +15,7 @@ This file tracks known follow-up work that future agents should consider before 
 ## Strategic Alignment
 
 - Local miners now include one standby substitute, but active source miner scaling is still mostly count-based and does not explicitly add extra active miners when per-source WORK is under target.
-- Legacy role scripts (`role.harvester.ts`, `role.builder.ts`) still `delete Memory.creeps[creep.name]` when idle. This can destroy remote-creep memory (archetype, remoteRoom, sourceId, homeRoom) if a remote creep falls through to legacy fallback and happens to be idle. Remove or add a guard.
+- (Fixed) Legacy role scripts (`role.harvester.ts`, `role.builder.ts`) now guard against deleting creep memory of remote creeps that fall through to legacy fallback — checks `!creep.memory.remoteRoom && !creep.memory.homeRoom` before deleting.
 - Remote danger detection is visibility-driven only; unseen hostiles between scout passes can still cause delayed pauses.
 - (Fixed) Remote hauler target convergence is now mitigated in two layers: remote energy selection subtracts other empty remote-hauler claims, and per-target assignment now applies an access-tile-aware soft cap (up to 2 empty haulers per target). Stuck haulers on `withdrawEnergy`/`pickupEnergy` also retarget after 4+ stuck ticks.
 - (Fixed) Haulers no longer prioritize source links over source containers. For the overflow/fallback path, source containers are selected before source links, preventing light source-link buffers from diverting haulers away from full source containers. Hub/controller/sink links are the primary pickup (drained first to keep capacity for runLinks); source containers/links are only reached as overflow. Remote haulers also prioritize full containers over dropped-energy piles.
@@ -59,18 +59,18 @@ This file tracks known follow-up work that future agents should consider before 
 - (Fixed) Hauler overflow: `chooseSpawnRequest()` had no hard count maximum for local haulers — only a capacity check. Old small-body haulers (from early-game or low-energy spawns) kept `haulerCapacity` below demand, causing 7–8 haulers to accumulate at RCL 6. Fixed by refactoring `desiredHaulerCapacity` to return `{ demand, maxCount }` (exposing the already-computed `maxHaulerCreeps`) and adding a `haulerCountWithPending < maxHaulerCount` guard in `chooseSpawnRequest`. RemoteHaulers were already adequately capped (`MAX_REMOTE_HAULERS_PER_SOURCE=2`, per-room cap, idle detection).
 - (Fixed) Worker overflow: `chooseSpawnRequest()` had no hard count cap — workers spawned until total WORK capacity met `desiredWorkerWork()` (up to 12+ at high RCL with many construction sites), producing 12 workers at RCL 6. Fixed by adding `maxWorkerCount` per-RCL cap `[0,2,2,2,3,4,4,4,4]` in `chooseSpawnRequest()`, adding `!pending.some(r => r.archetype === 'worker')` to the emergency-recovery guard, adding `'defender'` to `CreepArchetype` in `types.d.ts`, adding a defender role check in `inferArchetype()` before the `return 'worker'` fallback, and excluding `'defender'` archetype from `workerWork` in `measureCapabilities()`. Previously ATTACK+MOVE defender creeps were misclassified as workers and consumed a worker count slot.
 - Remote path demand can be noisy when long paths are temporarily incomplete (fallback distance is conservative by design).
-- Wall/rampart repair caps (`wallRampartRepairCap` in `role.doctor.ts`) are hardcoded; a future improvement would make them configurable via `room.memory.plan` for rooms that want custom defense budgets.
+- Wall/rampart repair caps (`wallRampartRepairCap` in `src/repair.rules.ts`) are hardcoded; a future improvement would make them configurable via `room.memory.plan` for rooms that want custom defense budgets.
 
 ## Architecture Cleanup
 
 - Two parallel body planning systems exist: `creep.capabilities.ts:planBodyForArchetype()` (strategic) and `creep.roleBalance.ts:balanceSpec()` (legacy). They can produce different bodies for similar purposes. Unify when legacy roles are fully retired.
 - Structure discovery cache is still write-through only (not read back); writes are now throttled and forced on structure-count changes.
-- `firstStoredResource()` exists in both `creep.jobRunner.ts` and `room.controller.ts`; consider consolidating once shared utilities exist.
+- `firstStoredResource()` — consolidated into `src/utils.shared.ts` in Phase 1.
 - `closest()` and `closestByRange()` in `room.controller.ts` overlap heavily.
 - `interruptReason` is written for observability but not consumed.
 - Remote hauler repair/build branches rely on WORK part for opportunistic maintenance. All non-minimal remoteHauler bodies now include WORK+MOVE, enabling this feature reliably.
 - Remote room memory (plans, serialized paths, demand data) is never garbage-collected when a room is disabled. Over many enable/disable cycles, this accumulates stale memory.
-- `room.controller.ts` is 2,868 lines — a god module. Candidates for extraction: remote room logic (~400 lines), spawn planning (~250 lines), job assignment (~300 lines).
+- `room.controller.ts` is ~2,837 lines — a god module. Remote room logic (~2,500 lines) has been extracted to `src/remote.operations.ts`. Remaining candidates for extraction: spawn planning (~250 lines), job assignment (~300 lines). See plan at `.claude/plans/review-this-repo-and-prancy-blanket.md` Phase 5.
 
 ## Deferred By Strategy
 

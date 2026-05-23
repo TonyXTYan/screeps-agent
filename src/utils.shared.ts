@@ -90,3 +90,19 @@ export function mostCriticalCreep(referenceCreep: Creep, candidates: Creep[]): C
     }
     return best;
 }
+
+/**
+ * Quick reachability check between two positions in the same room.
+ * Uses PathFinder with maxOps capped low to avoid CPU spikes.
+ * Returns true if a path exists (same-room only).
+ */
+export function isReachable(pos: RoomPosition, target: RoomPosition): boolean {
+    if (pos.roomName !== target.roomName) { return false; }
+    if (pos.x === target.x && pos.y === target.y) { return true; }
+    const result = PathFinder.search(pos, target, {
+        maxOps: 200,
+        ignoreCreeps: true,
+        ignoreDestructibleStructures: true,
+    } as any);
+    return result.path.length > 0;
+}

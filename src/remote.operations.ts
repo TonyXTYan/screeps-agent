@@ -2530,3 +2530,23 @@ function bestRemoteSourceContainer(creep: Creep, remotePlan: RemoteRoomPlan): St
 
     return pickRemoteEnergyTarget(creep, candidates, avoidTargetId);
 }
+
+/**
+ * Garbage-collects stale memory for disabled remote rooms.
+ * Called from room.controller.run() to prevent unbounded memory growth
+ * when a room is enabled/disabled repeatedly over many ticks.
+ */
+export function garbageCollectDisabledRemotes(room: Room): void {
+    const disabledRemotes = room.memory.disabledRemoteRooms;
+    if (!disabledRemotes || disabledRemotes.length === 0) { return; }
+
+    for (const remoteRoom of disabledRemotes) {
+        const mem = Memory.rooms?.[remoteRoom];
+        if (!mem) { continue; }
+        delete mem.plan;
+        delete mem.remotePaths;
+        delete mem.sourceDemand;
+        // Clean up per-remote creep assignment memory that was restored by memoryManagement
+        // but is now stale for a disabled room.
+    }
+}

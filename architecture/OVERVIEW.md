@@ -13,9 +13,9 @@ src/
   main.ts                  Entry point — Screeps calls loop() every tick
   env.ts                   BUILD_COMMIT from git hash (injected by rollup banner)
   hostileUtils.ts          Shared hostile detection helpers (`isHostile`, `findHostiles`)
-  utils.shared.ts          Shared utilities (`firstStoredResource`, `nudgeFromRoomEdge`, `mostCriticalCreep`)
+  utils.shared.ts          Shared utilities (`firstStoredResource`, `nudgeFromRoomEdge`, `mostCriticalCreep`, `isReachable`)
   repair.rules.ts          Repair rules (`wallRampartRepairCap`, `repairStructureFilter`)
-  remote.operations.ts     Remote room operations (scouting, roads, haulers, miners, energy targets)
+  remote.operations.ts     Remote room operations (scouting, roads, haulers, miners, energy targets, memory GC)
 
   creep.capabilities.ts    Body → capability derivation, archetype inference, body planning
   creep.jobRunner.ts       Job execution dispatch (19 job types)
@@ -24,7 +24,7 @@ src/
   creep.harvest.ts         Legacy direct-harvest helper
   creep.roleBalance.ts     Legacy body planner (defender only)
 
-  room.controller.ts       Main economic controller (~2,837 lines; spawn planning, job assignment)
+  room.controller.ts       Main economic controller (~2,838 lines; spawn planning, job assignment)
   room.structures.ts       Structure discovery, link classification
 
   tower.basics.ts          Tower attack/heal/repair

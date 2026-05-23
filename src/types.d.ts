@@ -257,6 +257,9 @@ interface RoomMemory {
     debug_tower?: boolean;
     debug_home?: boolean;
     debug_remotes?: boolean;
+    disabledRemoteRooms?: string[];
+    remotePaths?: { [sourceId: string]: string };
+    sourceDemand?: { [sourceId: string]: number };
 }
 
 interface SpawnMemory {

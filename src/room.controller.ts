@@ -117,6 +117,7 @@ export function run(room: Room): void {
 
     initialiseRoomPlan(room);
     remoteOps.updateRemoteRoomPlans(room);
+    remoteOps.garbageCollectDisabledRemotes(room);
     rememberRcl(room);
     updatePlanAssignments(context);
     rememberLoad(context);

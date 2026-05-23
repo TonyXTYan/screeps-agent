@@ -129,6 +129,13 @@ export function loop(): void {
         if (creep.memory.role === 'upgrader') { roleUpgrader.run(creep); }
         if (creep.memory.role === 'doctor') { roleDoctor.run(creep); }
         if (creep.memory.role === 'manual') { roleManual.run(creep); }
+
+        // Log fallback rate for legacy role retirement planning.
+        const arch = creep.memory.archetype ?? null;
+        const hadJob = creep.memory.jobType != null;
+        if (!hadJob && arch !== 'remoteMiner' && arch !== 'remoteHauler' && arch !== 'remoteMaintainer') {
+            console.log(`LEGACY_FALLBACK: ${creep.name} archetype=${arch} role=${creep.memory.role}`);
+        }
     }
 
     debug.tickRemoteCreepLog();

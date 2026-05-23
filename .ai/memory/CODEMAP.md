@@ -10,7 +10,7 @@ Use this as the first stop before editing code.
 
 ## Tick Flow
 
-- `src/main.ts` — Screeps `loop()` entry point, standby miner parking (no standby renew), hostile flee/retreat, home renew gating (economy/recovery-aware with critical-TTL override), debug hooks
+- `src/main.ts` — Screeps `loop()` entry point, standby miner parking (no standby renew), hostile flee/retreat, home renew gating (economy/recovery-aware with critical-TTL override), legacy role fallback logging, debug hooks
 - `src/creep.memoryManagement.ts` — dead creep memory cleanup and fallback role/remote initialization
 - `src/memoryAudit.ts` — memory consistency audit (runs on deploy when commit hash changes)
 - `src/env.ts` — exports `BUILD_COMMIT` from build-injected git hash
@@ -27,7 +27,7 @@ Use this as the first stop before editing code.
 - `firstStoredResource(store)` — shared utility in `src/utils.shared.ts` (prefers non-energy resources).
 - `nudgeFromRoomEdge(creep)` — shared utility in `src/utils.shared.ts` (moves creeps off room edges).
 - `mostCriticalCreep(creep, candidates)` — shared utility in `src/utils.shared.ts` (selects lowest health ratio creep).
-- `closest()` / `closestByRange()` — overlap in `room.controller.ts`.
+- `isReachable(pos, target)` — shared utility in `src/utils.shared.ts` (quick same-room reachability check via PathFinder).
 - `spawn.renewal.ts` — shared `acquireRenewSpawn()` / `nearestSpawn()` helper used by home, remote, and defender renew flows.
 
 ## Architecture Docs

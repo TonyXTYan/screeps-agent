@@ -57,8 +57,8 @@ This is a Screeps bot written in TypeScript, bundled by Rollup into a single `di
 - The main strategic path assigns `jobType`, `jobTargetId`, and related memory through `room.controller.ts`; `creep.jobRunner.ts` executes those jobs.
 - Legacy roles use boolean state flags in creep memory (`dumping`, `building`, `repairing`, `upgrading`) to toggle between harvesting and their primary action.
 - `repair.rules.ts` exports shared repair utilities used across the codebase:
-  - `repairStructureFilter(structure, rcl)` — imported by `tower.basics`, `room.controller`, and `jobRunner`; applies RCL-staged hit caps for walls/ramparts
-  - `wallRampartRepairCap(rcl)` — imported by `room.controller` for repair-job validity checks
+  - `repairStructureFilter(structure, rcl)` — imported by `tower.basics` and `room.controller`; applies RCL-staged hit caps for walls/ramparts
+  - `wallRampartRepairCap(rcl)` — imported by `room.controller` and `creep.jobRunner` for repair-job validity checks
 - `role.doctor.ts` still provides `repairJob(creep)` for legacy fallback behavior
 - `creep.harvest.ts` is imported by every role that needs to collect energy.
 - `creep.capabilities.planBodyForArchetype(archetype, energy, opts)` is the current strategic body planner.

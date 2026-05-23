@@ -120,7 +120,7 @@ Changing remote behavior:
 Changing wall/rampart repair caps or tower repair policy:
 
 1. Update `architecture/DEFENSE.md` first.
-2. Edit `wallRampartRepairCap()` in `src/role.doctor.ts` for the staged hit caps.
+2. Edit `wallRampartRepairCap()` in `src/repair.rules.ts` for the staged hit caps.
 3. Edit the energy thresholds in `tower.basics.ts` (lines 46–47):
    - `minEnergyForRepair` — controls heal/repair of normal structures (0.5 combat, 0.7 peace)
    - `minEnergyForDefense` — controls wall/rampart repair (0.4 combat, 0.75 peace)

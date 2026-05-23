@@ -90,7 +90,7 @@ Attack always proceeds regardless of energy level.
 | 7   | 300,000   |
 | 8   | Infinity  |
 
-From `wallRampartRepairCap()` in `role.doctor.ts`.
+From `wallRampartRepairCap()` in `src/repair.rules.ts`.
 
 ### Tower under-siege override
 

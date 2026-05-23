@@ -76,8 +76,7 @@ Wall/rampart hit caps live in `wallRampartRepairCap()`. Tower energy thresholds 
 
 ## Legacy Compatibility
 
-- Legacy role balancing helpers — `src/creep.roleBalance.ts`
-- Legacy body planner (`balanceSpec()`) — `src/creep.roleBalance.ts` (DO NOT use for strategic-path creeps; use `planBodyForArchetype()` in `creep.capabilities.ts` instead)
+- Legacy body planner (`balanceSpec()`) — deleted in Phase 4; defender bodies now use `planBodyForArchetype()` in `creep.capabilities.ts`. Remaining legacy helpers below are still used.
 - Legacy direct harvesting helper — `src/creep.harvest.ts`
 - Legacy fallback roles — `src/role.harvester.ts`, `src/role.builder.ts`, `src/role.upgrader.ts`, `src/role.doctor.ts`
 - Emergency defender behavior — `src/role.defender.ts`

@@ -213,6 +213,21 @@ export function planBodyForArchetype(
         return buildClaimerBody(energyBudget, opts?.minClaimParts ?? 1, opts?.maxClaimParts);
     }
 
+    if (archetype === 'defender') {
+        return selectLargestWithinBudget([
+            // 2×A + 1×RA + 2×T + 3×M = 480
+            [ATTACK, ATTACK, RANGED_ATTACK, TOUGH, TOUGH, MOVE, MOVE, MOVE],
+            // 1×A + 1×RA + 2×T + 2×M = 350
+            [ATTACK, RANGED_ATTACK, TOUGH, TOUGH, MOVE, MOVE],
+            // 1×A + 1×RA + 2×T + 1×M = 300
+            [ATTACK, RANGED_ATTACK, TOUGH, TOUGH, MOVE],
+            // 1×A + 1×RA + 1×T + 1×M = 290
+            [ATTACK, RANGED_ATTACK, TOUGH, MOVE],
+            // 1×A + 1×T + 1×M = 140
+            [ATTACK, TOUGH, MOVE],
+        ], energyBudget);
+    }
+
     return buildWorkerBody(energyBudget, opts?.workRatio ?? 1);
 }
 

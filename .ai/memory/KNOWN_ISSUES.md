@@ -63,7 +63,6 @@ This file tracks known follow-up work that future agents should consider before 
 
 ## Architecture Cleanup
 
-- Two parallel body planning systems exist: `creep.capabilities.ts:planBodyForArchetype()` (strategic) and `creep.roleBalance.ts:balanceSpec()` (legacy). They can produce different bodies for similar purposes. Unify when legacy roles are fully retired.
 - Structure discovery cache is still write-through only (not read back); writes are now throttled and forced on structure-count changes.
 - `firstStoredResource()` — consolidated into `src/utils.shared.ts` in Phase 1.
 - `closest()` and `closestByRange()` in `room.controller.ts` overlap heavily.

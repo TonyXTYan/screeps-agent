@@ -9,8 +9,6 @@ import {
 import { mineralReadyToMine } from '../planning/sources';
 import {
     assignedSourcePlan,
-    clearStaticMiningMemory,
-    closestSourcePlan,
     reserveSourceIfNeeded,
     setStaticHarvestMemory,
     setStaticMineralMemory
@@ -19,13 +17,11 @@ import {
     resourceDepositTarget,
 } from './targets';
 import {
-    haulerMiningSiteMinPickup,
     hasEnergyToGather
 } from './energyTargets';
 import { tryAssignEmergencyEnergyDelivery } from './emergencyEnergy';
 import { keepCurrentJob } from './current';
-import { assignEnergySpendingJob, assignWorkerPartialEnergyWork } from './energyWork';
-import { assignHaulAcquisitionJob } from './assignmentHauling';
+import { handleEnergyCarryingFlow, handlePostEnergyFallbackFlow } from './assignmentFlow';
 
 export function assignJobs(context: RoomControllerContext): void {
     const reservations = createReservations(context);
@@ -86,45 +82,8 @@ function assignJob(context: RoomControllerContext, creep: Creep, reservations: J
         return;
     }
 
-    if (energyUsed > 0) {
-        if (archetype === 'worker' &&
-            creep.store.getFreeCapacity(RESOURCE_ENERGY) > 0 &&
-            hasEnergyToGather(context)) {
-            if (assignWorkerPartialEnergyWork(context, creep, capabilities, reservations)) { return; }
-        } else if (archetype === 'hauler' &&
-                   creep.store.getFreeCapacity(RESOURCE_ENERGY) > 0 &&
-                   (context.sourcePlans.some(p => p.container &&
-                        creep.pos.getRangeTo(p.container) <= 3 &&
-                        p.container.store.getUsedCapacity(RESOURCE_ENERGY) >= haulerMiningSiteMinPickup(creep)) ||
-                    context.structures.links.source.some(l =>
-                        creep.pos.getRangeTo(l) <= 3 &&
-                        l.store.getUsedCapacity(RESOURCE_ENERGY) >= haulerMiningSiteMinPickup(creep)))) {
-            // Hauler at a source site with free capacity; top up before leaving.
-        } else {
-            assignEnergySpendingJob(context, creep, archetype, capabilities, reservations);
-            return;
-        }
-    }
-
-    if (capabilities.haul > 0) {
-        if (assignHaulAcquisitionJob(context, creep, archetype, reservations)) { return; }
-    }
-
-    if (capabilities.harvest > 0 && archetype !== 'hauler' && archetype !== 'remoteHauler') {
-        const fallbackSourcePlan = closestSourcePlan(creep, context.sourcePlans);
-        if (fallbackSourcePlan) {
-            clearStaticMiningMemory(creep);
-            setJob(creep, 'harvestSource', fallbackSourcePlan.source);
-            return;
-        }
-    }
-
-    if (capabilities.reserve > 0 && context.room.controller) {
-        setJob(creep, 'reserveController', context.room.controller);
-        return;
-    }
-
-    setJob(creep, 'idle', context.structures.storage ?? context.structures.spawns[0]);
+    if (handleEnergyCarryingFlow(context, creep, archetype, capabilities, reservations, energyUsed)) { return; }
+    handlePostEnergyFallbackFlow(context, creep, archetype, capabilities, reservations);
 }
 
 function assignmentPriority(archetype: CreepArchetype): number {

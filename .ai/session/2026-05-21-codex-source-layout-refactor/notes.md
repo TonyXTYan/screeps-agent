@@ -114,6 +114,10 @@ Completed slices:
 - Split primary build/repair/upgrade resume checks and reservation carry-forward into `src/rooms/jobs/energyWorkPrimaryResume.ts`, leaving `src/rooms/jobs/energyWork.ts` focused on energy-spending orchestration.
 - Split traffic blocker priority checks and yield-position selection helpers into `src/creeps/jobs/trafficYieldHelpers.ts`, leaving `src/creeps/jobs/traffic.ts` focused on traffic-yield request/honor orchestration.
 - Split remote fallback dropped/container/link target selection and stuck-target avoidance helper into `src/rooms/remotes/energyFallback.ts`, leaving `src/rooms/remotes/energy.ts` focused on remote energy-target orchestration and target-path gating.
+- Split local energy deposit target selection policy into `src/rooms/jobs/energyDeposit.ts`, leaving `src/rooms/jobs/energyTargets.ts` focused on local energy gather/withdraw target orchestration.
+- Split local energy-carrying and post-energy fallback assignment flow into `src/rooms/jobs/assignmentFlow.ts`, leaving `src/rooms/jobs/assignment.ts` focused on assignment orchestration.
+- Split withdraw/pickup/deposit job validity checks into `src/rooms/jobs/validityTransfer.ts`, leaving `src/rooms/jobs/validity.ts` focused on validity orchestration and non-transfer guards.
+- Split refill constants plus spawn/tower/terminal refill target helpers into `src/rooms/energyRefill.ts`, leaving `src/rooms/energy.ts` focused on energy pressure/recovery-state orchestration and stored-energy helpers.
 
 Verification:
 
@@ -202,11 +206,15 @@ Verification:
 - `npm run build` passed after energy-work primary-resume split (`jobs/energyWorkPrimaryResume.ts`).
 - `npm run build` passed after traffic-yield helper split (`creeps/jobs/trafficYieldHelpers.ts`).
 - `npm run build` passed after remote energy fallback split (`remotes/energyFallback.ts`).
+- `npm run build` passed after local energy deposit split (`jobs/energyDeposit.ts`).
+- `npm run build` passed after local assignment-flow split (`jobs/assignmentFlow.ts`).
+- `npm run build` passed after transfer-validity split (`jobs/validityTransfer.ts`).
+- `npm run build` passed after room energy-refill split (`rooms/energyRefill.ts`).
 
 Current high-value large-module candidates (post-split):
 
-- `src/rooms/jobs/energyTargets.ts`
-- `src/rooms/jobs/assignment.ts`
-- `src/rooms/jobs/validity.ts`
-- `src/rooms/energy.ts`
 - `src/rooms/remotes/minerStation.ts`
+- `src/creeps/jobs/sideEffects.ts`
+- `src/rooms/remotes/remoteCoverageProjections.ts`
+- `src/rooms/spawning/remoteHarvestSourceDemand.ts`
+- `src/rooms/remotes/fleetStandby.ts`

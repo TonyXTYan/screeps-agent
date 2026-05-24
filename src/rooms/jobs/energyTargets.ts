@@ -1,19 +1,17 @@
 import { closest } from '../../utils/selection';
 import type { JobReservations, RoomControllerContext } from '../controllerTypes';
+import { energyDepositTarget } from './energyDeposit';
 import {
     haulerMiningSiteMinPickup,
     isMiningSiteEnergyTarget,
     miningSiteContainerIds
 } from './energyMiningSites';
 import {
-    TOWER_HAULER_DEPOSIT_RATIO,
-    roomHasEnergyDemand,
     roomNeedsCriticalEnergyRecovery,
-    terminalEnergyReserveDeficit,
     terminalWithdrawableEnergy,
-    towerEnergyRatio
 } from '../energy';
 export { haulerMiningSiteMinPickup, isMiningSiteEnergyTarget } from './energyMiningSites';
+export { energyDepositTarget } from './energyDeposit';
 
 export function hasEnergyToGather(context: RoomControllerContext): boolean {
     if (context.droppedEnergy.length > 0) return true;
@@ -25,44 +23,6 @@ export function hasEnergyToGather(context: RoomControllerContext): boolean {
     if (context.structures.links.hub.some(l => l.store.getUsedCapacity(RESOURCE_ENERGY) > 0)) return true;
     if (context.structures.links.sink.some(l => l.store.getUsedCapacity(RESOURCE_ENERGY) > 0)) return true;
     return false;
-}
-
-export function energyDepositTarget(
-    context: RoomControllerContext,
-    creep: Creep,
-    reservations: JobReservations
-): StructureStorage | StructureTerminal | StructureContainer | StructureTower | null {
-    if (context.structures.terminal &&
-        context.structures.terminal.store.getFreeCapacity(RESOURCE_ENERGY) > 0 &&
-        terminalEnergyReserveDeficit(context, reservations) > 0 &&
-        !roomHasEnergyDemand(context)) {
-        return context.structures.terminal;
-    }
-
-    const towerTarget = closest(creep, context.structures.towers
-        .filter(t => towerEnergyRatio(t) < TOWER_HAULER_DEPOSIT_RATIO &&
-            t.store.getFreeCapacity(RESOURCE_ENERGY) > (reservations.energySinks[t.id] ?? 0)));
-    if (towerTarget) { return towerTarget; }
-
-    if (context.structures.storage && context.structures.storage.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
-        return context.structures.storage;
-    }
-    if (context.structures.terminal && context.structures.terminal.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
-        return context.structures.terminal;
-    }
-
-    const sourceContainerIds = miningSiteContainerIds(context);
-    const nonSourceContainers = context.structures.containers
-        .filter((container) =>
-            container.store.getFreeCapacity(RESOURCE_ENERGY) > 0 &&
-            !sourceContainerIds[container.id]);
-    if (nonSourceContainers.length > 0) {
-        return closest(creep, nonSourceContainers);
-    }
-
-    return closest(
-        creep,
-        context.structures.containers.filter((container) => container.store.getFreeCapacity(RESOURCE_ENERGY) > 0));
 }
 
 export function energyWithdrawalTarget(

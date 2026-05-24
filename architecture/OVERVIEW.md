@@ -6,7 +6,7 @@ A TypeScript Screeps AI bot that manages a colony economy — source mining, hau
 upgrading, remote harvesting, and defense. Bundled via Rollup into `dist/main.js` and pushed to the
 Screeps server via `grunt-screeps`.
 
-## Source Map (142 modules)
+## Source Map (146 modules)
 
 ```
 src/
@@ -78,25 +78,29 @@ src/
     controllerLoad.ts      Room load snapshot memory writes and passive infrastructure reporting
     controllerState.ts     Room context build + room plan snapshot/assignment update helpers
     controllerTypes.ts     Shared room-controller interfaces for extraction modules
-    energy.ts              Room energy pressure, refill target, tower ratio, and recovery-state helpers
+    energy.ts              Room energy pressure/recovery-state orchestration and stored-energy helpers
+    energyRefill.ts        Refill constants plus spawn/tower/terminal refill target helpers
     energyTerminal.ts      Room terminal reserve policy and withdrawable/reserve-deficit energy helpers
     linkGroups.ts          Link group classification policy (source/hub/controller/sink/other)
     links.ts               Link transfer loop and receiver/sender selection
     jobs/
       assignment.ts        Local new-job assignment orchestration
+      assignmentFlow.ts    Local energy-carrying and post-energy fallback assignment flow helpers
       assignmentHauling.ts Local haul/resource acquisition assignment policy
       current.ts           Current-job retention orchestration and high-level interrupt flow
       currentRetentionHelpers.ts Current-job reservation accounting and energy-refill interruption helpers
+      energyDeposit.ts     Local energy deposit target selection policy for haulers/workers
       emergencyEnergy.ts   Shared emergency energy-delivery interrupt and assignment policy
       energyMiningSites.ts Local mining-site pickup thresholds and container target-id helpers
-      energyTargets.ts     Local energy gather/withdraw/deposit target orchestration policy
+      energyTargets.ts     Local energy gather/withdraw target orchestration policy
       energyWork.ts        Worker/hauler energy spending orchestration
       energyWorkAssignment.ts Build/repair/upgrade/refill assignment helpers used by energy-work orchestration
       energyWorkPrimaryResume.ts Primary build/repair/upgrade resume checks and reservation carry-forward
       reservations.ts      Job reservation ledgers and progress reservation accounting
       sourceAssignment.ts  Source assignment, static-mining memory, and stationary-target helpers
       targets.ts           Local resource pickup/salvage/mineral withdrawal targets
-      validity.ts          Current-job target validity and resource/work guards
+      validity.ts          Current-job validity orchestration and non-transfer job guards
+      validityTransfer.ts  Withdraw/pickup/deposit job validity helpers
       work.ts              Build/repair/upgrade target ranking and upgrade reservation policy
     planning/
       sources.ts           Local source/mineral planning and source demand/coverage helpers

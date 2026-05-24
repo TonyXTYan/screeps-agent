@@ -17,6 +17,7 @@ Use this as the first stop before editing code.
 - `src/creep.populationControl.ts` — emergency defender spawning before economic spawn planning
 - `src/room.controller.ts` — main room-level economic controller (spawn planning, job assignment)
 - `src/remote.operations.ts` — remote room operations: scouting, road placement, energy targeting, hauler cycle, standby miners, counting utilities
+- `src/local.operations.ts` — local room logic: job assignment (`assignJobs`, `assignJob`), spawn planning (`runSpawnPlanner`, `chooseSpawnRequest`), energy management (links, recovery state, terminal reserves), source/mineral planning (plan building, construction/repair targeting)
 - `src/spawn.renewal.ts` — per-tick spawn reservation helper for renew actions
 - `src/tower.basics.ts` — tower attack, heal, and repair behavior
 - `src/creep.jobRunner.ts` — executes assigned jobs before legacy role fallback
@@ -41,17 +42,17 @@ Use this as the first stop before editing code.
 
 ## Core Economy
 
-- Source/mineral planning — `src/room.controller.ts`
+- Source/mineral planning — `src/local.operations.ts`
 - Link classification — `src/room.structures.ts`
-- Spawn demand selection — `src/room.controller.ts`; multiple free spawns share a pending-request ledger with planned bodies so in-flight creeps count toward capacity and per-source/per-role caps.
-- Home room priority gate (blocks remote spawns when home requests pending, throttles remotes under low stored/spawn energy, and rejects uneconomic scaled remote bodies) — `src/room.controller.ts`
+- Spawn demand selection — `src/local.operations.ts`; multiple free spawns share a pending-request ledger with planned bodies so in-flight creeps count toward capacity and per-source/per-role caps.
+- Home room priority gate (blocks remote spawns when home requests pending, throttles remotes under low stored/spawn energy, and rejects uneconomic scaled remote bodies) — `src/local.operations.ts`
 - Remote standby miner system (TTL-triggered source-targeted handoff with remote pre-positioning; blank standby reassignment; pending container-site awareness; no standby renew) — `src/room.controller.ts`, `src/creep.jobRunner.ts`, `src/main.ts`
-- Remote route health and road placement (degraded-route memory, prioritized road sites, route-health maintainer recovery bypass) — `src/room.controller.ts`
+- Remote route health and road placement (degraded-route memory, prioritized road sites, route-health maintainer recovery bypass) — `src/remote.operations.ts`
 - Body capability derivation — `src/creep.capabilities.ts`
 - Body planning by archetype — `src/creep.capabilities.ts`
-- Remote hauler capacity cap (per source) — `src/room.controller.ts`
-- Hauling, refill, build, repair, upgrade assignment — `src/room.controller.ts`; haulers/workers pick dropped resources, salvage ruins/tombstones, then non-energy minerals from the planned mineral container. Workers prefer room storage as the primary `withdrawEnergy` target whenever storage has energy. Haulers prioritize draining hub/controller/sink links first (keeping them ready for runLinks transfers), then fall back to terminal, source containers, and source links as overflow. Energy-carrying local haulers/support creeps preempt idle/deposit/withdraw/build/repair/upgrade work to refill spawn/extensions during spawn pressure, then low towers. Terminal energy follows an RCL reserve floor (RCL6/7/8 = 5k/10k/50k) breakable only during energy recovery. Non-miner `harvestSource` assignments are treated as temporary fallback jobs and are interrupted once energy is loaded or storage is available.
-- Remote maintainer build targeting is sticky on the current road/container site to prevent rapid target oscillation; retargeting happens only when that target is no longer a valid road/container construction site — `src/room.controller.ts`.
+- Remote hauler capacity cap (per source) — `src/local.operations.ts`
+- Hauling, refill, build, repair, upgrade assignment — `src/local.operations.ts`; haulers/workers pick dropped resources, salvage ruins/tombstones, then non-energy minerals from the planned mineral container. Workers prefer room storage as the primary `withdrawEnergy` target whenever storage has energy. Haulers prioritize draining hub/controller/sink links first (keeping them ready for runLinks transfers), then fall back to terminal, source containers, and source links as overflow. Energy-carrying local haulers/support creeps preempt idle/deposit/withdraw/build/repair/upgrade work to refill spawn/extensions during spawn pressure, then low towers. Terminal energy follows an RCL reserve floor (RCL6/7/8 = 5k/10k/50k) breakable only during energy recovery. Non-miner `harvestSource` assignments are treated as temporary fallback jobs and are interrupted once energy is loaded or storage is available.
+- Remote maintainer build targeting is sticky on the current road/container site to prevent rapid target oscillation; retargeting happens only when that target is no longer a valid road/container construction site — `src/local.operations.ts`.
 - Remote hauler cycle (assigned-source-first remote pickup with cross-source pickup only for large overflow when assigned source is dry, fill-to-full top-up, far-pickup return at >=75% load, home delivery prioritizes spawn/extension refill then low towers before storage/terminal, post-trip renew only when TTL<1000 to TTL>1400, no-job home idle/wander with TTL<500 renew gate; energy pressure can defer starting renew, but active renew cycles persist next to spawn until TTL>1400) — `src/room.controller.ts`; renew requests reserve free spawns through `src/spawn.renewal.ts` so multiple renewers spread across multiple spawns, adjacent renewers can preempt reservations held by creeps still traveling to the spawn, and spawn planning keeps one free spawn when multiple spawns are idle to avoid renew-only reservation lockouts.
 - Job execution for those assignments — `src/creep.jobRunner.ts` (includes pass-by remote-hauler opportunistic build/repair within range 3)
 - Recovery log regression checker — `.ai/scripts/check-screeps-recovery-regressions.py` parses console NDJSON for recovery-pull mismatches, remote-hauler renew loops, flatlined demand recovery, and stale post-full recovery pull.
@@ -105,7 +106,7 @@ Adding a new strategic Memory setting:
 Changing construction priority:
 
 1. Update `architecture/ECONOMY.md`.
-2. Update `constructionPriority()` in `src/room.controller.ts`.
+2. Update `constructionPriority()` in `src/local.operations.ts`.
 3. Validate in-game that builders choose the intended sites.
 
 Changing remote behavior:
@@ -123,4 +124,4 @@ Changing wall/rampart repair caps or tower repair policy:
 3. Edit the energy thresholds in `tower.basics.ts` (lines 46–47):
    - `minEnergyForRepair` — controls heal/repair of normal structures (0.5 combat, 0.7 peace)
    - `minEnergyForDefense` — controls wall/rampart repair (0.4 combat, 0.75 peace)
-4. The repair-job validity check in `currentJobStillValid()` (`src/room.controller.ts`) automatically uses `wallRampartRepairCap` — no separate update needed.
+4. The repair-job validity check in `currentJobStillValid()` (`src/local.operations.ts`) automatically uses `wallRampartRepairCap` — no separate update needed.

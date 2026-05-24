@@ -69,7 +69,7 @@ This file tracks known follow-up work that future agents should consider before 
 - `interruptReason` is written for observability but not consumed.
 - Remote hauler repair/build branches rely on WORK part for opportunistic maintenance. All non-minimal remoteHauler bodies now include WORK+MOVE, enabling this feature reliably.
 - Remote room memory garbage collection implemented via `garbageCollectDisabledRemotes()` in `remote.operations.ts`, called from `room.controller.run()`. Scans `room.memory.plan?.remoteRooms` for entries with `enabled: false` (set via console `disable` command) and prunes their `plan`/`remotePaths`/`sourceDemand` blocks in `Memory.rooms`. Throttled to once per 500 ticks per room (spread by room index). Legacy `disabledRemoteRooms` type field on RoomMemory was removed since GC no longer needs it.
-- `room.controller.ts` is ~2,838 lines — a god module. Remote room logic (~2,500 lines) has been extracted to `src/remote.operations.ts`. Remaining candidates for extraction: spawn planning (`runSpawnPlanner`, `chooseSpawnRequest`, `remoteSpawnRequest`) and job assignment (`assignJobs`, `assignJob`, `keepCurrentJob`). These should be deferred until the strategic path behavior is fully documented.
+- `room.controller.ts` is ~342 lines — a lean orchestrator. Room logic has been extracted into `src/local.operations.ts` (job assignment, spawn planning, energy management, source/mineral planning) and `src/remote.operations.ts` (~2,559 lines).
 
 ## Deferred By Strategy
 

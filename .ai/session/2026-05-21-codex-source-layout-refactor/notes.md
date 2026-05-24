@@ -100,6 +100,16 @@ Completed slices:
 - Split room link classification policy into `src/rooms/linkGroups.ts` and structure-memory refresh/change-detection policy into `src/rooms/structureMemoryCache.ts`, leaving `src/room.structures.ts` focused on structure discovery and cache orchestration.
 - Split cross-room `travelRoom` routing into `src/creeps/jobs/movementTravelRoom.ts`, generic move-to-target behavior into `src/creeps/jobs/movementTargets.ts`, and stuck/reset helpers into `src/creeps/jobs/movementStuck.ts`, leaving `src/creeps/jobs/movement.ts` as compatibility exports.
 - Split remote hauler renew-cycle policy into `src/rooms/remotes/haulerHomeRenewal.ts` and home idle/wander targeting into `src/rooms/remotes/haulerHomeIdle.ts`, leaving `src/rooms/remotes/haulerHome.ts` as compatibility exports.
+- Split remote source path refresh/reachability and incomplete-path retry policy into `src/rooms/remotes/remotePlanningSourcePathing.ts`, leaving `src/rooms/remotes/remotePlanningSources.ts` focused on source container/road planning and source-demand updates.
+- Split local mining-site pickup threshold and mining-site container-id helpers into `src/rooms/jobs/energyMiningSites.ts`, leaving `src/rooms/jobs/energyTargets.ts` focused on local energy target orchestration.
+- Split terminal reserve policy and withdrawable/deficit helpers into `src/rooms/energyTerminal.ts`, leaving `src/rooms/energy.ts` focused on energy pressure/recovery orchestration.
+- Split remote entry mirroring/station selection/container-site placement checks into `src/rooms/remotes/pathingStations.ts`, leaving `src/rooms/remotes/pathing.ts` focused on path serialization/distance and shared route-health helpers.
+- Split remote status/pathing/claim/target signal helpers into `src/debug/remoteStatusLineSignals.ts`, leaving `src/debug/remoteStatusLineBuilder.ts` focused on status-line formatting assembly.
+- Split archetype-specific body templates/body-building helpers into `src/creeps/bodyPlanStrategies.ts`, leaving `src/creeps/bodyPlans.ts` focused on `planBodyForArchetype` dispatch.
+- Split current-job reservation carry-forward and energy-refill interruption helpers into `src/rooms/jobs/currentRetentionHelpers.ts`, leaving `src/rooms/jobs/current.ts` focused on current-job retention orchestration and high-level interrupts.
+- Split pending spawn count/capability helpers into `src/rooms/spawning/accountingPending.ts`, leaving `src/rooms/spawning/accounting.ts` focused on capability accounting and renewal-demand orchestration.
+- Split spawn body budgeting/scaling/minimum checks and spawn-attempt execution into `src/rooms/spawning/plannerSpawnAttempt.ts`, leaving `src/rooms/spawning/planner.ts` focused on spawn-loop orchestration and request iteration.
+- Split legacy body-spec scaling helper into `src/creepRoleBalanceSpec.ts`, leaving `src/creep.roleBalance.ts` with compatibility API and legacy role-balance orchestration.
 
 Verification:
 
@@ -174,7 +184,21 @@ Verification:
 - `npm run build` passed after room structure split (`rooms/linkGroups.ts` + `rooms/structureMemoryCache.ts`).
 - `npm run build` passed after movement split (`creeps/jobs/movementTravelRoom.ts` + `creeps/jobs/movementTargets.ts` + `creeps/jobs/movementStuck.ts`).
 - `npm run build` passed after remote hauler-home split (`remotes/haulerHomeRenewal.ts` + `remotes/haulerHomeIdle.ts`).
+- `npm run build` passed after remote path-refresh split (`remotes/remotePlanningSourcePathing.ts`).
+- `npm run build` passed after local energy mining-site helper split (`rooms/jobs/energyMiningSites.ts`).
+- `npm run build` passed after room terminal-energy policy split (`rooms/energyTerminal.ts`).
+- `npm run build` passed after remote station-helper split (`remotes/pathingStations.ts`).
+- `npm run build` passed after remote status-line signal split (`debug/remoteStatusLineSignals.ts`).
+- `npm run build` passed after body planning strategy split (`creeps/bodyPlanStrategies.ts`).
+- `npm run build` passed after current-job retention helper split (`rooms/jobs/currentRetentionHelpers.ts`).
+- `npm run build` passed after spawn-accounting pending helper split (`spawning/accountingPending.ts`).
+- `npm run build` passed after spawn planner attempt split (`spawning/plannerSpawnAttempt.ts`).
+- `npm run build` passed after legacy body-spec helper split (`creepRoleBalanceSpec.ts`).
 
-Remaining high-value refactor targets:
+Current high-value large-module candidates (post-split):
 
-- Split remaining large modules such as `src/rooms/remotes/remotePlanningSources.ts`, `src/rooms/jobs/energyTargets.ts`, and `src/rooms/energy.ts` by responsibility once behavior stabilizes.
+- `src/rooms/jobs/energyWork.ts`
+- `src/rooms/spawning/requestSelection.ts`
+- `src/creeps/jobs/traffic.ts`
+- `src/rooms/remotes/energy.ts`
+- `src/rooms/jobs/energyTargets.ts`

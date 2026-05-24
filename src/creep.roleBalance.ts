@@ -1,4 +1,5 @@
 import * as roleHarvester from './role.harvester';
+import { balanceBodySpec } from './creepRoleBalanceSpec';
 
 export const specification: { [role: string]: number[] } = {
     harvester: [1, 1, 1, 0, 0, 0, 0, 0],
@@ -51,26 +52,7 @@ export function countEnergy(spawn: StructureSpawn): { available: number; capacit
 }
 
 export function balanceSpec(spec: number[], energy: number): BodyPartConstant[] {
-    const bodyPartName: BodyPartConstant[] = [MOVE, WORK, CARRY, ATTACK, RANGED_ATTACK, HEAL, CLAIM, TOUGH];
-    const bodyPartCost =                     [50,   100,  50,    80,     150,           250,  600,   10  ];
-
-    const weighted: number[] = [];
-    let weightedSum = 0;
-    for (let i = 0; i < spec.length; i++) {
-        const c = spec[i] * bodyPartCost[i];
-        weighted[i] = c;
-        weightedSum += c;
-    }
-
-    const scale = energy / weightedSum;
-    const parts: BodyPartConstant[] = [];
-    for (let i = 0; i < spec.length; i++) {
-        const count = Math.floor(weighted[i] * scale / bodyPartCost[i]);
-        for (let j = 0; j < count; j++) {
-            parts.push(bodyPartName[i]);
-        }
-    }
-    return parts;
+    return balanceBodySpec(spec, energy);
 }
 
 export function creepsType(_room: Room): { harvester: string[]; builder: string[]; upgrader: string[]; doctor: string[] } {

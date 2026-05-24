@@ -1,5 +1,9 @@
 import type { JobReservations, RoomControllerContext } from './controllerTypes';
 import { closest } from '../utils/selection';
+import {
+    terminalEnergyReserveDeficit,
+    terminalWithdrawableEnergy
+} from './energyTerminal';
 
 export const TOWER_RESERVE_RATIO = 0.7;
 export const TOWER_RECOVERY_RATIO = 0.55;
@@ -12,9 +16,10 @@ const ENERGY_RECOVERY_EXIT_TOWER_RATIO = TOWER_RESERVE_RATIO;
 export const WORKER_EMERGENCY_SPAWN_RATIO = 0.1;
 // Spawn fill ratio at which haulers yield spawn priority to tower refill
 export const TOWER_REFILL_SPAWN_YIELD_RATIO = 0.90;
-const TERMINAL_RESERVE_RCL6 = 5000;
-const TERMINAL_RESERVE_RCL7 = 10000;
-const TERMINAL_RESERVE_RCL8 = 50000;
+export {
+    terminalEnergyReserveDeficit,
+    terminalWithdrawableEnergy
+} from './energyTerminal';
 
 export function refillSpawnTargets(context: RoomControllerContext): EnergyStructure[] {
     return [...context.structures.spawns, ...context.structures.extensions]
@@ -71,13 +76,6 @@ export function spawnEnergyPressure(context: RoomControllerContext): number {
     return sumFreeEnergy([...context.structures.spawns, ...context.structures.extensions]);
 }
 
-function terminalEnergyReserveTarget(rcl: number): number {
-    if (rcl >= 8) { return TERMINAL_RESERVE_RCL8; }
-    if (rcl >= 7) { return TERMINAL_RESERVE_RCL7; }
-    if (rcl >= 6) { return TERMINAL_RESERVE_RCL6; }
-    return 0;
-}
-
 export function roomHasEnergyDemand(context: RoomControllerContext): boolean {
     return spawnEnergyPressure(context) > 0 || refillTowerTargets(context).length > 0;
 }
@@ -117,34 +115,6 @@ function energyRecoveryReason(context: RoomControllerContext, active: boolean): 
     if (spawnHeld) { return 'spawn'; }
     if (towerHeld) { return 'tower'; }
     return 'hysteresis';
-}
-
-export function terminalWithdrawableEnergy(
-    context: RoomControllerContext,
-    reservations: JobReservations,
-    allowReserveBreak: boolean
-): number {
-    const terminal = context.structures.terminal;
-    if (!terminal) { return 0; }
-    const reserved = reservations.resources[terminal.id] ?? 0;
-    const available = terminal.store.getUsedCapacity(RESOURCE_ENERGY) - reserved;
-    if (available <= 0) { return 0; }
-    if (allowReserveBreak) { return available; }
-
-    const reserveTarget = terminalEnergyReserveTarget(context.room.controller?.level ?? 0);
-    return Math.max(0, available - reserveTarget);
-}
-
-export function terminalEnergyReserveDeficit(context: RoomControllerContext, reservations: JobReservations): number {
-    const terminal = context.structures.terminal;
-    if (!terminal) { return 0; }
-
-    const reserveTarget = terminalEnergyReserveTarget(context.room.controller?.level ?? 0);
-    if (reserveTarget <= 0) { return 0; }
-
-    const incomingReserved = reservations.energySinks[terminal.id] ?? 0;
-    const projectedEnergy = terminal.store.getUsedCapacity(RESOURCE_ENERGY) + incomingReserved;
-    return Math.max(0, reserveTarget - projectedEnergy);
 }
 
 export function storedEnergy(context: RoomControllerContext): number {

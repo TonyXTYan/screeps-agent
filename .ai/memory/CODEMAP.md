@@ -28,7 +28,8 @@ Use this as the first stop before editing code.
 - `src/rooms/linkGroups.ts` — link group classification policy (source/hub/controller/sink/other)
 - `src/rooms/structureMemoryCache.ts` — room structure-memory refresh/write policy and change detection
 - `src/spawn.renewal.ts` — per-tick spawn reservation helper for renew actions
-- `src/creeps/bodyPlans.ts` — strategic archetype body planning (`planBodyForArchetype`)
+- `src/creeps/bodyPlans.ts` — strategic archetype body planning dispatch (`planBodyForArchetype`)
+- `src/creeps/bodyPlanStrategies.ts` — archetype-specific body templates and body-building helpers
 - `src/creeps/renewal.ts` — home renew gating and standby remote-miner parking
 - `src/combat/emergencyHealing.ts` — critical ally heal targeting and retreat-heal helpers
 - `src/combat/flee.ts` — non-defender hostile flee orchestration
@@ -61,18 +62,22 @@ Use this as the first stop before editing code.
 - `src/debug/remoteSources.ts` — remote source debug section orchestration
 - `src/debug/remoteStatusNav.ts` — remote target/nav/path debug label helpers
 - `src/debug/remoteStatus.ts` — remote creep-status debug orchestration and owned-room enumeration for debug ticks
-- `src/debug/remoteStatusLineBuilder.ts` — remote creep status-line construction helpers (status/pathing/claim/nav tags)
+- `src/debug/remoteStatusLineBuilder.ts` — remote creep status-line formatting assembly
+- `src/debug/remoteStatusLineSignals.ts` — remote status/pathing/claim/target label helpers for status lines
 - `src/debug/remoteStatusLines.ts` — remote creep-status line collection and sort orchestration
 - `src/repairs/policy.ts` — shared repair filters and RCL-staged wall/rampart caps
 - `src/resources/store.ts` — shared Store helpers for first-resource selection and stored-resource totals
 - `src/rooms/controllerTypes.ts` — shared room-controller interfaces used by extracted modules
-- `src/rooms/energy.ts` — room energy pressure, spawn/tower refill targeting, terminal reserve math, and energy recovery hysteresis
+- `src/rooms/energy.ts` — room energy pressure, spawn/tower refill targeting, and energy recovery hysteresis orchestration
+- `src/rooms/energyTerminal.ts` — terminal reserve policy plus withdrawable-energy and reserve-deficit helpers
 - `src/rooms/links.ts` — room link transfer loop and link receiver/sender selection
 - `src/rooms/jobs/assignment.ts` — local new-job assignment orchestration
 - `src/rooms/jobs/assignmentHauling.ts` — haul/resource acquisition assignment policy (pickup/salvage/mineral/energy withdraw branches)
-- `src/rooms/jobs/current.ts` — current-job retention, reservation carry-forward, and interrupt policy
+- `src/rooms/jobs/current.ts` — current-job retention orchestration and high-level interrupt flow
+- `src/rooms/jobs/currentRetentionHelpers.ts` — current-job reservation accounting and energy-refill interruption helpers
 - `src/rooms/jobs/emergencyEnergy.ts` — shared emergency energy-delivery decision, interrupt, and assignment helpers
-- `src/rooms/jobs/energyTargets.ts` — local energy gather/withdraw/deposit target-selection policy
+- `src/rooms/jobs/energyMiningSites.ts` — local mining-site pickup thresholds and mining-site container target-id helpers
+- `src/rooms/jobs/energyTargets.ts` — local energy gather/withdraw/deposit target-selection orchestration
 - `src/rooms/jobs/energyWork.ts` — worker/hauler energy spending orchestration and primary-job resume checks
 - `src/rooms/jobs/energyWorkAssignment.ts` — build/repair/upgrade/refill assignment helpers for energy spending
 - `src/rooms/jobs/reservations.ts` — job reservation ledgers and progress reservation accounting
@@ -81,9 +86,11 @@ Use this as the first stop before editing code.
 - `src/rooms/jobs/validity.ts` — current-job target validity, terminal/storage guards, and build/repair/work checks
 - `src/rooms/jobs/work.ts` — construction/repair/upgrade target selection and upgrade reservation policy
 - `src/rooms/planning/sources.ts` — local source/mineral planning and source demand/coverage helpers
-- `src/rooms/spawning/accounting.ts` — current/pending fleet capability accounting, pending spawn request helpers, and renewal-demand selection
+- `src/rooms/spawning/accounting.ts` — current/pending fleet capability accounting, pending spawn request helpers, and renewal-demand orchestration
+- `src/rooms/spawning/accountingPending.ts` — pending spawn count/capability helpers (global + remote/source-scoped)
 - `src/rooms/spawning/bodyPolicy.ts` — minimum spawn body checks and legacy role mapping
-- `src/rooms/spawning/planner.ts` — spawn loop and spawn execution
+- `src/rooms/spawning/planner.ts` — spawn loop orchestration and request iteration
+- `src/rooms/spawning/plannerSpawnAttempt.ts` — spawn body budgeting/scaling/minimum checks and spawn attempt execution
 - `src/rooms/spawning/requestSelection.ts` — local spawn demand modeling and spawn-request selection policy
 - `src/rooms/spawning/remote.ts` — remote spawn request orchestration by remote mode
 - `src/rooms/spawning/remoteHarvest.ts` — harvest-mode remote spawn demand selection
@@ -115,9 +122,11 @@ Use this as the first stop before editing code.
 - `src/rooms/remotes/maintenance.ts` — remote maintainer presence, infrastructure demand, and degraded-route demand checks
 - `src/rooms/remotes/minerStation.ts` — remote miner station stall detection and route-health mutation
 - `src/rooms/remotes/remoteRouteHealth.ts` — remote source route-health mutation and station-failure policy
-- `src/rooms/remotes/pathing.ts` — remote path serialization, distance fallback, entry/station selection, and route-health helpers
+- `src/rooms/remotes/pathing.ts` — remote path serialization, distance fallback, and shared route-health helpers
+- `src/rooms/remotes/pathingStations.ts` — remote entry mirroring, station selection, and container-site placement checks
 - `src/rooms/remotes/planning.ts` — remote room planning orchestration (visibility, danger marking, and defaults)
-- `src/rooms/remotes/remotePlanningSources.ts` — remote source path/container/road planning and source-demand updates
+- `src/rooms/remotes/remotePlanningSourcePathing.ts` — remote source path refresh/reachability and incomplete-path retry helpers
+- `src/rooms/remotes/remotePlanningSources.ts` — remote source container/road planning and source-demand updates
 - `src/rooms/remotes/renewal.ts` — generic non-hauler remote renew flow
 - `src/rooms/remotes/roads.ts` — remote road-site placement and road-cursor helpers
 - `src/rooms/remotes/scouts.ts` — remote scout pack accounting, non-scout assignment checks, and visible-room crowd checks
@@ -146,20 +155,20 @@ Use this as the first stop before editing code.
 - Source/mineral planning — `src/rooms/planning/sources.ts`
 - Link classification — policy in `src/rooms/linkGroups.ts`, orchestration in `src/room.structures.ts`
 - Link transfers — `src/rooms/links.ts`
-- Energy pressure, refill targeting, terminal reserve floors, and recovery hysteresis — `src/rooms/energy.ts`
+- Energy pressure, refill targeting, and recovery hysteresis — `src/rooms/energy.ts`; terminal reserve floors and withdrawability/deficit helpers in `src/rooms/energyTerminal.ts`
 - Job memory writes and primary-job resume memory — `src/creeps/jobs/memory.ts`
 - Local source/mineral/gather/fallback job assignment — orchestration in `src/rooms/jobs/assignment.ts`, haul/resource acquisition policy in `src/rooms/jobs/assignmentHauling.ts`
-- Current-job retention, interrupt policy, and reservation carry-forward — `src/rooms/jobs/current.ts`
+- Current-job retention and high-level interrupt policy — `src/rooms/jobs/current.ts`; reservation carry-forward and energy-refill interruption helpers in `src/rooms/jobs/currentRetentionHelpers.ts`
 - Shared emergency energy-delivery interruption/assignment policy — `src/rooms/jobs/emergencyEnergy.ts`
 - Miner source assignment, static-mining memory, and stationary-target helpers — `src/rooms/jobs/sourceAssignment.ts`
 - Current-job target validity and resource/work guards — `src/rooms/jobs/validity.ts`
 - Energy spending and primary build/repair/upgrade resume — orchestration in `src/rooms/jobs/energyWork.ts` with assignment helpers in `src/rooms/jobs/energyWorkAssignment.ts`
-- Local energy gather/withdraw/deposit target selection — `src/rooms/jobs/energyTargets.ts`
+- Local energy gather/withdraw/deposit target selection — `src/rooms/jobs/energyTargets.ts`; mining-site pickup thresholds and container-id mining-site helpers in `src/rooms/jobs/energyMiningSites.ts`
 - Local resource pickup/salvage/mineral-withdraw target selection — `src/rooms/jobs/targets.ts`
 - Construction/repair/upgrade target selection and upgrade reservation policy — `src/rooms/jobs/work.ts`
-- Spawn accounting and current/pending capability measurement — `src/rooms/spawning/accounting.ts`
+- Spawn accounting and current/pending capability measurement — `src/rooms/spawning/accounting.ts`; pending spawn count/capability helpers in `src/rooms/spawning/accountingPending.ts`
 - Spawn body minimums and legacy role mapping — `src/rooms/spawning/bodyPolicy.ts`
-- Local spawn demand selection — `src/rooms/spawning/requestSelection.ts`; spawn loop/execution lives in `src/rooms/spawning/planner.ts`, with pending-spawn snapshot and spawn name/memory helpers in `src/rooms/spawning/spawnRequestHelpers.ts`. Multiple free spawns share a pending-request ledger with planned bodies so in-flight creeps count toward capacity and per-source/per-role caps via `src/rooms/spawning/accounting.ts`.
+- Local spawn demand selection — `src/rooms/spawning/requestSelection.ts`; spawn loop orchestration lives in `src/rooms/spawning/planner.ts`, spawn attempt/budget/scale/minimum helpers live in `src/rooms/spawning/plannerSpawnAttempt.ts`, and pending-spawn snapshot plus spawn name/memory helpers live in `src/rooms/spawning/spawnRequestHelpers.ts`. Multiple free spawns share a pending-request ledger with planned bodies so in-flight creeps count toward capacity and per-source/per-role caps via `src/rooms/spawning/accounting.ts`.
 - Remote spawn demand selection — orchestration in `src/rooms/spawning/remote.ts`, harvest-mode flow in `src/rooms/spawning/remoteHarvest.ts`, and per-source/standby demand policy in `src/rooms/spawning/remoteHarvestSourceDemand.ts`
 - Remote spawn gates and minimum body checks (blocks remote spawns when home requests pending, throttles remotes under low stored/spawn energy, and rejects uneconomic scaled remote bodies) — orchestration in `src/rooms/spawning/remotePolicy.ts`, minimum-cost policy in `src/rooms/spawning/remotePolicyCost.ts`, and shared policy predicates/helpers in `src/rooms/spawning/remotePolicyShared.ts`
 - Remote fleet enumeration and role counts — `src/rooms/remotes/fleet.ts`
@@ -171,9 +180,9 @@ Use this as the first stop before editing code.
 - Remote role-specific assignment helpers — `src/rooms/remotes/assignmentRoles.ts`, `src/rooms/remotes/assignmentRoleMiner.ts`, `src/rooms/remotes/assignmentRoleMaintainer.ts`
 - Overflow remote-scout wander routing — `src/rooms/remotes/scoutOverflow.ts`
 - Remote standby miner system (TTL-triggered source-targeted handoff with remote pre-positioning; blank standby reassignment; pending container-site awareness; no standby renew) — `src/rooms/remotes/standbyMiner.ts` with standby detection/replacement helpers from `src/rooms/remotes/fleetStandby.ts`, source coverage/replacement math from `src/rooms/remotes/remoteCoverageProjections.ts` plus station policy from `src/rooms/remotes/remoteSourceStations.ts` (compat exports in `src/rooms/remotes/coverage.ts`), and runtime coordination in `src/creep.jobRunner.ts` and `src/creeps/renewal.ts`
-- Remote route health and road placement (degraded-route memory, prioritized road sites, route-health maintainer recovery bypass) — remote room planning orchestration in `src/rooms/remotes/planning.ts`, source-level path/container/road planning in `src/rooms/remotes/remotePlanningSources.ts`, station stall tracking in `src/rooms/remotes/minerStation.ts`, route-health mutation/station-failure policy in `src/rooms/remotes/remoteRouteHealth.ts`, pathing helpers in `src/rooms/remotes/pathing.ts`, road-site mechanics in `src/rooms/remotes/roads.ts`
+- Remote route health and road placement (degraded-route memory, prioritized road sites, route-health maintainer recovery bypass) — remote room planning orchestration in `src/rooms/remotes/planning.ts`, source-level path refresh/reachability in `src/rooms/remotes/remotePlanningSourcePathing.ts`, source-level container/road planning in `src/rooms/remotes/remotePlanningSources.ts`, station stall tracking in `src/rooms/remotes/minerStation.ts`, route-health mutation/station-failure policy in `src/rooms/remotes/remoteRouteHealth.ts`, pathing/distance helpers in `src/rooms/remotes/pathing.ts`, entry/station selection in `src/rooms/remotes/pathingStations.ts`, road-site mechanics in `src/rooms/remotes/roads.ts`
 - Body capability derivation — `src/creep.capabilities.ts`
-- Body planning by archetype — `src/creeps/bodyPlans.ts`
+- Body planning by archetype — dispatch in `src/creeps/bodyPlans.ts`; archetype template/build helpers in `src/creeps/bodyPlanStrategies.ts`
 - Remote hauler capacity cap (per source) — `src/rooms/remotes/planning.ts`
 - Remote hauler energy targeting — orchestration (`findRemoteEnergySource`, target-path gating, stuck-target avoidance memory) lives in `src/rooms/remotes/energy.ts`; per-source container/drop target enumeration and source-energy accounting live in `src/rooms/remotes/energySourceTargets.ts`; assigned-source-first pickup and cross-source overflow selection helpers live in `src/rooms/remotes/energyTargets.ts`; shared target-picking helpers live in `src/rooms/remotes/remoteEnergyTargetPicker.ts`. Per-target claim caps, claim subtraction, access-slot scoring, and reachability checks live in `src/rooms/remotes/energyClaims.ts`.
 - Hauling, refill, build, repair, upgrade assignment — source/mineral/gather orchestration in `src/rooms/jobs/assignment.ts`, haul/resource acquisition policy in `src/rooms/jobs/assignmentHauling.ts`, emergency energy-delivery policy in `src/rooms/jobs/emergencyEnergy.ts`, source-assignment/static-mining helpers in `src/rooms/jobs/sourceAssignment.ts`, energy-spending orchestration in `src/rooms/jobs/energyWork.ts`, energy-spend assignment helpers in `src/rooms/jobs/energyWorkAssignment.ts`, current-job retention/interrupt policy in `src/rooms/jobs/current.ts`, current-job validity in `src/rooms/jobs/validity.ts`, resource target helpers in `src/rooms/jobs/targets.ts`, energy target helpers in `src/rooms/jobs/energyTargets.ts`, and energy-state helpers from `src/rooms/energy.ts`; haulers/workers pick dropped resources, salvage ruins/tombstones, then non-energy minerals from the planned mineral container. Workers prefer room storage as the primary `withdrawEnergy` target whenever storage has energy. Haulers prioritize draining hub/controller/sink links first (keeping them ready for `src/rooms/links.ts` transfers), then fall back to terminal, source containers, and source links as overflow. Energy-carrying local haulers/support creeps preempt idle/deposit/withdraw/build/repair/upgrade work to refill spawn/extensions during spawn pressure, then low towers. Terminal energy follows an RCL reserve floor (RCL6/7/8 = 5k/10k/50k) breakable only during energy recovery. Non-miner `harvestSource` assignments are treated as temporary fallback jobs and are interrupted once energy is loaded or storage is available.
@@ -203,7 +212,7 @@ Wall/rampart hit caps live in `wallRampartRepairCap()`. Tower energy thresholds 
 ## Legacy Compatibility
 
 - Legacy role balancing helpers — `src/creep.roleBalance.ts`
-- Legacy body planner (`balanceSpec()`) — `src/creep.roleBalance.ts` (DO NOT use for strategic-path creeps; use `planBodyForArchetype()` in `creeps/bodyPlans.ts` instead)
+- Legacy body planner (`balanceSpec()`) — wrapper in `src/creep.roleBalance.ts` with body-spec scaling helper in `src/creepRoleBalanceSpec.ts` (DO NOT use for strategic-path creeps; use `planBodyForArchetype()` in `creeps/bodyPlans.ts` instead)
 - Legacy direct harvesting helper — `src/creep.harvest.ts`
 - Legacy fallback roles — `src/role.harvester.ts`, `src/role.builder.ts`, `src/role.upgrader.ts`, `src/role.doctor.ts`
 - Emergency defender behavior — `src/role.defender.ts`

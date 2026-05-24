@@ -6,7 +6,7 @@ A TypeScript Screeps AI bot that manages a colony economy — source mining, hau
 upgrading, remote harvesting, and defense. Bundled via Rollup into `dist/main.js` and pushed to the
 Screeps server via `grunt-screeps`.
 
-## Source Map (128 modules)
+## Source Map (138 modules)
 
 ```
 src/
@@ -35,7 +35,8 @@ src/
     remoteSources.ts       Remote source debug section orchestration
     remoteStatusNav.ts     Remote navigation/target path debug labels
     remoteStatus.ts        Remote creep-status debug orchestration and owned-room enumeration
-    remoteStatusLineBuilder.ts Remote creep status-line construction helpers (status/pathing/claim/nav tags)
+    remoteStatusLineBuilder.ts Remote creep status-line formatting assembly
+    remoteStatusLineSignals.ts Remote status/pathing/claim/target label helpers for status lines
     remoteStatusLines.ts   Remote creep-status line collection and sort orchestration
 
   creep.capabilities.ts    Body → capability derivation and archetype inference
@@ -44,8 +45,10 @@ src/
   creep.populationControl.ts Emergency defender spawning
   creep.harvest.ts         Legacy direct-harvest helper
   creep.roleBalance.ts     Legacy body planner (defender only)
+  creepRoleBalanceSpec.ts  Legacy body-spec scaling helper for `balanceSpec`
 
   creeps/
+    bodyPlanStrategies.ts  Archetype-specific body templates and body-building helpers
     bodyPlans.ts           Strategic body planning by archetype (`planBodyForArchetype`)
     renewal.ts             Home creep renew gating and standby remote-miner parking
     jobs/
@@ -74,15 +77,18 @@ src/
     controllerLoad.ts      Room load snapshot memory writes and passive infrastructure reporting
     controllerState.ts     Room context build + room plan snapshot/assignment update helpers
     controllerTypes.ts     Shared room-controller interfaces for extraction modules
-    energy.ts              Room energy pressure, refill target, tower ratio, and terminal reserve helpers
+    energy.ts              Room energy pressure, refill target, tower ratio, and recovery-state helpers
+    energyTerminal.ts      Room terminal reserve policy and withdrawable/reserve-deficit energy helpers
     linkGroups.ts          Link group classification policy (source/hub/controller/sink/other)
     links.ts               Link transfer loop and receiver/sender selection
     jobs/
       assignment.ts        Local new-job assignment orchestration
       assignmentHauling.ts Local haul/resource acquisition assignment policy
-      current.ts           Current-job retention, reservations, and interrupt policy
+      current.ts           Current-job retention orchestration and high-level interrupt flow
+      currentRetentionHelpers.ts Current-job reservation accounting and energy-refill interruption helpers
       emergencyEnergy.ts   Shared emergency energy-delivery interrupt and assignment policy
-      energyTargets.ts     Local energy gather/withdraw/deposit target selection policy
+      energyMiningSites.ts Local mining-site pickup thresholds and container target-id helpers
+      energyTargets.ts     Local energy gather/withdraw/deposit target orchestration policy
       energyWork.ts        Worker/hauler energy spending orchestration and primary-job resume
       energyWorkAssignment.ts Build/repair/upgrade/refill assignment helpers used by energy-work orchestration
       reservations.ts      Job reservation ledgers and progress reservation accounting
@@ -93,9 +99,11 @@ src/
     planning/
       sources.ts           Local source/mineral planning and source demand/coverage helpers
     spawning/
-      accounting.ts        Current/pending fleet capability accounting and renewal-demand helpers
+      accounting.ts        Current/pending fleet capability accounting and renewal-demand orchestration
+      accountingPending.ts Pending spawn count/capability helpers (global + remote/source-scoped)
       bodyPolicy.ts        Minimum spawn body checks and legacy role mapping
-      planner.ts           Spawn loop and spawn execution
+      planner.ts           Spawn loop orchestration and request iteration
+      plannerSpawnAttempt.ts Spawn body budgeting/scaling/minimum checks and spawn attempt execution
       requestSelection.ts  Local spawn demand modeling and spawn-request selection policy
       remote.ts            Remote spawn request orchestration by remote mode
       remoteHarvest.ts     Harvest-mode remote spawn demand selection
@@ -128,9 +136,11 @@ src/
       maintenance.ts       Remote maintainer presence/demand checks
       minerStation.ts      Remote miner station stall tracking and route-health updates
       remoteRouteHealth.ts Remote source route-health mutation and station-failure policy
-      pathing.ts           Remote path serialization, distance fallback, station selection
+      pathing.ts           Remote path serialization, distance fallback, and shared route-health helpers
+      pathingStations.ts   Remote entry mirroring, station tile selection, and container-site placement checks
       planning.ts          Remote room planning orchestration (visibility/danger/defaults)
-      remotePlanningSources.ts Remote source path/container/road planning and demand updates
+      remotePlanningSourcePathing.ts Remote source path refresh/reachability and retry-interval policy
+      remotePlanningSources.ts Remote source container/road planning and source-demand updates
       renewal.ts           Generic non-hauler remote renew flow
       roads.ts             Remote road-site placement helpers
       scouts.ts            Remote scout pack accounting and room-crowding checks

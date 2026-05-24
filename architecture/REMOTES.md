@@ -78,7 +78,8 @@ Remote spawning is conservative when the home room is under pressure:
 - Remote haulers are also suppressed while existing haulers for that remote show route congestion.
 
 Remote room discovery, danger marking, and remote planning orchestration live in
-`src/rooms/remotes/planning.ts`. Source path planning, container-site placement, road-site
+`src/rooms/remotes/planning.ts`. Source path refresh/reachability and retry policy live in
+`src/rooms/remotes/remotePlanningSourcePathing.ts`. Source container-site placement, road-site
 placement scheduling, and per-source hauler capacity demand updates live in
 `src/rooms/remotes/remotePlanningSources.ts`.
 Per-source remote workforce coverage, replacement horizons, and idle-hauler detection live in
@@ -164,8 +165,11 @@ harvest range, the source route is marked `degraded` and its cached path is pres
 placement instead of clearing the source assignment or making the miner source-less standby. The route
 returns to `healthy` when a miner reaches harvest range or harvests successfully.
 
-Remote path serialization and station selection live in `src/rooms/remotes/pathing.ts`; miner station
-stall tracking and route-health mutation live in `src/rooms/remotes/minerStation.ts`.
+Remote path serialization and shared route/distance helpers live in `src/rooms/remotes/pathing.ts`;
+remote entry mirroring/station selection/container placement checks live in
+`src/rooms/remotes/pathingStations.ts`; source path refresh/reachability and incomplete-path retry policy live in
+`src/rooms/remotes/remotePlanningSourcePathing.ts`; miner station stall tracking and route-health
+mutation live in `src/rooms/remotes/minerStation.ts`.
 
 ## Infrastructure Placement
 

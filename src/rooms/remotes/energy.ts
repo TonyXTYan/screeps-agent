@@ -1,11 +1,11 @@
-import { remoteEnergyAvailableAfterClaims } from './energyClaims';
+import {
+    pickRemoteFallbackEnergyTarget,
+    remoteHaulerAvoidTargetId as remoteHaulerAvoidTargetIdForStuck
+} from './energyFallback';
 import {
     bestCrossSourceRemoteEnergyTarget,
     bestRemoteEnergyTargetForSource,
-    bestRemoteSourceContainer,
-    pickRemoteEnergyTarget,
     remoteEnergyAvailableForSource,
-    remoteSourceContainerIds,
     type RemoteEnergySourceTarget
 } from './energyTargets';
 
@@ -20,7 +20,6 @@ export function findRemoteEnergySource(
     opts?: { followDroppedTopUp?: boolean; droppedFirst?: boolean; droppedMinAmount?: number }
 ): RemoteEnergySourceTarget | null {
     const avoidTargetId = remoteHaulerAvoidTargetId(creep);
-    const sourceContainerIds = remoteSourceContainerIds(remotePlan);
     const droppedFirst = opts?.droppedFirst !== false;
     const droppedMinAmount = Math.max(1, opts?.droppedMinAmount ?? 1);
     const assignedSourceId = creep.memory.assignedSourceId ?? creep.memory.sourceId;
@@ -62,60 +61,14 @@ export function findRemoteEnergySource(
         return null;
     }
 
-    const droppedCandidates = creep.room.find(FIND_DROPPED_RESOURCES, {
-        filter: (resource) =>
-            resource.resourceType === RESOURCE_ENERGY &&
-            resource.amount >= droppedMinAmount &&
-            remoteEnergyAvailableAfterClaims(creep, resource as Resource<RESOURCE_ENERGY>) > 0
-    }) as Resource<RESOURCE_ENERGY>[];
-    const droppedEnergy = pickRemoteEnergyTarget(creep, droppedCandidates, avoidTargetId);
-
-    if (!followDroppedTopUp && droppedFirst && droppedEnergy) {
-        return { jobType: 'pickupEnergy', target: droppedEnergy, fromDropped: true };
-    }
-
-    if (followDroppedTopUp) {
-        const sourceContainers = creep.room.find(FIND_STRUCTURES, {
-            filter: (structure) =>
-                structure.structureType === STRUCTURE_CONTAINER &&
-                sourceContainerIds[structure.id] === true &&
-                remoteEnergyAvailableAfterClaims(creep, structure as StructureContainer) > 0
-        }) as StructureContainer[];
-        const sourceContainer = pickRemoteEnergyTarget(creep, sourceContainers, avoidTargetId);
-        if (sourceContainer) {
-            return { jobType: 'withdrawEnergy', target: sourceContainer, fromDropped: false };
-        }
-    }
-
-    const bestContainer = bestRemoteSourceContainer(creep, remotePlan, avoidTargetId);
-    if (bestContainer) {
-        return { jobType: 'withdrawEnergy', target: bestContainer, fromDropped: false };
-    }
-
-    const containers = creep.room.find(FIND_STRUCTURES, {
-        filter: (structure) =>
-            structure.structureType === STRUCTURE_CONTAINER &&
-            remoteEnergyAvailableAfterClaims(creep, structure as StructureContainer) > 0
-    }) as StructureContainer[];
-    const container = pickRemoteEnergyTarget(creep, containers, avoidTargetId);
-    if (container) {
-        return { jobType: 'withdrawEnergy', target: container, fromDropped: false };
-    }
-
-    const links = creep.room.find(FIND_STRUCTURES, {
-        filter: s => s.structureType === STRUCTURE_LINK &&
-            remoteEnergyAvailableAfterClaims(creep, s as StructureLink) > 0
-    }) as StructureLink[];
-    const link = pickRemoteEnergyTarget(creep, links, avoidTargetId);
-    if (link) {
-        return { jobType: 'withdrawEnergy', target: link, fromDropped: false };
-    }
-
-    if (droppedEnergy) {
-        return { jobType: 'pickupEnergy', target: droppedEnergy, fromDropped: true };
-    }
-
-    return null;
+    return pickRemoteFallbackEnergyTarget(
+        creep,
+        remotePlan,
+        avoidTargetId,
+        droppedMinAmount,
+        followDroppedTopUp,
+        droppedFirst
+    );
 }
 
 export function remoteEnergyTargetPathLength(
@@ -136,8 +89,5 @@ export function remoteEnergyTargetPathLength(
 }
 
 function remoteHaulerAvoidTargetId(creep: Creep): string | undefined {
-    const jobType = creep.memory.jobType;
-    if (jobType !== 'withdrawEnergy' && jobType !== 'pickupEnergy') { return undefined; }
-    if ((creep.memory.travelStuckTicks ?? 0) < REMOTE_HAULER_RETARGET_STUCK_TICKS) { return undefined; }
-    return creep.memory.jobTargetId;
+    return remoteHaulerAvoidTargetIdForStuck(creep, REMOTE_HAULER_RETARGET_STUCK_TICKS);
 }

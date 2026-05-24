@@ -110,6 +110,10 @@ Completed slices:
 - Split pending spawn count/capability helpers into `src/rooms/spawning/accountingPending.ts`, leaving `src/rooms/spawning/accounting.ts` focused on capability accounting and renewal-demand orchestration.
 - Split spawn body budgeting/scaling/minimum checks and spawn-attempt execution into `src/rooms/spawning/plannerSpawnAttempt.ts`, leaving `src/rooms/spawning/planner.ts` focused on spawn-loop orchestration and request iteration.
 - Split legacy body-spec scaling helper into `src/creepRoleBalanceSpec.ts`, leaving `src/creep.roleBalance.ts` with compatibility API and legacy role-balance orchestration.
+- Split local spawn-demand threshold math into `src/rooms/spawning/requestDemand.ts`, leaving `src/rooms/spawning/requestSelection.ts` focused on request modeling/selection orchestration.
+- Split primary build/repair/upgrade resume checks and reservation carry-forward into `src/rooms/jobs/energyWorkPrimaryResume.ts`, leaving `src/rooms/jobs/energyWork.ts` focused on energy-spending orchestration.
+- Split traffic blocker priority checks and yield-position selection helpers into `src/creeps/jobs/trafficYieldHelpers.ts`, leaving `src/creeps/jobs/traffic.ts` focused on traffic-yield request/honor orchestration.
+- Split remote fallback dropped/container/link target selection and stuck-target avoidance helper into `src/rooms/remotes/energyFallback.ts`, leaving `src/rooms/remotes/energy.ts` focused on remote energy-target orchestration and target-path gating.
 
 Verification:
 
@@ -194,11 +198,15 @@ Verification:
 - `npm run build` passed after spawn-accounting pending helper split (`spawning/accountingPending.ts`).
 - `npm run build` passed after spawn planner attempt split (`spawning/plannerSpawnAttempt.ts`).
 - `npm run build` passed after legacy body-spec helper split (`creepRoleBalanceSpec.ts`).
+- `npm run build` passed after request-demand helper split (`spawning/requestDemand.ts`).
+- `npm run build` passed after energy-work primary-resume split (`jobs/energyWorkPrimaryResume.ts`).
+- `npm run build` passed after traffic-yield helper split (`creeps/jobs/trafficYieldHelpers.ts`).
+- `npm run build` passed after remote energy fallback split (`remotes/energyFallback.ts`).
 
 Current high-value large-module candidates (post-split):
 
-- `src/rooms/jobs/energyWork.ts`
-- `src/rooms/spawning/requestSelection.ts`
-- `src/creeps/jobs/traffic.ts`
-- `src/rooms/remotes/energy.ts`
 - `src/rooms/jobs/energyTargets.ts`
+- `src/rooms/jobs/assignment.ts`
+- `src/rooms/jobs/validity.ts`
+- `src/rooms/energy.ts`
+- `src/rooms/remotes/minerStation.ts`

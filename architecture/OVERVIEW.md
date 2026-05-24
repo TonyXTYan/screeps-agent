@@ -6,7 +6,7 @@ A TypeScript Screeps AI bot that manages a colony economy — source mining, hau
 upgrading, remote harvesting, and defense. Bundled via Rollup into `dist/main.js` and pushed to the
 Screeps server via `grunt-screeps`.
 
-## Source Map (138 modules)
+## Source Map (142 modules)
 
 ```
 src/
@@ -65,7 +65,8 @@ src/
       movementTargets.ts   Generic move-to-target pathing/repathing logic
       movementTravelRoom.ts Cross-room travelRoom exit routing and escape behavior
       sideEffects.ts       Opportunistic job side effects: healing, offload, and remote-hauler maintenance
-      traffic.ts           Traffic-yield requests and priority negotiation
+      traffic.ts           Traffic-yield request/honor orchestration
+      trafficYieldHelpers.ts Traffic blocker priority checks and yield-position selection helpers
 
   repairs/
     policy.ts              Shared repair filters and RCL-staged wall/rampart caps
@@ -89,8 +90,9 @@ src/
       emergencyEnergy.ts   Shared emergency energy-delivery interrupt and assignment policy
       energyMiningSites.ts Local mining-site pickup thresholds and container target-id helpers
       energyTargets.ts     Local energy gather/withdraw/deposit target orchestration policy
-      energyWork.ts        Worker/hauler energy spending orchestration and primary-job resume
+      energyWork.ts        Worker/hauler energy spending orchestration
       energyWorkAssignment.ts Build/repair/upgrade/refill assignment helpers used by energy-work orchestration
+      energyWorkPrimaryResume.ts Primary build/repair/upgrade resume checks and reservation carry-forward
       reservations.ts      Job reservation ledgers and progress reservation accounting
       sourceAssignment.ts  Source assignment, static-mining memory, and stationary-target helpers
       targets.ts           Local resource pickup/salvage/mineral withdrawal targets
@@ -104,6 +106,7 @@ src/
       bodyPolicy.ts        Minimum spawn body checks and legacy role mapping
       planner.ts           Spawn loop orchestration and request iteration
       plannerSpawnAttempt.ts Spawn body budgeting/scaling/minimum checks and spawn attempt execution
+      requestDemand.ts     Local spawn-demand thresholds and worker/hauler demand math
       requestSelection.ts  Local spawn demand modeling and spawn-request selection policy
       remote.ts            Remote spawn request orchestration by remote mode
       remoteHarvest.ts     Harvest-mode remote spawn demand selection
@@ -120,6 +123,7 @@ src/
       coverage.ts          Remote coverage compatibility exports
       remoteCoverageProjections.ts Remote per-source workforce coverage, replacement horizons, and idle-hauler detection
       energy.ts            Remote hauler energy-target orchestration, target-path gating, and stuck-target avoidance memory
+      energyFallback.ts    Remote fallback dropped/container/link target selection and stuck-target avoidance helper
       energyTargets.ts     Remote cross-source target selection and assigned-source container preference
       energySourceTargets.ts Remote per-source container/drop target enumeration and source-energy accounting
       remoteSourceStations.ts Remote source station/static-mining policy and miner slot-capping helpers

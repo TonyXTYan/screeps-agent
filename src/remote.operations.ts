@@ -3,7 +3,7 @@ import { clearJob } from './creep.jobRunner';
 import { getRoomStructures } from './room.structures';
 import { findHostiles } from './hostileUtils';
 import { acquireRenewSpawn, nearestSpawn } from './spawn.renewal';
-import { firstStoredResource } from './utils.shared';
+import { closest, closestByRange, firstStoredResource } from './utils.shared';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -54,7 +54,7 @@ const REMOTE_CONTAINER_CRITICAL_REPAIR_THRESHOLD = 0.25;
 const REMOTE_MINER_REPAIR_THRESHOLD = 0.5;
 const REMOTE_MINER_REPAIR_RANGE = 3;
 
-// ─── Private helpers (duplicated from room.controller) ──────────────────────
+// ─── Private helpers ─────────────────────────────────────────────────────────
 
 function setJob(creep: Creep, jobType: CreepJobType, target: (RoomObject & { id: string }) | undefined | null): void {
     if (!target) {
@@ -109,39 +109,9 @@ function setResourceJob(
     creep.memory.jobResourceType = resource;
 }
 
-function closest<T extends RoomObject>(creep: Creep, targets: T[]): T | null {
-    if (targets.length === 0) { return null; }
-
-    let best = targets[0];
-    let bestRange = creep.pos.getRangeTo(best);
-    for (const target of targets) {
-        const range = creep.pos.getRangeTo(target);
-        if (range < bestRange) {
-            best = target;
-            bestRange = range;
-        }
-    }
-    return best;
-}
-
 function closestReachable<T extends RoomObject>(creep: Creep, targets: T[]): T | null {
     if (targets.length === 0) { return null; }
     return creep.pos.findClosestByPath(targets, { ignoreCreeps: false }) as T | null;
-}
-
-function closestByRange<T extends RoomObject>(origin: RoomObject, targets: T[]): T | null {
-    if (targets.length === 0) { return null; }
-
-    let best = targets[0];
-    let bestRange = origin.pos.getRangeTo(best);
-    for (const target of targets) {
-        const range = origin.pos.getRangeTo(target);
-        if (range < bestRange) {
-            best = target;
-            bestRange = range;
-        }
-    }
-    return best;
 }
 
 function towerEnergyRatio(tower: StructureTower): number {

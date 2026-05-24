@@ -4,7 +4,7 @@ import { getRoomStructures, RoomStructureCache } from './room.structures';
 import { repairStructureFilter, wallRampartRepairCap } from './repair.rules';
 import { isHostile } from './hostileUtils';
 import { reserveRenewSpawns } from './spawn.renewal';
-import { firstStoredResource } from './utils.shared';
+import { closest, closestByRange, firstStoredResource } from './utils.shared';
 import * as remoteOps from './remote.operations';
 
 // Local copies of functions not exported from utils.shared
@@ -33,9 +33,9 @@ function firstStoredNonEnergyResource(store: StoreDefinition): ResourceConstant 
     return null;
 }
 
-// ─── Types (mirrored from room.controller.ts) ───
+// ─── Shared types (exported so room.controller.ts can import rather than redefine) ───
 
-interface RoomControllerContext {
+export interface RoomControllerContext {
     room: Room;
     structures: RoomStructureCache;
     sources: Source[];
@@ -52,7 +52,7 @@ interface RoomControllerContext {
     mineralPlan: MineralPlan | null;
 }
 
-interface SpawnRequest {
+export interface SpawnRequest {
     archetype: CreepArchetype;
     reason: string;
     sourceId?: string;
@@ -68,17 +68,17 @@ interface SpawnRequest {
     remoteStandby?: boolean;
 }
 
-interface PendingSpawnRequest extends SpawnRequest {
+export interface PendingSpawnRequest extends SpawnRequest {
     plannedBody?: BodyPartConstant[];
 }
 
-interface ResourceTarget {
+export interface ResourceTarget {
     target: WithdrawStructure;
     resource: ResourceConstant;
     amount: number;
 }
 
-interface SourcePlan {
+export interface SourcePlan {
     source: Source;
     container: StructureContainer | null;
     link: StructureLink | null;
@@ -87,7 +87,7 @@ interface SourcePlan {
     staticMining: boolean;
 }
 
-interface MineralPlan {
+export interface MineralPlan {
     mineral: Mineral;
     extractor: StructureExtractor | undefined;
     container: StructureContainer | null;
@@ -97,7 +97,7 @@ interface MineralPlan {
     staticMining: boolean;
 }
 
-interface JobReservations {
+export interface JobReservations {
     resources: { [targetId: string]: number };
     dropped: { [targetId: string]: number };
     energySinks: { [targetId: string]: number };
@@ -124,8 +124,6 @@ const REMOTE_HAULER_USEFUL_MIN_COST = 900;
 const REMOTE_HAULER_MIN_DEMAND_RATIO = 0.4;
 const REMOTE_MAINTAINER_MIN_COST = 500;
 
-// Constants below are defined in room.controller.ts alongside matching values
-// Only the ones _not_ already exported/stored there are repeated here.
 const DOCTOR_EMERGENCY_HITS_RATIO = 0.35;
 const DOCTOR_THREAT_RADIUS = 4;
 const TOWER_RESERVE_RATIO = 0.7;
@@ -2663,36 +2661,6 @@ function setResourceJob(
     creep.memory.jobRoomName = target.pos.roomName;
     creep.memory.jobAssignedAt = Game.time;
     creep.memory.jobResourceType = resource;
-}
-
-function closest<T extends RoomObject>(creep: Creep, targets: T[]): T | null {
-    if (targets.length === 0) { return null; }
-
-    let best = targets[0];
-    let bestRange = creep.pos.getRangeTo(best);
-    for (const target of targets) {
-        const range = creep.pos.getRangeTo(target);
-        if (range < bestRange) {
-            best = target;
-            bestRange = range;
-        }
-    }
-    return best;
-}
-
-function closestByRange<T extends RoomObject>(origin: RoomObject, targets: T[]): T | null {
-    if (targets.length === 0) { return null; }
-
-    let best = targets[0];
-    let bestRange = origin.pos.getRangeTo(best);
-    for (const target of targets) {
-        const range = origin.pos.getRangeTo(target);
-        if (range < bestRange) {
-            best = target;
-            bestRange = range;
-        }
-    }
-    return best;
 }
 
 function jobTarget<T extends RoomObject>(creep: Creep): T | null {

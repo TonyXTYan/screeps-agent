@@ -4,7 +4,7 @@ import { execSync } from 'child_process';
 
 let buildCommit = 'unknown';
 try {
-    buildCommit = execSync('git rev-parse --short=8 HEAD', { encoding: 'utf8' }).trim();
+    buildCommit = execSync('git rev-parse HEAD', { encoding: 'utf8' }).trim().slice(0, 8);
 } catch {
     // not a git repo or git not available
 }

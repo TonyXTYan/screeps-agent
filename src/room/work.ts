@@ -1,10 +1,9 @@
 // Build, repair, upgrade, and mineral work assignment helpers.
 
 import { wallRampartRepairCap } from '../role/doctor';
-import { RoomControllerContext, JobReservations, SourcePlan, MineralPlan } from './types';
+import { RoomControllerContext, JobReservations } from './types';
 import { BUILD_RESERVATION_TICKS, REPAIR_RESERVATION_TICKS } from './constants';
 import { storedEnergy } from './energy';
-import { firstStoredResource, firstStoredNonEnergyResource, haulerMiningSiteMinPickup } from './storeUtils';
 export { totalStoredTargets, totalStoredResources, firstStoredResource, firstStoredNonEnergyResource, haulerMiningSiteMinPickup } from './storeUtils';
 
 export function bestConstructionSite(

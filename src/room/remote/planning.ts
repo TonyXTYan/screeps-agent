@@ -111,8 +111,8 @@ export function updateRemoteRoomPlans(homeRoom: Room): void {
                 filter: (site) => site.structureType === STRUCTURE_CONTAINER &&
                     site.pos.getRangeTo(source) <= REMOTE_CONTAINER_BUILD_DISTANCE
             }) as ConstructionSite[]);
-            const blockedApproach = (existing.blockedApproachX != null && existing.blockedApproachRoom != null && existing.blockedApproachRoom === remoteName)
-                ? new RoomPosition(existing.blockedApproachX, existing.blockedApproachY ?? 0, existing.blockedApproachRoom)
+            const blockedApproach = (existing.blockedApproachX != null && existing.blockedApproachY != null && existing.blockedApproachRoom != null && existing.blockedApproachRoom === remoteName)
+                ? new RoomPosition(existing.blockedApproachX, existing.blockedApproachY, existing.blockedApproachRoom)
                 : undefined;
             const station = container?.pos ?? containerSite?.pos ?? findStationForSource(visible, source, remoteEntries, blockedApproach);
             if (station) {

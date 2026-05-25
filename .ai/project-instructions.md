@@ -161,3 +161,4 @@ Quick reference for persistent project knowledge:
 - **project-vision.md** — AI-assisted play model: user owns strategy (expansion, defense, resource decisions), agents own implementation (code, optimization)
 - **maestri_portals.md** — Commands & workflow for reading game state via Maestri portal (navigate, snapshot, evaluate, screenshot) with key URLs
 - **tooling.md** — Script location (.ai/scripts/), .local-scripts symlink warning, local docs location, and official online docs as source of truth
+- **codegraph.md** — Codegraph call-graph tool: `query`, `callers`, `callees`, `impact`, `context` commands; MCP server setup; per-machine `codegraph init -i` required

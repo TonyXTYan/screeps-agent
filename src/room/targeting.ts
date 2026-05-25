@@ -38,6 +38,24 @@ export function closestByRange<T extends RoomObject>(origin: RoomObject, targets
     return best;
 }
 
+// Picks the structure with the lowest HP ratio (most degraded), using range as a tie-breaker.
+export function worstHits<T extends Structure>(creep: Creep, targets: T[]): T | null {
+    if (targets.length === 0) { return null; }
+    let best = targets[0];
+    let bestRatio = best.hits / Math.max(1, best.hitsMax);
+    let bestRange = creep.pos.getRangeTo(best);
+    for (const target of targets) {
+        const ratio = target.hits / Math.max(1, target.hitsMax);
+        const range = creep.pos.getRangeTo(target);
+        if (ratio < bestRatio || (ratio === bestRatio && range < bestRange)) {
+            best = target;
+            bestRatio = ratio;
+            bestRange = range;
+        }
+    }
+    return best;
+}
+
 export function bestHealTarget(creep: Creep, targets: Creep[]): Creep | null {
     if (targets.length === 0) { return null; }
 

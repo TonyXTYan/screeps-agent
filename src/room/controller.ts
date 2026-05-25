@@ -3,7 +3,7 @@ import { clearJob } from '../creep/jobRunner';
 import { getRoomStructures } from './structures';
 import { repairStructureFilter } from '../role/doctor';
 import { findHostiles } from '../hostileUtils';
-import { closest, closestReachable, bestHealTarget } from './targeting';
+import { closest, closestReachable, bestHealTarget, worstHits } from './targeting';
 import { setJob, setTravelJob, setResourceJob, rememberPrimaryJob } from './jobMemory';
 import {
     buildSourcePlans, buildMineralPlan,
@@ -295,26 +295,57 @@ export function assignRemoteCreep(creep: Creep): boolean {
     }
 
     if (archetype === 'remoteMaintainer') {
-        const criticalContainer = closest(creep, creep.room.find(FIND_STRUCTURES, {
+        const hasEnergy = creep.store.getUsedCapacity(RESOURCE_ENERGY) > 0;
+
+        // 1. Critical container repair: most-degraded container below threshold (Fix A: 50%).
+        const criticalContainers = creep.room.find(FIND_STRUCTURES, {
             filter: s => s.structureType === STRUCTURE_CONTAINER && s.hits < s.hitsMax * REMOTE_CONTAINER_CRITICAL_REPAIR_THRESHOLD
-        }) as AnyStructure[]);
-        if (criticalContainer && creep.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
+        }) as AnyStructure[];
+        const criticalContainer = worstHits(creep, criticalContainers);
+        if (criticalContainer && hasEnergy) {
             setJob(creep, 'repair', criticalContainer);
             return true;
         }
+
+        // 2. Container repair: most-degraded container below 90% — prioritised over building.
+        const damagedContainers = creep.room.find(FIND_STRUCTURES, {
+            filter: s => s.structureType === STRUCTURE_CONTAINER && s.hits < s.hitsMax * 0.9
+        }) as AnyStructure[];
+        const worstContainer = worstHits(creep, damagedContainers);
+        if (worstContainer && hasEnergy) {
+            setJob(creep, 'repair', worstContainer);
+            return true;
+        }
+
+        // 3. Road repair: most-degraded road below 80% — prioritised over building.
+        const criticalRoads = creep.room.find(FIND_STRUCTURES, {
+            filter: s => s.structureType === STRUCTURE_ROAD && s.hits < s.hitsMax * 0.8
+        }) as AnyStructure[];
+        const worstCriticalRoad = worstHits(creep, criticalRoads);
+        if (worstCriticalRoad && hasEnergy) {
+            setJob(creep, 'repair', worstCriticalRoad);
+            return true;
+        }
+
+        // 4. Build construction sites (roads and containers only; falls back to any site).
         const site = closestRemoteInfrastructureSite(creep, true) ??
             closest(creep, creep.room.find(FIND_MY_CONSTRUCTION_SITES));
-        if (site && creep.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
+        if (site && hasEnergy) {
             setJob(creep, 'build', site);
             return true;
         }
-        const repair = closest(creep, creep.room.find(FIND_STRUCTURES, {
-            filter: s => (s.structureType === STRUCTURE_ROAD || s.structureType === STRUCTURE_CONTAINER) && s.hits < s.hitsMax * 0.9
-        }) as AnyStructure[]);
-        if (repair && creep.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
-            setJob(creep, 'repair', repair);
+
+        // 5. Road repair: roads below 80% (after building, same threshold as step 3).
+        const minorRoads = creep.room.find(FIND_STRUCTURES, {
+            filter: s => s.structureType === STRUCTURE_ROAD && s.hits < s.hitsMax * 0.8
+        }) as AnyStructure[];
+        const worstMinorRoad = worstHits(creep, minorRoads);
+        if (worstMinorRoad && hasEnergy) {
+            setJob(creep, 'repair', worstMinorRoad);
             return true;
         }
+
+        // 6. Collect energy.
         if (creep.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
             const remoteEnergy = findRemoteEnergySource(creep, remotePlan, {
                 droppedFirst: false,

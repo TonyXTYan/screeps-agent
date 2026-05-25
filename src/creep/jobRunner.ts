@@ -48,6 +48,7 @@ export function run(creep: Creep): boolean {
         if (jobType !== 'heal') {
             opportunisticHealNearby(creep);
         }
+        opportunisticMaintainerRepair(creep, jobType, result);
         return true;
     }
 
@@ -483,6 +484,42 @@ function opportunisticHealNearby(creep: Creep): void {
     if (rangedTarget) {
         creep.rangedHeal(rangedTarget);
     }
+}
+
+// Opportunistically repairs the most-degraded nearby road or container while the maintainer
+// is in transit to another target. Fires whenever the build/repair action slot is free —
+// i.e., the primary job this tick was not a successful build or repair.
+function opportunisticMaintainerRepair(creep: Creep, jobType: CreepJobType, result: number): void {
+    if (creep.memory.archetype !== 'remoteMaintainer') { return; }
+    if (creep.getActiveBodyparts(WORK) <= 0) { return; }
+    if (creep.store.getUsedCapacity(RESOURCE_ENERGY) <= 0) { return; }
+    // Skip if the build/repair action slot was already consumed this tick.
+    if ((jobType === 'build' || jobType === 'repair') && result === OK) { return; }
+
+    const repairs = creep.pos.findInRange(FIND_STRUCTURES, 3, {
+        filter: (s: AnyStructure) => {
+            if (s.structureType === STRUCTURE_CONTAINER) { return s.hits < s.hitsMax * 0.9; }
+            if (s.structureType === STRUCTURE_ROAD) { return s.hits < s.hitsMax * 0.8; }
+            return false;
+        }
+    }) as AnyStructure[];
+    if (repairs.length === 0) { return; }
+
+    // Pick the most degraded structure; use range as tie-breaker.
+    let best = repairs[0];
+    let bestRatio = best.hits / Math.max(1, best.hitsMax);
+    let bestRange = creep.pos.getRangeTo(best);
+    for (const candidate of repairs) {
+        const ratio = candidate.hits / Math.max(1, candidate.hitsMax);
+        const range = creep.pos.getRangeTo(candidate);
+        if (ratio < bestRatio || (ratio === bestRatio && range < bestRange)) {
+            best = candidate;
+            bestRatio = ratio;
+            bestRange = range;
+        }
+    }
+
+    creep.repair(best);
 }
 
 function mostCriticalByRatio(creep: Creep, targets: Creep[]): Creep | null {

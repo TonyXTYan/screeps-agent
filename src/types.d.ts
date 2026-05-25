@@ -149,6 +149,43 @@ interface MineralPlanMemory {
     staticMining: boolean;
 }
 
+type RemoteMaintenanceTrigger = 'setup' | 'maintainerDeath' | 'memoryAudit';
+
+interface RemoteMaintenanceDecayPressure {
+    roadCount: number;
+    containerCount: number;
+    roadHits: number;
+    roadHitsMax: number;
+    containerHits: number;
+    containerHitsMax: number;
+    roadDecayHitsPerTick: number;
+    containerDecayHitsPerTick: number;
+    totalDecayHitsPerTick: number;
+    roadDecayEnergyPerTick: number;
+    containerDecayEnergyPerTick: number;
+    totalDecayEnergyPerTick: number;
+}
+
+interface RemoteMaintenanceBacklogPressure {
+    roadRepairEnergy: number;
+    containerRepairEnergy: number;
+    totalRepairEnergy: number;
+    roadBuildEnergy: number;
+    containerBuildEnergy: number;
+    totalBuildEnergy: number;
+    totalBacklogEnergy: number;
+}
+
+interface RemoteMaintenancePressure {
+    observedAt?: number;
+    stale: boolean;
+    lastTrigger?: RemoteMaintenanceTrigger;
+    needsRefresh: boolean;
+    lastMaintainerCount: number;
+    decay: RemoteMaintenanceDecayPressure;
+    backlog: RemoteMaintenanceBacklogPressure;
+}
+
 interface RemoteRoomPlan {
     enabled: boolean;
     roomName: string;
@@ -162,6 +199,7 @@ interface RemoteRoomPlan {
     lastScouted?: number;
     lastSeenHostiles?: number;
     skipReason?: string;
+    maintenance?: RemoteMaintenancePressure;
     sources?: { [sourceId: string]: RemoteSourcePlan };
 }
 

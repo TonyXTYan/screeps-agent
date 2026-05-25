@@ -14,6 +14,12 @@ import { mineralReadyToMine, totalStoredTargets } from '../work';
 import { ensureArchetype, getCreepCapabilities } from '../../creep/capabilities';
 import { RoomControllerContext } from '../types';
 import {
+    ensureRemoteMaintenancePressure,
+    markRemoteMaintenanceRefresh,
+    refreshRemoteMaintenancePressureIfNeeded,
+    snapshotRemoteMaintainerCount,
+} from './maintenance';
+import {
     REMOTE_DANGER_TICKS, REMOTE_CONTAINER_REROUTE_FREEZE_TICKS,
     REMOTE_PATH_REFRESH_INTERVAL, REMOTE_INACCESSIBLE_RETRY_TICKS, REMOTE_PATH_INCOMPLETE_RETRY_TICKS,
     REMOTE_PLANNING_LOG_INTERVAL, REMOTE_CONTAINER_BUILD_DISTANCE,
@@ -69,6 +75,13 @@ export function updateRemoteRoomPlans(homeRoom: Room): void {
         if (remote.buildRoads === undefined) { remote.buildRoads = true; }
         if (remote.maintainRoads === undefined) { remote.maintainRoads = true; }
         if (remote.debugPaths === undefined) { remote.debugPaths = false; }
+        const maintenance = ensureRemoteMaintenancePressure(remote);
+        const currentMaintainerCount = countAssignedRemoteMaintainers(homeRoom.name, remoteName);
+        if (currentMaintainerCount < maintenance.lastMaintainerCount) {
+            markRemoteMaintenanceRefresh(remote, 'maintainerDeath');
+        }
+        snapshotRemoteMaintainerCount(remote, currentMaintainerCount);
+        refreshRemoteMaintenancePressureIfNeeded(remote, remoteName);
         if (remote.mode !== 'harvest') { continue; }
 
         const visible = Game.rooms[remoteName];
@@ -228,6 +241,19 @@ export function updateRemoteRoomPlans(homeRoom: Room): void {
             }
         }
     }
+}
+
+function countAssignedRemoteMaintainers(homeRoomName: string, remoteRoomName: string): number {
+    let count = 0;
+    for (const name in Game.creeps) {
+        const creep = Game.creeps[name];
+        if (creep.spawning) { continue; }
+        if (ensureArchetype(creep) !== 'remoteMaintainer') { continue; }
+        if (creep.memory.homeRoom !== homeRoomName) { continue; }
+        if (creep.memory.remoteRoom !== remoteRoomName) { continue; }
+        count++;
+    }
+    return count;
 }
 
 export function rememberPlans(context: RoomControllerContext): void {

@@ -95,12 +95,23 @@ This is a Screeps bot written in TypeScript, bundled by Rollup into a single `di
 - Build injects the current 8-char git commit hash into the bundle banner (`var __BUILD_COMMIT__ = "hash";`) so server-side code can detect new deployments and trigger the memory audit
 - `grunt-screeps` reads from `dist/` and pushes `**/*.{js,wasm}`; source maps stay local
 
+## Combat Strategy Notes
+
+When discussing or designing single-creep siege profiles, use:
+- `.ai/strategy/solo-siege.md` — tower sustain formulas, per-tier boost requirements, and practical/impractical 1-6 tower body envelopes.
+
+Guardrails:
+- Use official Screeps docs (`docs.screeps.com`) as source of truth for boost multipliers.
+- Distinguish "paper sustain" from "practical offense": a mathematically stable body can still be operationally impractical if mobility or attack throughput is too low.
+- Prefer every-tick `heal(self)` plus same-tick `attack()` over strict heal/attack alternation for tower dives.
+
 ## .ai Folder Convention
 
 This project uses `.ai/` for agent-readable project context that doesn't belong in code.
 
 **Structure:**
 - `.ai/project-instructions.md` — this file; general guidance for agents
+- `.ai/strategy/` — strategy envelopes and tactical calculations that are not code-level architecture
 - `.ai/memory/` — persistent project knowledge (decisions, architecture notes, gotchas)
 - `.ai/session/` — session folders named `yyyy-mm-dd-agentname-title/`, each containing `notes.md` plus any other files the agent wants to store (plans, diffs, screenshots, etc.)
 

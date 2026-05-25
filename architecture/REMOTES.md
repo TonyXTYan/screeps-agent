@@ -30,6 +30,23 @@ dangerUntil?: number       (set when hostiles detected)
 lastScouted?: number
 lastSeenHostiles?: number
 skipReason?: string
+maintenance?: {
+  observedAt?: number
+  stale: boolean
+  lastTrigger?: 'setup' | 'maintainerDeath' | 'memoryAudit'
+  needsRefresh: boolean
+  lastMaintainerCount: number
+  decay: {
+    roadCount, containerCount,
+    roadHits, roadHitsMax, containerHits, containerHitsMax,
+    roadDecayHitsPerTick, containerDecayHitsPerTick, totalDecayHitsPerTick,
+    roadDecayEnergyPerTick, containerDecayEnergyPerTick, totalDecayEnergyPerTick
+  }
+  backlog: {
+    roadRepairEnergy, containerRepairEnergy, totalRepairEnergy,
+    roadBuildEnergy, containerBuildEnergy, totalBuildEnergy, totalBacklogEnergy
+  }
+}
 sources?: {
   [sourceId: string]: {
     sourceId, stationX, stationY, containerId, containerSiteId,
@@ -42,6 +59,18 @@ sources?: {
   }
 }
 ```
+
+## Maintenance Pressure Telemetry
+
+- `maintenance.decay` models passive road/container decay load in hits/tick and energy/tick.
+- `maintenance.backlog` models one-time repair/build backlog energy for roads/containers.
+- The telemetry is event-driven, not per-tick:
+  - `setup` trigger on `remoteMining.activate(...)`
+  - `maintainerDeath` trigger when assigned remoteMaintainer count drops for that remote
+  - `memoryAudit` trigger during `runMemoryAudit()`
+- Recompute only runs when `needsRefresh=true` and the remote room is visible.
+- If a trigger fires without visibility, previous values are preserved, `stale=true`, and refresh stays pending.
+- This telemetry does not yet compute a combined decay+backlog "overall pressure" score and does not auto-scale maintainer bodies/counts.
 
 ## Remote Creep Archetypes
 

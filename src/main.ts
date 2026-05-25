@@ -11,6 +11,10 @@ import * as roomController from './room/controller';
 import * as towerBasics from './tower/basics';
 import * as memoryAudit from './memoryAudit';
 import * as debug from './debug';
+import {
+    createEmptyRemoteMaintenancePressure,
+    markRemoteMaintenanceRefresh,
+} from './room/remote/maintenance';
 import { findHostiles, isHostile } from './hostileUtils';
 import { bodyCost } from './creep/capabilities';
 import { BUILD_COMMIT } from './env';
@@ -160,8 +164,10 @@ function installConsoleHelpers(): void {
                 buildRoads: options?.buildRoads ?? true,
                 maintainRoads: options?.maintainRoads ?? true,
                 debugPaths: options?.debugPaths ?? false,
-                debugCreeps: options?.debugCreeps ?? false
+                debugCreeps: options?.debugCreeps ?? false,
+                maintenance: createEmptyRemoteMaintenancePressure()
             };
+            markRemoteMaintenanceRefresh(room.plan.remoteRooms[remoteRoom], 'setup');
             return `remoteMining: activated ${homeRoom} -> ${remoteRoom}`;
         },
         configure(homeRoom: string, remoteRoom: string, options?: RemoteMiningOptions): string {

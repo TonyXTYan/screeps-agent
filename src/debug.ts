@@ -208,6 +208,12 @@ function remoteSourceMinerCap(sourceId: string, sourcePlan: RemoteSourcePlan): n
     return Math.max(1, Math.min(2, slots));
 }
 
+function formatPressure(value: number): string {
+    if (Number.isInteger(value)) { return String(value); }
+    if (Math.abs(value) >= 10) { return value.toFixed(1); }
+    return value.toFixed(3);
+}
+
 export function ownedRooms(): Room[] {
     const rooms: { [roomName: string]: Room } = {};
     for (const spawnName in Game.spawns) {
@@ -464,6 +470,43 @@ function printRemoteCreepStatus(filterHome?: string, filterRemote?: string): voi
                 for (const line of sourceLines) {
                     console.log(line);
                 }
+            }
+
+            if (plan.maintenance) {
+                const maintenance = plan.maintenance;
+                console.log(`  --- Maintenance Pressure ---`);
+                console.log(
+                    `  meta trigger=${maintenance.lastTrigger ?? 'none'}` +
+                    ` observedAt=${maintenance.observedAt ?? '-'}` +
+                    ` stale=${maintenance.stale ? 'yes' : 'no'}` +
+                    ` needsRefresh=${maintenance.needsRefresh ? 'yes' : 'no'}` +
+                    ` maintainers=${maintenance.lastMaintainerCount}`
+                );
+                console.log(
+                    `  decay roads=${maintenance.decay.roadCount}` +
+                    ` containers=${maintenance.decay.containerCount}` +
+                    ` roadHits=${formatPressure(maintenance.decay.roadHits)}/${formatPressure(maintenance.decay.roadHitsMax)}` +
+                    ` containerHits=${formatPressure(maintenance.decay.containerHits)}/${formatPressure(maintenance.decay.containerHitsMax)}`
+                );
+                console.log(
+                    `  decay/tick roadHits=${formatPressure(maintenance.decay.roadDecayHitsPerTick)}` +
+                    ` containerHits=${formatPressure(maintenance.decay.containerDecayHitsPerTick)}` +
+                    ` totalHits=${formatPressure(maintenance.decay.totalDecayHitsPerTick)}` +
+                    ` roadEnergy=${formatPressure(maintenance.decay.roadDecayEnergyPerTick)}` +
+                    ` containerEnergy=${formatPressure(maintenance.decay.containerDecayEnergyPerTick)}` +
+                    ` totalEnergy=${formatPressure(maintenance.decay.totalDecayEnergyPerTick)}`
+                );
+                console.log(
+                    `  backlog repair road=${formatPressure(maintenance.backlog.roadRepairEnergy)}` +
+                    ` container=${formatPressure(maintenance.backlog.containerRepairEnergy)}` +
+                    ` total=${formatPressure(maintenance.backlog.totalRepairEnergy)}`
+                );
+                console.log(
+                    `  backlog build road=${formatPressure(maintenance.backlog.roadBuildEnergy)}` +
+                    ` container=${formatPressure(maintenance.backlog.containerBuildEnergy)}` +
+                    ` total=${formatPressure(maintenance.backlog.totalBuildEnergy)}` +
+                    ` overall=${formatPressure(maintenance.backlog.totalBacklogEnergy)}`
+                );
             }
 
             const droppedLines: string[] = [];

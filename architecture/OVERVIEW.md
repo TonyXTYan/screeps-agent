@@ -53,6 +53,7 @@ src/
       energy.ts            Remote energy source selection and claim tracking
       miners.ts            Remote miner station priming, route health, standby assignment
       haulers.ts           Remote hauler cycle management
+      maintenance.ts       Remote maintenance-pressure telemetry (event-driven)
       spawn.ts             Remote spawn planning, body sizing
       planning.ts          Remote room plan init, route-health tracking, plan persistence
       roads.ts             Remote road site placement, infrastructure site selection

@@ -47,6 +47,7 @@ src/
       energy.ts           Remote energy source selection and hauler claim tracking
       fleet.ts            Remote fleet queries: counts, caps, source assignments, wander helpers
       haulers.ts          Remote hauler cycle management (pickup → delivery → renew → idle)
+      maintenance.ts      Remote maintenance-pressure telemetry (decay/backlog snapshots)
       miners.ts           Remote miner station priming, route health, standby assignment
       planning.ts         Remote room plan initialisation, route-health tracking, plan persistence
       roads.ts            Remote road site placement, infrastructure site selection
@@ -105,6 +106,7 @@ src/
 - Home room priority gate (blocks remote spawns when home requests pending, throttles remotes under low stored/spawn energy) — `src/room/remote/spawn.ts`
 - Remote standby miner system (TTL-triggered source-targeted handoff with remote pre-positioning) — `src/room/remote/miners.ts`, `src/room/controller.ts`, `src/main.ts`
 - Remote route health and road placement — `src/room/remote/planning.ts`, `src/room/remote/roads.ts`
+- Remote maintenance-pressure telemetry (setup/death/audit-triggered recompute) — `src/room/remote/maintenance.ts`, `src/room/remote/planning.ts`, `src/memoryAudit.ts`, `src/debug.ts`
 - Body capability derivation — `src/creep/capabilities.ts`
 - Body planning by archetype — `src/creep/capabilities.ts`
 - Hauling, refill, build, repair, upgrade assignment — `src/room/controller.ts` + `src/room/energy.ts`

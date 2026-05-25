@@ -8,7 +8,7 @@ approach.
 
 ## Room Controller Pipeline
 
-`room.controller.run(room)` executes each tick:
+`room/controller.run(room)` executes each tick:
 
 ```
 buildContext()       → gather structures, sources, creeps, sites, resources
@@ -40,8 +40,8 @@ runSpawnPlanner()   → spawn creeps to fill measured deficits
 | `remoteScout` | 1–2 MOVE parts only |
 | `claimer` | CLAIM+MOVE pairs scaled to budget; min 1 part, reserve mode min 2 |
 
-Body planning lives in `planBodyForArchetype()` in `creep.capabilities.ts`. Legacy body planning
-(`balanceSpec()` in `creep.roleBalance.ts`) is used only for emergency defenders.
+Body planning lives in `planBodyForArchetype()` in `creep/capabilities.ts`. Legacy body planning
+(`balanceSpec()` in `creep/roleBalance.ts`) is used only for emergency defenders.
 
 **Body budget cap:** All archetypes are planned against `max(BODY_MIN_BUDGET, floor(energyCapacityAvailable × BODY_BUDGET_RATIO))` rather than the raw `energyCapacityAvailable`. With `BODY_BUDGET_RATIO = 0.5` and `BODY_MIN_BUDGET = 300`, bodies target at most 50% of room energy capacity, so creeps can spawn with partial extension fill. Demand calculations (`desiredHaulerCapacity`, `desiredWorkerWork`) use the same capped budget so population counts stay consistent with actual body sizes. At RCL 8 the 50-part body limit typically binds first, so those bodies are unaffected.
 
@@ -49,7 +49,7 @@ Body planning lives in `planBodyForArchetype()` in `creep.capabilities.ts`. Lega
 
 ## Spawn Planning Priority
 
-`chooseSpawnRequest()` in `room.controller.ts` selects the next creep to spawn:
+`chooseSpawnRequest()` in `room/controller.ts` selects the next creep to spawn:
 
 ```
 1. Emergency worker          → if no creeps exist (recovery)
@@ -125,7 +125,7 @@ When a creep has energy and needs a spending job:
 
 ## Job Execution
 
-Jobs are stored in creep memory and executed by `creep.jobRunner.run()`:
+Jobs are stored in creep memory and executed by `creep/jobRunner.run()`:
 
 ```
 Job fields: jobType, jobTargetId, jobRoomName, jobResourceType, jobAssignedAt
@@ -166,7 +166,7 @@ Remote miners do not renew at the home spawn. Instead, handoff replacement uses 
 ## Job Reservation System
 
 To prevent multiple creeps targeting the same resource (e.g., three haulers all going for the same
-dropped energy), `room.controller.ts` builds a `JobReservations` object each tick:
+dropped energy), `room/controller.ts` builds a `JobReservations` object each tick:
 
 ```
 Reservations track:
@@ -186,7 +186,7 @@ and assigned jobs in order, deducting from reservations to avoid pile-ups.
 
 ## Links
 
-Links are classified into groups by `room.structures.ts`. **A link can belong to multiple groups simultaneously** if it is near multiple qualifying structures:
+Links are classified into groups by `room/structures.ts`. **A link can belong to multiple groups simultaneously** if it is near multiple qualifying structures:
 - **source** — within range 2 of any source; sends energy outward
 - **hub** — within range 3 of storage or any spawn; receives energy
 - **controller** — within range 4 of the room controller; receives energy for upgrading

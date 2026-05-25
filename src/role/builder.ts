@@ -1,6 +1,6 @@
-import * as creepHarvest from './creep.harvest';
-import * as roleDoctor from './role.doctor';
-import * as towerBasics from './tower.basics';
+import * as creepHarvest from '../creep/harvest';
+import * as roleDoctor from './doctor';
+import * as towerBasics from '../tower/basics';
 
 export function run(creep: Creep): void {
     if (creep.memory.building === undefined) {

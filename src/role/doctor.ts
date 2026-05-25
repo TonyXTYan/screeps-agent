@@ -1,4 +1,4 @@
-import * as creepHarvest from './creep.harvest';
+import * as creepHarvest from '../creep/harvest';
 
 export function wallRampartRepairCap(rcl: number): number {
     if (rcl <= 2) return 20_000;

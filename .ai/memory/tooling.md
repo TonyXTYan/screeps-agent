@@ -22,6 +22,18 @@ If local docs seem stale, ambiguous, or inconsistent with runtime behavior, trea
 - API reference: `https://docs.screeps.com/api/`
 - Guides and reference pages: `https://docs.screeps.com/`
 
+## Codegraph (Code Intelligence)
+Codegraph is installed and initialized in this project (`.codegraph/` is gitignored — each developer runs `codegraph init -i` once).
+
+Key uses for agents:
+- `codegraph query "symbol"` — find a function/constant by name and its file:line
+- `codegraph callers "fn"` / `codegraph callees "fn"` — call-graph traversal without grep
+- `codegraph impact "symbol"` — list all symbols affected by a change (pre-refactor check)
+- `codegraph context "task description"` — outputs relevant source snippets for a natural-language task
+- `codegraph sync` — re-sync index after file edits (auto if MCP server is running)
+
+Full reference: `.ai/memory/codegraph.md` — also covers MCP server setup (`codegraph install -t claude -y`) and new-machine setup.
+
 ## GitHub Workflow Preference
 - Prefer `gh` CLI for GitHub write actions in this repo (posting PR comments, reviews, resolving threads, etc.).
 - The Codex GitHub app/connector is fine for read operations, but write actions can fail with `403 Resource not accessible by integration`.

@@ -6,37 +6,63 @@ A TypeScript Screeps AI bot that manages a colony economy — source mining, hau
 upgrading, remote harvesting, and defense. Bundled via Rollup into `dist/main.js` and pushed to the
 Screeps server via `grunt-screeps`.
 
-## Source Map (22 modules)
+## Source Map
 
 ```
 src/
   main.ts                  Entry point — Screeps calls loop() every tick
   env.ts                   BUILD_COMMIT from git hash (injected by rollup banner)
   hostileUtils.ts          Shared hostile detection helpers (`isHostile`, `findHostiles`)
-
-  creep.capabilities.ts    Body → capability derivation, archetype inference, body planning
-  creep.jobRunner.ts       Job execution dispatch (19 job types)
-  creep.memoryManagement.ts Dead creep cleanup, fallback role assignment
-  creep.populationControl.ts Emergency defender spawning
-  creep.harvest.ts         Legacy direct-harvest helper
-  creep.roleBalance.ts     Legacy body planner (defender only)
-
-  room.controller.ts       Main economic controller (~3100 lines)
-  room.structures.ts       Structure discovery, link classification
-
-  tower.basics.ts          Tower attack/heal/repair
-
-  role.harvester.ts        Legacy harvester fallback
-  role.builder.ts          Legacy builder fallback
-  role.upgrader.ts         Legacy upgrader fallback
-  role.doctor.ts           Legacy doctor fallback + shared repair utilities
-  role.defender.ts         Defender combat behavior
-  role.manual.ts           Manual-control stub
-
   memoryAudit.ts           Memory consistency audit (runs on deploy)
   debug.ts                 Console debug helpers
-  spawn.renewal.ts         Per-tick renew-spawn reservation helper
   types.d.ts               All Memory extensions and type unions
+
+  creep/
+    capabilities.ts        Body → capability derivation, archetype inference, body planning
+    jobRunner.ts           Job execution dispatch (19 job types)
+    memoryManagement.ts    Dead creep cleanup, fallback role assignment
+    populationControl.ts   Emergency defender spawning
+    harvest.ts             Legacy direct-harvest helper
+    roleBalance.ts         Legacy body planner (defender only)
+    movement.ts            Path following, stuck detection, exit navigation, room-edge nudging
+    traffic.ts             Traffic yield system: request, honour, assign, priorities
+
+  role/
+    harvester.ts           Legacy harvester fallback
+    builder.ts             Legacy builder fallback
+    upgrader.ts            Legacy upgrader fallback
+    doctor.ts              Legacy doctor fallback + shared repair utilities
+    defender.ts            Defender combat behavior
+    manual.ts              Manual-control stub
+
+  room/
+    controller.ts          Main economic controller: context, job assignment, link management
+    structures.ts          Structure discovery, link classification
+    constants.ts           All magic numbers (tower ratios, TTLs, thresholds, terminal reserves)
+    types.ts               RoomControllerContext, JobReservations, SpawnRequest, plan types
+    energy.ts              Energy demand, withdrawal/deposit targets, refill helpers, link receivers
+    work.ts                Construction/repair/upgrade reservation and targeting
+    source.ts              Source/mineral plan building, static harvest memory
+    spawn.ts               Home spawn planning: body sizing, demand sizing
+    targeting.ts           closest / closestReachable / closestByRange / heal-target helpers
+    jobMemory.ts           setJob / setTravelJob / setResourceJob / primary-job memory helpers
+    jobManage.ts           Job retention, emergency energy delivery, job validity checks
+    storeUtils.ts          Store utility helpers
+    remote/
+      fleet.ts             Remote fleet queries: counts, caps, assignments, wander helpers
+      energy.ts            Remote energy source selection and claim tracking
+      miners.ts            Remote miner station priming, route health, standby assignment
+      haulers.ts           Remote hauler cycle management
+      spawn.ts             Remote spawn planning, body sizing
+      planning.ts          Remote room plan init, route-health tracking, plan persistence
+      roads.ts             Remote road site placement, infrastructure site selection
+      routing.ts           Remote entry/exit estimation, station finding, route serialisation
+
+  spawn/
+    renewal.ts             Per-tick renew-spawn reservation helper
+
+  tower/
+    basics.ts              Tower attack/heal/repair
 ```
 
 ## Tick Loop (main.ts)
@@ -68,8 +94,8 @@ src/
 │    b. Try to renew standby miners           │
 │    c. Run defender combat (bypasses jobs)   │
 │    d. Flee hostiles (or emergency heal)     │
-│    e. creepJobRunner.run() — execute job    │
-│    f. Fallback: role.harvester/builder/...  │
+│    e. creep/jobRunner.run() — execute job   │
+│    f. Fallback: role/harvester/builder/...  │
 ├─────────────────────────────────────────────┤
 │ 8. debug.tickRemoteCreepLog() — periodic    │
 └─────────────────────────────────────────────┘
@@ -100,7 +126,7 @@ Job completion → clearJob() → reassigned next tick
 
 | Path | How | Used for |
 |------|-----|----------|
-| **Strategic** | `room.controller` assigns `jobType`/`jobTargetId` → `creep.jobRunner` executes | All economic creeps (miners, haulers, workers, healers, remote roles, mineral miners) |
+| **Strategic** | `room/controller` assigns `jobType`/`jobTargetId` → `creep/jobRunner` executes | All economic creeps (miners, haulers, workers, healers, remote roles, mineral miners) |
 | **Legacy fallback** | Boolean state flags in creep memory (`dumping`, `building`, `repairing`, `upgrading`) | Runs when `creepJobRunner` returns false (no job assigned) |
 
 The strategic path is the primary path. Legacy fallback exists for compatibility and should shrink over time.

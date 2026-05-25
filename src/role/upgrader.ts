@@ -1,5 +1,5 @@
-import * as creepHarvest from './creep.harvest';
-import * as towerBasics from './tower.basics';
+import * as creepHarvest from '../creep/harvest';
+import * as towerBasics from '../tower/basics';
 
 export function run(creep: Creep): void {
     if (creep.memory.upgrading === undefined) {

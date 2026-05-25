@@ -1,6 +1,6 @@
 // Job and primary-job memory helpers: set, remember, clear job state on creeps.
 
-import { clearJob } from './creep.jobRunner';
+import { clearJob } from '../creep/jobRunner';
 
 export function setJob(creep: Creep, jobType: CreepJobType, target: (RoomObject & { id: string }) | undefined | null): void {
     if (!target) {

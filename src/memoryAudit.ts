@@ -1,4 +1,4 @@
-import { ensureArchetype } from './creep.capabilities';
+import { ensureArchetype } from './creep/capabilities';
 
 export function runFullAudit(): number {
     let fixed = 0;

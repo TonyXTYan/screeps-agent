@@ -1,17 +1,17 @@
 // Home-room energy management: stored energy, refill targets, deposit/withdrawal routing,
 // energy state (recovery, pressure), terminal reserves, link receivers, interrupts.
 
-import { RoomControllerContext, JobReservations, ResourceTarget } from './room.types';
-import { getCreepCapabilities } from './creep.capabilities';
+import { RoomControllerContext, JobReservations, ResourceTarget } from './types';
+import { getCreepCapabilities } from '../creep/capabilities';
 import {
     TOWER_RESERVE_RATIO, TOWER_RECOVERY_RATIO, TOWER_HAULER_DEPOSIT_RATIO,
     ENERGY_RECOVERY_ENTER_SPAWN_RATIO, ENERGY_RECOVERY_EXIT_SPAWN_RATIO,
     ENERGY_RECOVERY_ENTER_TOWER_RATIO, ENERGY_RECOVERY_EXIT_TOWER_RATIO,
     WORKER_EMERGENCY_SPAWN_RATIO, TOWER_REFILL_SPAWN_YIELD_RATIO,
     TERMINAL_RESERVE_RCL6, TERMINAL_RESERVE_RCL7, TERMINAL_RESERVE_RCL8,
-} from './room.constants';
-import { closest } from './room.targeting';
-import { firstStoredResource, firstStoredNonEnergyResource, haulerMiningSiteMinPickup } from './room.storeUtils';
+} from './constants';
+import { closest } from './targeting';
+import { firstStoredResource, firstStoredNonEnergyResource, haulerMiningSiteMinPickup } from './storeUtils';
 
 // ---------------------------------------------------------------------------
 // Core stored-energy helpers

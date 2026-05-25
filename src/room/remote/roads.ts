@@ -1,8 +1,8 @@
 // Remote road and infrastructure placement: site selection, road cursor, build eligibility.
 
-import { closest } from './room.targeting';
-import { sameRoomPosition, isRemoteExitApproach, isSwampPathStep, isOwnedByMe } from './room.remote.routing';
-import { REMOTE_AUX_BUILD_RANGE, REMOTE_PLANNING_LOG_INTERVAL } from './room.constants';
+import { closest } from '../targeting';
+import { sameRoomPosition, isRemoteExitApproach, isSwampPathStep, isOwnedByMe } from './routing';
+import { REMOTE_AUX_BUILD_RANGE, REMOTE_PLANNING_LOG_INTERVAL } from '../constants';
 
 export function preferredRemoteInfrastructureSite(
     creep: Creep,

@@ -3,14 +3,14 @@
 import {
     ensureArchetype, planBodyForArchetype, getBodyCapabilities, bodyCost,
     BODY_MIN_BUDGET, BODY_BUDGET_RATIO,
-} from './creep.capabilities';
-import { reserveRenewSpawns } from './spawn.renewal';
+} from '../../creep/capabilities';
+import { reserveRenewSpawns } from '../../spawn/renewal';
 import {
     pendingSpawnRequest, renewalDemandCreepsForRoom, pendingArchetypeCount,
     pendingRemoteArchetypeCount, pendingRemoteBodyCapability,
     addPendingCapabilities, measureCapabilities, desiredHaulerCapacity, desiredWorkerWork,
     meetsMinimumBody, workerWorkRatio,
-} from './room.spawn';
+} from '../spawn';
 import {
     creepsForHomeRoom, countRemoteScouts, hasAssignedNonScoutRemoteCreep, remoteClaimerCount,
     countRemoteHaulersForRoom, countActiveRemoteMinersForRoom, countSourceLessRemoteStandbyMiners,
@@ -18,19 +18,19 @@ import {
     countRemoteMinersForSource, remoteSourceActiveMinerLimit, hasRemoteStandbyMinerForSource,
     countRemoteHaulersForSource, hasIdleRemoteHauler, remoteNeedsMaintainer, hasRemoteMaintainer,
     remoteSourceHasContainerStation, remoteSourceReplacementHorizon, countFleetForArchetype,
-} from './room.remote.fleet';
-import { remoteNeedsRouteHealthMaintainer } from './room.remote.planning';
-import { sourceSpawnDeficit, stationaryTargetIdForSource, stationaryTargetIdForMineral, activeMinerCount } from './room.source';
-import { mineralReadyToMine } from './room.work';
-import { storedEnergy } from './room.energy';
-import { legacyRoleForArchetype } from './room.targeting';
-import { RoomControllerContext, SpawnRequest, PendingSpawnRequest } from './room.types';
+} from './fleet';
+import { remoteNeedsRouteHealthMaintainer } from './planning';
+import { sourceSpawnDeficit, stationaryTargetIdForSource, stationaryTargetIdForMineral, activeMinerCount } from '../source';
+import { mineralReadyToMine } from '../work';
+import { storedEnergy } from '../energy';
+import { legacyRoleForArchetype } from '../targeting';
+import { RoomControllerContext, SpawnRequest, PendingSpawnRequest } from '../types';
 import {
     REMOTE_HOME_RECOVERY_STORED_ENERGY, REMOTE_SPAWN_MIN_ENERGY_RATIO, REMOTE_SPAWN_AVAIL_CHECK_MAX_STORED,
     REMOTE_HAULER_MIN_DEMAND_RATIO, REMOTE_HAULER_ABSOLUTE_MIN_COST, REMOTE_HAULER_USEFUL_MIN_COST,
     REMOTE_MAINTAINER_MIN_COST, REMOTE_THROTTLE_STORED_ENERGY,
     REMOTE_HAULER_RETARGET_STUCK_TICKS, MAX_REMOTE_HAULERS_PER_SOURCE,
-} from './room.constants';
+} from '../constants';
 
 export function runSpawnPlanner(context: RoomControllerContext): void {
     const allFreeSpawns = context.structures.spawns.filter((s) => !s.spawning);

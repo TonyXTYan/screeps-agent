@@ -1,6 +1,6 @@
 // Shared types/interfaces for room controller modules.
 
-import { RoomStructureCache } from './room.structures';
+import { RoomStructureCache } from './structures';
 
 export interface RoomControllerContext {
     room: Room;

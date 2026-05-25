@@ -1,11 +1,11 @@
 // Remote energy targeting: source containers, dropped resources, claim management.
 
-import { ensureArchetype } from './creep.capabilities';
-import { remoteTargetAccessSlots } from './room.remote.fleet';
+import { ensureArchetype } from '../../creep/capabilities';
+import { remoteTargetAccessSlots } from './fleet';
 import {
     REMOTE_HAULER_ASSIGNED_SOURCE_MIN_ENERGY, REMOTE_HAULER_CROSS_SOURCE_MIN_ENERGY,
     REMOTE_TARGET_MAX_HAULER_CLAIMS, REMOTE_HAULER_RETARGET_STUCK_TICKS,
-} from './room.constants';
+} from '../constants';
 
 type RemoteEnergySourceTarget = {
     jobType: 'withdrawEnergy' | 'pickupEnergy';

@@ -2,9 +2,9 @@
 // runSpawnPlanner / chooseSpawnRequest live in room.controller.ts until remote spawn
 // functions are co-extracted (they share mutual call dependencies).
 
-import { BODY_BUDGET_RATIO, BODY_MIN_BUDGET, MAX_CARRY_CAPACITY, getBodyCapabilities, getCreepCapabilities, ensureArchetype } from './creep.capabilities';
-import { RoomControllerContext, SpawnRequest, PendingSpawnRequest } from './room.types';
-import { desiredUpgraderWork } from './room.work';
+import { BODY_BUDGET_RATIO, BODY_MIN_BUDGET, MAX_CARRY_CAPACITY, getBodyCapabilities, getCreepCapabilities, ensureArchetype } from '../creep/capabilities';
+import { RoomControllerContext, SpawnRequest, PendingSpawnRequest } from './types';
+import { desiredUpgraderWork } from './work';
 
 // ── Body minimums ─────────────────────────────────────────────────────────────
 

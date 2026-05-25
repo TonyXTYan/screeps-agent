@@ -1,13 +1,13 @@
 // Remote hauler cycle management: pickup, delivery, renewal, idle wander.
 
-import { findRemoteEnergySource, remoteEnergyTargetPathLength } from './room.remote.energy';
-import { setJob, setTravelJob, setResourceJob } from './room.jobMemory';
-import { acquireRenewSpawn, nearestSpawn } from './spawn.renewal';
-import { closest } from './room.targeting';
-import { getRoomStructures } from './room.structures';
-import { firstStoredResource } from './room.work';
-import { towerEnergyRatio } from './room.energy';
-import { hashString } from './room.remote.fleet';
+import { findRemoteEnergySource, remoteEnergyTargetPathLength } from './energy';
+import { setJob, setTravelJob, setResourceJob } from '../jobMemory';
+import { acquireRenewSpawn, nearestSpawn } from '../../spawn/renewal';
+import { closest } from '../targeting';
+import { getRoomStructures } from '../structures';
+import { firstStoredResource } from '../work';
+import { towerEnergyRatio } from '../energy';
+import { hashString } from './fleet';
 import {
     REMOTE_HAULER_FAR_PICKUP_PATH_LENGTH, REMOTE_HAULER_FAR_PICKUP_RETURN_LOAD_RATIO,
     REMOTE_HAULER_POST_TRIP_RENEW_START_TTL, REMOTE_HAULER_RENEW_STOP_TTL,
@@ -15,7 +15,7 @@ import {
     REMOTE_HAULER_RENEW_CRITICAL_TTL,
     REMOTE_HAULER_WANDER_MIN_RANGE, REMOTE_HAULER_WANDER_MAX_RANGE, REMOTE_HAULER_WANDER_TICKS,
     TOWER_RECOVERY_RATIO,
-} from './room.constants';
+} from '../constants';
 
 export function assignRemoteHaulerCycle(
     creep: Creep,

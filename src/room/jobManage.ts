@@ -1,27 +1,27 @@
 // Job retention and assignment helpers: keepCurrentJob, assignEmergencyEnergyDelivery,
 // resumePrimaryEnergyJob, and their private support functions.
 
-import { ensureArchetype, getCreepCapabilities } from './creep.capabilities';
-import { clearJob } from './creep.jobRunner';
-import { repairStructureFilter, wallRampartRepairCap } from './role.doctor';
-import { bestHealTarget, isEmergencyHealTarget } from './room.targeting';
-import { setJob, jobTarget, rememberActiveAsPrimary, clearPrimaryJob } from './room.jobMemory';
-import { clearStaticMiningMemory } from './room.source';
+import { ensureArchetype, getCreepCapabilities } from '../creep/capabilities';
+import { clearJob } from '../creep/jobRunner';
+import { repairStructureFilter, wallRampartRepairCap } from '../role/doctor';
+import { bestHealTarget, isEmergencyHealTarget } from './targeting';
+import { setJob, jobTarget, rememberActiveAsPrimary, clearPrimaryJob } from './jobMemory';
+import { clearStaticMiningMemory } from './source';
 import {
     canEmergencyDeliverEnergy, refillSpawnTarget, refillTowerTarget, spawnEnergyRatio,
     reserveResourceTarget, reserveDroppedTarget, reserveEnergySink,
     roomNeedsCriticalEnergyRecovery, terminalWithdrawableEnergy,
     shouldInterruptForEnergyRefill,
-} from './room.energy';
+} from './energy';
 import {
     firstStoredResource, mineralReadyToMine,
     remainingConstructionProgress, remainingRepairProgress,
     reserveConstructionProgress, reserveRepairProgress,
     repairTargetFor, shouldRepairWithCreeps, shouldReserveUpgrade,
     haulerMiningSiteMinPickup, isMiningSiteEnergyTarget,
-} from './room.work';
-import { RoomControllerContext, JobReservations } from './room.types';
-import { TOWER_REFILL_SPAWN_YIELD_RATIO } from './room.constants';
+} from './work';
+import { RoomControllerContext, JobReservations } from './types';
+import { TOWER_REFILL_SPAWN_YIELD_RATIO } from './constants';
 
 export function keepCurrentJob(
     context: RoomControllerContext,

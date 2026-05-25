@@ -1,10 +1,10 @@
-import { wallRampartRepairCap } from './role.doctor';
-import { honorTrafficYieldRequest, requestTrafficYieldForPath } from './creep.traffic';
+import { wallRampartRepairCap } from '../role/doctor';
+import { honorTrafficYieldRequest, requestTrafficYieldForPath } from './traffic';
 import {
     moveToJobTarget, moveToWithdrawTarget, forceStepTowardsRoomExit,
     clearTravelStuckMemory, updateTravelStuckMemory, nearestExitTileToRoom,
     nudgeFromRoomEdge, wanderRandomAdjacent, isOnRequestedExitEdge, sidestepAlongExitEdge,
-} from './creep.movement';
+} from './movement';
 
 export function run(creep: Creep): boolean {
     if (honorTrafficYieldRequest(creep)) {

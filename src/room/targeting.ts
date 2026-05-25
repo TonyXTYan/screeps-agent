@@ -1,7 +1,7 @@
 // Room targeting utilities: find closest/best targets, heal priority, role mapping.
 
-import { isHostile } from './hostileUtils';
-import { DOCTOR_EMERGENCY_HITS_RATIO, DOCTOR_THREAT_RADIUS } from './room.constants';
+import { isHostile } from '../hostileUtils';
+import { DOCTOR_EMERGENCY_HITS_RATIO, DOCTOR_THREAT_RADIUS } from './constants';
 
 export function closest<T extends RoomObject>(creep: Creep, targets: T[]): T | null {
     if (targets.length === 0) { return null; }

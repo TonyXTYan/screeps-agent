@@ -3,18 +3,18 @@
 import {
     creepsForHomeRoom, findDyingRemoteMiner, sourceNeedingBlankStandbyMiner,
     hasActiveRemoteMinerForSource, remoteSourceHasStaticStation,
-} from './room.remote.fleet';
-import { estimateRemoteDistance } from './room.remote.routing';
-import { setJob, setTravelJob } from './room.jobMemory';
-import { acquireRenewSpawn, nearestSpawn } from './spawn.renewal';
-import { getCreepCapabilities } from './creep.capabilities';
+} from './fleet';
+import { estimateRemoteDistance } from './routing';
+import { setJob, setTravelJob } from '../jobMemory';
+import { acquireRenewSpawn, nearestSpawn } from '../../spawn/renewal';
+import { getCreepCapabilities } from '../../creep/capabilities';
 import {
     REMOTE_STANDBY_PARK_RANGE_MIN, REMOTE_STANDBY_PARK_RANGE_TARGET, REMOTE_STANDBY_PARK_RANGE_MAX,
     REMOTE_STANDBY_BOUNDARY_STUCK_TICKS,
     REMOTE_MINER_STUCK_REPLAN_TICKS, REMOTE_MINER_NO_PROGRESS_REPLAN_TICKS, REMOTE_MINER_OSCILLATION_REPLAN_TICKS,
     REMOTE_MAX_STATION_STALLS, REMOTE_MAX_STATION_FAILURES,
     REMOTE_RENEW_MIN_TTL, REMOTE_RENEW_BUFFER_TICKS, REMOTE_RENEW_HYSTERESIS,
-} from './room.constants';
+} from '../constants';
 
 export function primeRemoteMinerTravelStation(creep: Creep, remotePlan: RemoteRoomPlan): void {
     const sourceId = creep.memory.assignedSourceId ?? creep.memory.sourceId;

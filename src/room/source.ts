@@ -1,10 +1,10 @@
 // Source and mineral planning: demand calculation, miner assignment, static mining memory.
 
-import { ensureArchetype, getCreepCapabilities } from './creep.capabilities';
-import { MINERAL_WORK_DEMAND } from './room.constants';
-import { RoomControllerContext, SourcePlan, MineralPlan, JobReservations } from './room.types';
-import { RoomStructureCache } from './room.structures';
-import { closestByRange } from './room.targeting';
+import { ensureArchetype, getCreepCapabilities } from '../creep/capabilities';
+import { MINERAL_WORK_DEMAND } from './constants';
+import { RoomControllerContext, SourcePlan, MineralPlan, JobReservations } from './types';
+import { RoomStructureCache } from './structures';
+import { closestByRange } from './targeting';
 
 export function buildSourcePlans(sources: Source[], structures: RoomStructureCache): SourcePlan[] {
     return sources.map((source) => {

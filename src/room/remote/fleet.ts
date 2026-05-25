@@ -1,14 +1,14 @@
 // Remote fleet composition: counting, standby management, slot calculations, scout wander.
 
-import { ensureArchetype, getCreepCapabilities, getBodyCapabilities, planBodyForArchetype } from './creep.capabilities';
-import { findHostiles } from './hostileUtils';
-import { setTravelJob } from './room.jobMemory';
-import { clearJob } from './creep.jobRunner';
-import { RoomControllerContext } from './room.types';
+import { ensureArchetype, getCreepCapabilities, getBodyCapabilities, planBodyForArchetype } from '../../creep/capabilities';
+import { findHostiles } from '../../hostileUtils';
+import { setTravelJob } from '../jobMemory';
+import { clearJob } from '../../creep/jobRunner';
+import { RoomControllerContext } from '../types';
 import {
     REMOTE_STANDBY_TRIGGER_TTL, REMOTE_SCOUT_CROWD_THRESHOLD, REMOTE_SCOUT_WANDER_TICKS,
     REMOTE_REPLACEMENT_BUFFER_TICKS,
-} from './room.constants';
+} from '../constants';
 
 // ── Home fleet helpers ────────────────────────────────────────────────────────
 

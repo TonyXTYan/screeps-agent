@@ -1,16 +1,16 @@
-import { ensureArchetype, getCreepCapabilities } from './creep.capabilities';
-import { clearJob } from './creep.jobRunner';
-import { getRoomStructures } from './room.structures';
-import { repairStructureFilter } from './role.doctor';
-import { findHostiles } from './hostileUtils';
-import { closest, closestReachable, bestHealTarget } from './room.targeting';
-import { setJob, setTravelJob, setResourceJob, rememberPrimaryJob } from './room.jobMemory';
+import { ensureArchetype, getCreepCapabilities } from '../creep/capabilities';
+import { clearJob } from '../creep/jobRunner';
+import { getRoomStructures } from './structures';
+import { repairStructureFilter } from '../role/doctor';
+import { findHostiles } from '../hostileUtils';
+import { closest, closestReachable, bestHealTarget } from './targeting';
+import { setJob, setTravelJob, setResourceJob, rememberPrimaryJob } from './jobMemory';
 import {
     buildSourcePlans, buildMineralPlan,
     assignedSourcePlan, reserveSourceIfNeeded,
     setStaticHarvestMemory, setStaticMineralMemory, clearStaticMiningMemory,
     closestSourcePlan,
-} from './room.source';
+} from './source';
 import {
     storedEnergy,
     reserveResourceTarget, reserveDroppedTarget, reserveEnergySink,
@@ -21,43 +21,43 @@ import {
     droppedResourceTarget, salvageWithdrawalTarget, mineralContainerWithdrawalTarget,
     resourceDepositTarget, energyDepositTarget, energyWithdrawalTarget,
     linkReceivers, uniqueLinks,
-} from './room.energy';
+} from './energy';
 import {
     bestConstructionSite, repairTargetFor, remainingConstructionProgress, remainingRepairProgress,
     reserveConstructionProgress, reserveRepairProgress,
     shouldRepairWithCreeps, shouldReserveUpgrade,
     mineralReadyToMine, totalStoredResources, firstStoredResource,
     haulerMiningSiteMinPickup, isMiningSiteEnergyTarget,
-} from './room.work';
+} from './work';
 import {
     preferredRemoteInfrastructureSite, shouldBuildRemoteInfrastructure, closestRemoteInfrastructureSite,
-} from './room.remote.roads';
+} from './remote/roads';
 import {
     remoteSourceRouteDegraded,
     initialiseRoomPlan, updateRemoteRoomPlans, rememberPlans,
     rememberRcl, updatePlanAssignments, rememberLoad,
-} from './room.remote.planning';
+} from './remote/planning';
 import {
     creepsForHomeRoom,
     remoteSourceMinerSlotCap, pickRemoteMinerSource,
     remoteScoutPack, remoteRoomCrowdedForScout, assignOverflowRemoteScout,
-} from './room.remote.fleet';
-import { findRemoteEnergySource } from './room.remote.energy';
+} from './remote/fleet';
+import { findRemoteEnergySource } from './remote/energy';
 import {
     primeRemoteMinerTravelStation, remoteMinerStationRouteStalled, resetRemoteMinerStationProgress,
     markRemoteSourceRouteDegraded, assignStandbyRemoteMiner, manageRemoteRenewal,
-} from './room.remote.miners';
-import { assignRemoteHaulerCycle } from './room.remote.haulers';
-import { runSpawnPlanner } from './room.remote.spawn';
-import { keepCurrentJob, assignEmergencyEnergyDelivery, resumePrimaryEnergyJob } from './room.jobManage';
-import { RoomControllerContext, JobReservations } from './room.types';
+} from './remote/miners';
+import { assignRemoteHaulerCycle } from './remote/haulers';
+import { runSpawnPlanner } from './remote/spawn';
+import { keepCurrentJob, assignEmergencyEnergyDelivery, resumePrimaryEnergyJob } from './jobManage';
+import { RoomControllerContext, JobReservations } from './types';
 import {
     LINK_TRANSFER_THRESHOLD,
     REMOTE_SCOUT_KEEP_COUNT, REMOTE_HAULER_RETARGET_STUCK_TICKS,
     REMOTE_MINER_NO_PROGRESS_REPLAN_TICKS,
     REMOTE_CONTAINER_CRITICAL_REPAIR_THRESHOLD,
     REMOTE_MINER_REPAIR_THRESHOLD, REMOTE_MINER_REPAIR_RANGE,
-} from './room.constants';
+} from './constants';
 
 export function run(room: Room): void {
     const context = buildContext(room);

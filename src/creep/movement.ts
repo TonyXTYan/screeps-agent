@@ -1,7 +1,7 @@
 // Creep movement: path following, stuck detection, exit navigation, room-edge nudging.
 
-import { requestTrafficYieldForPath } from './creep.traffic';
-import { mirrorExitPositionIntoRoom } from './room.remote.routing';
+import { requestTrafficYieldForPath } from './traffic';
+import { mirrorExitPositionIntoRoom } from '../room/remote/routing';
 
 const MOVE_STUCK_REPATH_TICKS = 2;
 const MOVE_STUCK_RESET_PATH_TICKS = 4;

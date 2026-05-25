@@ -1,25 +1,25 @@
 // Remote room plan management: initialise, scout, path, and load recording.
 
-import { findHostiles } from './hostileUtils';
-import { closestByRange } from './room.targeting';
+import { findHostiles } from '../../hostileUtils';
+import { closestByRange } from '../targeting';
 import {
     remoteEntryPositions, findStationForSource, bestRemoteEntryRoute,
     serializeRemotePath, deserializeRemotePath, fallbackRemotePathDistance, canPlaceContainerSite,
-} from './room.remote.routing';
-import { placeRemoteRoadSites } from './room.remote.roads';
-import { sourceWorkDemand, assignedSourceWork, totalSourcePlanWorkDemand } from './room.source';
-import { measureCapabilities, desiredHaulerCapacity, desiredWorkerWork } from './room.spawn';
-import { sumFreeEnergy, towerEnergyRatio, storedEnergy } from './room.energy';
-import { mineralReadyToMine, totalStoredTargets } from './room.work';
-import { ensureArchetype, getCreepCapabilities } from './creep.capabilities';
-import { RoomControllerContext } from './room.types';
+} from './routing';
+import { placeRemoteRoadSites } from './roads';
+import { sourceWorkDemand, assignedSourceWork, totalSourcePlanWorkDemand } from '../source';
+import { measureCapabilities, desiredHaulerCapacity, desiredWorkerWork } from '../spawn';
+import { sumFreeEnergy, towerEnergyRatio, storedEnergy } from '../energy';
+import { mineralReadyToMine, totalStoredTargets } from '../work';
+import { ensureArchetype, getCreepCapabilities } from '../../creep/capabilities';
+import { RoomControllerContext } from '../types';
 import {
     REMOTE_DANGER_TICKS, REMOTE_CONTAINER_REROUTE_FREEZE_TICKS,
     REMOTE_PATH_REFRESH_INTERVAL, REMOTE_INACCESSIBLE_RETRY_TICKS, REMOTE_PATH_INCOMPLETE_RETRY_TICKS,
     REMOTE_PLANNING_LOG_INTERVAL, REMOTE_CONTAINER_BUILD_DISTANCE,
     REMOTE_ROAD_SITES_PER_TICK, REMOTE_MAX_UNFINISHED_ROAD_SITES, REMOTE_DEGRADED_MAX_UNFINISHED_ROAD_SITES,
     TOWER_RESERVE_RATIO, MAX_REMOTE_HAULER_CAPACITY_PER_SOURCE,
-} from './room.constants';
+} from '../constants';
 
 export function remoteSourceRouteDegraded(sourcePlan: RemoteSourcePlan | undefined): boolean {
     return sourcePlan?.routeHealth === 'degraded';

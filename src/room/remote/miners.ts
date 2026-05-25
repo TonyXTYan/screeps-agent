@@ -259,7 +259,7 @@ export function assignStandbyRemoteMiner(creep: Creep, homeRoom: string, remoteR
         if (atBoundary && stuckTicks >= REMOTE_STANDBY_BOUNDARY_STUCK_TICKS) {
             // Can't navigate to park position from room entry — go home and wait
             creep.memory.standbyParkStuckTicks = 0;
-            setTravelJob(creep, creep.memory.homeRoom!);
+            setTravelJob(creep, homeRoom);
             return true;
         }
         creep.moveTo(source, {

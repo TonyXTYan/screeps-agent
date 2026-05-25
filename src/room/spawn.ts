@@ -231,8 +231,9 @@ export function desiredWorkerWork(context: RoomControllerContext): number {
 
         if (rcl >= 4) {
             const ratio = workerWorkRatio(context);
-            const unitCost = ratio * 100 + 100;
-            const unitParts = ratio + 2;
+            // Match buildWorkerBody: each segment is ratio×WORK + 1×CARRY + ratio×MOVE
+            const unitCost = ratio * 150 + 50;   // ratio*WORK(100) + CARRY(50) + ratio*MOVE(50)
+            const unitParts = ratio * 2 + 1;      // ratio×WORK + 1×CARRY + ratio×MOVE
             const energyAvail = Math.max(BODY_MIN_BUDGET, Math.floor(context.room.energyCapacityAvailable * BODY_BUDGET_RATIO));
             const segments = Math.min(
                 Math.floor(50 / unitParts),

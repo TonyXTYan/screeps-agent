@@ -230,7 +230,8 @@ function currentJobStillValid(
         const structure = target as AnyStructure;
         const isDefense = structure.structureType === STRUCTURE_WALL || structure.structureType === STRUCTURE_RAMPART;
         const repairRcl = creep.room.controller?.level ?? 0;
-        const maxHits = isDefense ? Math.min(wallRampartRepairCap(repairRcl), structure.hitsMax) : structure.hitsMax;
+        // Use the same cap as remainingRepairProgress(): defense → wallRampartRepairCap, non-defense → 90%
+        const maxHits = isDefense ? Math.min(wallRampartRepairCap(repairRcl), structure.hitsMax) : structure.hitsMax * 0.9;
         return capabilities.repair > 0 &&
             creep.store.getUsedCapacity(RESOURCE_ENERGY) > 0 &&
             structure.hits < maxHits &&

@@ -245,7 +245,7 @@ export function moveToJobTarget(
     const targetPos = target instanceof RoomPosition ? target : target.pos;
     const targetRange = extra.range ?? 1;
 
-    if (stuckTicks >= MOVE_STUCK_REPATH_TICKS) {
+    if (needsDynamicTraffic) {
         requestTrafficYieldForPath(creep, targetPos, targetRange);
     }
 

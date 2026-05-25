@@ -8,6 +8,7 @@ try {
 } catch {
     // not a git repo or git not available
 }
+console.log(`[build] commit ${buildCommit}`);
 
 export default {
   input: 'src/main.ts',

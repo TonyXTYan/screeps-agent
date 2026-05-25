@@ -193,7 +193,7 @@ Links are classified into groups by `room/structures.ts`. **A link can belong to
 - **sink** — within range 3 of ≥3 extensions; receives energy for spawn refill
 - **other** — matches none of the above
 
-`runLinks()` transfers energy from senders (source links, hub links when spawn pressure=0, other links) to receivers (sink, hub, controller links). The sender list is deduplicated so multi-classified links are only processed once. Transfer threshold: 400 energy.
+`runLinks()` transfers energy from senders (source links and other links) to receivers (sink, hub, controller links), with one-way flow enforced by excluding source-class links from the receiver pool. This means source+controller/source+hub dual-class links are treated as sender-side only. The sender list is deduplicated so multi-classified links are only processed once. Transfer threshold: 200 energy.
 
 **Hauler interaction with links:**
 - Haulers drain hub/controller/sink links first (primary pickup) to keep them ready for incoming transfers from `runLinks`.

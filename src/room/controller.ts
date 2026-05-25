@@ -14,7 +14,7 @@ import {
 import {
     storedEnergy,
     reserveResourceTarget, reserveDroppedTarget, reserveEnergySink,
-    spawnEnergyRatio, spawnEnergyPressure,
+    spawnEnergyRatio,
     roomHasEnergyDemand, roomNeedsCriticalEnergyRecovery,
     terminalEnergyReserveDeficit,
     refillSpawnTarget, refillTowerTarget, refillTerminalTarget,
@@ -453,12 +453,12 @@ function buildContext(room: Room): RoomControllerContext {
 }
 
 function runLinks(context: RoomControllerContext): void {
-    const receivers = linkReceivers(context);
+    const sourceIds = new Set(context.structures.links.source.map((link) => link.id));
+    const receivers = linkReceivers(context).filter((link) => !sourceIds.has(link.id));
     if (receivers.length === 0) { return; }
 
     const senders = uniqueLinks([
         ...context.structures.links.source,
-        ...context.structures.links.hub.filter((link) => spawnEnergyPressure(context) === 0),
         ...context.structures.links.other
     ]);
 

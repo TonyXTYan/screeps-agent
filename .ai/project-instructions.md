@@ -30,39 +30,61 @@ This is a Screeps bot written in TypeScript, bundled by Rollup into a single `di
 
 **Module groups:**
 
-- `src/creep.*.ts` — shared systems that run once per tick across all creeps:
-  - `creep.capabilities.ts` — derives capabilities from body parts, infers archetypes, plans bodies per archetype
-  - `creep.jobRunner.ts` — executes assigned jobs (`harvestSource`, `withdrawEnergy`, `build`, `repair`, `upgrade`, remotes, minerals, idle, etc.)
-  - `creep.populationControl.ts` — emergency defender spawning when hostiles are present
-  - `creep.memoryManagement.ts` — clears dead creep memory; assigns fallback roles to unassigned creeps
-  - `creep.harvest.ts` — shared harvest logic used by all roles when they need energy; handles source selection, container fallback, and source load balancing
-  - `creep.roleBalance.ts` — legacy role body balancing utilities, still used for defender bodies
+- `src/creep/` — shared systems that run once per tick across all creeps:
+  - `creep/capabilities.ts` — derives capabilities from body parts, infers archetypes, plans bodies per archetype
+  - `creep/jobRunner.ts` — executes assigned jobs (`harvestSource`, `withdrawEnergy`, `build`, `repair`, `upgrade`, remotes, minerals, idle, etc.)
+  - `creep/populationControl.ts` — emergency defender spawning when hostiles are present
+  - `creep/memoryManagement.ts` — clears dead creep memory; assigns fallback roles to unassigned creeps
+  - `creep/harvest.ts` — shared harvest logic used by all roles when they need energy; handles source selection, container fallback, and source load balancing
+  - `creep/roleBalance.ts` — legacy role body balancing utilities, still used for defender bodies
+  - `creep/movement.ts` — path following, stuck detection, exit navigation, room-edge nudging
+  - `creep/traffic.ts` — traffic yield system: request, honour, assign yield positions, compute priorities
 
 - `src/env.ts` — exports `BUILD_COMMIT` from the build-time injected git hash (via rollup `output.banner`)
 - `src/memoryAudit.ts` — memory consistency audit that runs once on deploy (commit hash change); cleans orphaned rooms, stale remote plans, invalid creep assignments; reports duplicate source assignments
 
-- `src/role.*.ts` — per-creep state machines, each with a `run(creep)` export:
+- `src/role/` — per-creep state machines, each with a `run(creep)` export:
   - `harvester`, `builder`, `upgrader`, `doctor` — legacy fallback behavior after the job runner
   - `defender` — emergency hostile response creep behavior
   - `manual` — stub for manually controlled creeps
 
-- `src/room.*.ts` — room-level control:
-  - `room.controller.ts` — measures room load, manages source/mineral plans, assigns jobs with reservations, runs spawn planning, and drives remote planning/spawning (scouting, per-source demand, road/container planning, reserve/claim support)
-  - `room.structures.ts` — discovers room structures and classifies links
+- `src/room/` — room-level control:
+  - `room/controller.ts` — measures room load, manages source/mineral plans, assigns jobs with reservations, and drives remote planning/spawning (scouting, per-source demand, road/container planning, reserve/claim support)
+  - `room/structures.ts` — discovers room structures and classifies links
+  - `room/constants.ts` — all magic numbers (tower ratios, recovery thresholds, remote/hauler TTLs, terminal reserves)
+  - `room/types.ts` — `RoomControllerContext`, `JobReservations`, `SpawnRequest`, `SourcePlan`, `MineralPlan`, and related types
+  - `room/energy.ts` — energy demand, withdrawal/deposit targeting, refill helpers, link management
+  - `room/work.ts` — construction, repair, upgrade reservation and targeting helpers
+  - `room/source.ts` — source/mineral plan building, static harvest memory, assignment helpers
+  - `room/spawn.ts` — home spawn planning: body sizing, demand sizing, pending capability tracking
+  - `room/targeting.ts` — `closest`, `closestReachable`, `closestByRange`, heal-target helpers
+  - `room/jobMemory.ts` — `setJob`, `setTravelJob`, `setResourceJob`, primary-job memory helpers
+  - `room/jobManage.ts` — job retention (`keepCurrentJob`), emergency energy delivery, job validity checks
+  - `room/storeUtils.ts` — store utility helpers
+  - `room/remote/` — remote mining subsystem:
+    - `remote/fleet.ts` — remote creep fleet queries (counts, caps, assignments)
+    - `remote/energy.ts` — remote energy source selection and claim tracking
+    - `remote/miners.ts` — remote miner station priming, route health, standby assignment
+    - `remote/haulers.ts` — remote hauler cycle management
+    - `remote/spawn.ts` — remote spawn planning and body sizing
+    - `remote/planning.ts` — remote room plan initialisation, road placement, route-health tracking
+    - `remote/roads.ts` — remote road site placement and infrastructure site selection
+    - `remote/routing.ts` — remote entry/exit path estimation, station finding, route serialisation
 
-- `src/tower.basics.ts` — runs all towers in the room each tick: attack hostiles → heal creeps → repair urgent structures (cascading priority); walls/ramparts only repaired at ≥ 90 % charge via RCL-staged caps
+- `src/spawn/renewal.ts` — per-tick spawn reservation helper for renew actions
+- `src/tower/basics.ts` — runs all towers in the room each tick: attack hostiles → heal creeps → repair urgent structures (cascading priority); walls/ramparts only repaired at ≥ 90 % charge via RCL-staged caps
 
 **Key patterns:**
 
-- The main strategic path assigns `jobType`, `jobTargetId`, and related memory through `room.controller.ts`; `creep.jobRunner.ts` executes those jobs.
+- The main strategic path assigns `jobType`, `jobTargetId`, and related memory through `room/controller.ts`; `creep/jobRunner.ts` executes those jobs.
 - Legacy roles use boolean state flags in creep memory (`dumping`, `building`, `repairing`, `upgrading`) to toggle between harvesting and their primary action.
-- `role.doctor` exports shared repair utilities used beyond the legacy role:
-  - `repairStructureFilter(structure, rcl)` — imported by `tower.basics` and `room.controller`; applies RCL-staged hit caps for walls/ramparts
-  - `wallRampartRepairCap(rcl)` — imported by `room.controller` for repair-job validity checks
-  - `repairJob(creep)` — called by `role.builder` and `role.harvester` as legacy fallback behavior
-- `creep.harvest.ts` is imported by every role that needs to collect energy.
-- `creep.capabilities.planBodyForArchetype(archetype, energy, opts)` is the current strategic body planner.
-- `creep.roleBalance.balanceSpec(spec, energy)` is a legacy body scaler still used by emergency defenders.
+- `role/doctor.ts` exports shared repair utilities used beyond the legacy role:
+  - `repairStructureFilter(structure, rcl)` — imported by `tower/basics.ts` and `room/controller.ts`; applies RCL-staged hit caps for walls/ramparts
+  - `wallRampartRepairCap(rcl)` — imported by `room/jobManage.ts` for repair-job validity checks
+  - `repairJob(creep)` — called by `role/builder.ts` and `role/harvester.ts` as legacy fallback behavior
+- `creep/harvest.ts` is imported by every role that needs to collect energy.
+- `creep/capabilities.ts:planBodyForArchetype(archetype, energy, opts)` is the current strategic body planner.
+- `creep/roleBalance.ts:balanceSpec(spec, energy)` is a legacy body scaler still used by emergency defenders.
 - Clearing a creep's memory is done via `delete Memory.creeps[creep.name]` (not `creep.memory = undefined`).
 
 **Custom types** are in `src/types.d.ts`: extends `CreepMemory`, `RoomMemory`, `SpawnMemory` with bot-specific fields, declares `console`, and defines the `EnergyStructure` union type.

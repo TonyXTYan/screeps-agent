@@ -128,7 +128,7 @@ enumerates all 19 job types. Type union `CreepArchetype` enumerates all 11 arche
 
 ### Archetype assignment
 
-`ensureArchetype(creep)` in `creep.capabilities.ts` infers from body parts:
+`ensureArchetype(creep)` in `creep/capabilities.ts` infers from body parts:
 - Has CLAIM → `claimer`
 - Has HEAL → `doctor`
 - Has WORK + CARRY + manual role → `remoteMaintainer`
@@ -144,18 +144,18 @@ Miners, remote roles, and mineral miners must have `archetype` set explicitly at
 
 ### RoomStructureMemory
 
-Written by `room.structures.ts` when cache is stale (100 ticks) or structure counts change. Used
+Written by `room/structures.ts` when cache is stale (100 ticks) or structure counts change. Used
 for persistence across server reboots — current code does NOT read from this cache at runtime (it
 re-scans every tick).
 
 ### RoomLoadMemory
 
-Written every tick by `rememberLoad()` in `room.controller.ts`. Snapshot of room state for debugging
+Written every tick by `rememberLoad()` in `room/controller.ts`. Snapshot of room state for debugging
 and future optimization. Not currently read by any logic — purely diagnostic.
 
 ### RoomPlanMemory
 
-Written every tick by `rememberPlans()` in `room.controller.ts`. Source and mineral plans persist
+Written every tick by `rememberPlans()` in `room/controller.ts`. Source and mineral plans persist
 across server ticks for spawn planning continuity. `remoteRooms` is the user-facing configuration
 interface for remote mining. `claimTargets` stores expansion targets.
 

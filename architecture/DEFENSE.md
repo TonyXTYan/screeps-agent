@@ -27,7 +27,7 @@
 └──────────────────────────────────────────┘
 ```
 
-## Layer 1: Towers (tower.basics.ts)
+## Layer 1: Towers (tower/basics.ts)
 
 Executed every tick per room in `towerBasics.run(room)`.
 
@@ -90,14 +90,14 @@ Attack always proceeds regardless of energy level.
 | 7   | 300,000   |
 | 8   | Infinity  |
 
-From `wallRampartRepairCap()` in `role.doctor.ts`.
+From `wallRampartRepairCap()` in `role/doctor.ts`.
 
 ### Tower under-siege override
 
 `tryFillTowerUnderSiege(creep)` — when hostiles are present, any creep carrying energy will
 fill the nearest tower before doing other work. This is called from legacy role scripts.
 
-## Layer 2: Defender Creeps (creep.populationControl.ts + role.defender.ts)
+## Layer 2: Defender Creeps (creep/populationControl.ts + role/defender.ts)
 
 ### Spawning
 
@@ -113,7 +113,7 @@ If room has armed hostiles:
      c. Spawn with role = 'defender', attacking = true, homeRoom = room.name
 ```
 
-### Combat behavior (role.defender.ts)
+### Combat behavior (role/defender.ts)
 
 When `attacking`:
 - Find closest armed hostile by range

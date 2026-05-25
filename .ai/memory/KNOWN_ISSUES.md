@@ -60,6 +60,7 @@ This file tracks known follow-up work that future agents should consider before 
 - (Fixed) Worker overflow: `chooseSpawnRequest()` had no hard count cap — workers spawned until total WORK capacity met `desiredWorkerWork()` (up to 12+ at high RCL with many construction sites), producing 12 workers at RCL 6. Fixed by adding `maxWorkerCount` per-RCL cap `[0,2,2,2,3,4,4,4,4]` in `chooseSpawnRequest()`, adding `!pending.some(r => r.archetype === 'worker')` to the emergency-recovery guard, adding `'defender'` to `CreepArchetype` in `types.d.ts`, adding a defender role check in `inferArchetype()` before the `return 'worker'` fallback, and excluding `'defender'` archetype from `workerWork` in `measureCapabilities()`. Previously ATTACK+MOVE defender creeps were misclassified as workers and consumed a worker count slot.
 - Remote path demand can be noisy when long paths are temporarily incomplete (fallback distance is conservative by design).
 - Wall/rampart repair caps (`wallRampartRepairCap` in `role/doctor.ts`) are hardcoded; a future improvement would make them configurable via `room.memory.plan` for rooms that want custom defense budgets.
+- `canPlaceRemoteRoadSite` (`room/remote/roads.ts`) only allows road placement in the direct home room and target remote room. Routes that cross intermediate/corridor rooms will not have roads placed in those intermediate rooms. To fix, the planner would need to track all rooms along `latestPath` and pass them to the eligibility check.
 
 ## Architecture Cleanup
 

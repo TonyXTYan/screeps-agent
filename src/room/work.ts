@@ -2,7 +2,7 @@
 
 import { wallRampartRepairCap } from '../role/doctor';
 import { RoomControllerContext, JobReservations } from './types';
-import { BUILD_RESERVATION_TICKS, REPAIR_RESERVATION_TICKS } from './constants';
+import { BUILD_RESERVATION_TICKS, REPAIR_RESERVATION_TICKS, WORKER_REPAIR_STORAGE_THRESHOLD } from './constants';
 import { storedEnergy } from './energy';
 export { totalStoredTargets, totalStoredResources, firstStoredResource, firstStoredNonEnergyResource, haulerMiningSiteMinPickup } from './storeUtils';
 
@@ -101,7 +101,7 @@ export function constructionPriority(site: ConstructionSite): number {
 export function shouldRepairWithCreeps(context: RoomControllerContext): boolean {
     if (context.constructionSites.length === 0) { return true; }
     if (!context.structures.storage) { return true; }
-    return context.structures.storage.store.getUsedCapacity(RESOURCE_ENERGY) > 5000;
+    return context.structures.storage.store.getUsedCapacity(RESOURCE_ENERGY) > WORKER_REPAIR_STORAGE_THRESHOLD;
 }
 
 export function desiredUpgraderWork(rcl: number): number {

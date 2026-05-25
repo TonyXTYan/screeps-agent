@@ -129,7 +129,8 @@ export function canPlaceRemoteRoadSite(
 
     const structures = pos.lookFor(LOOK_STRUCTURES);
     if (structures.some((s) => s.structureType === STRUCTURE_ROAD)) { return false; }
-    if (structures.some((s) => s.structureType !== STRUCTURE_RAMPART)) { return false; }
+    // Roads can coexist with containers and ramparts; block only other structure types.
+    if (structures.some((s) => s.structureType !== STRUCTURE_RAMPART && s.structureType !== STRUCTURE_CONTAINER)) { return false; }
     if (pos.lookFor(LOOK_CONSTRUCTION_SITES).length > 0) { return false; }
     return true;
 }

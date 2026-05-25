@@ -428,6 +428,8 @@ function opportunisticRemoteHaulerWork(creep: Creep, jobType: CreepJobType): voi
     if (creep.getActiveBodyparts(WORK) <= 0) { return; }
     if (creep.store.getUsedCapacity(RESOURCE_ENERGY) <= 0) { return; }
     if (jobType === 'harvestSource' || jobType === 'mineMineral' || jobType === 'upgrade') { return; }
+    // Don't build/repair while stationary at an energy source — only opportunistic during transit.
+    if (jobType === 'withdrawEnergy' || jobType === 'pickupEnergy') { return; }
 
     const site = creep.pos.findInRange(FIND_MY_CONSTRUCTION_SITES, 3)[0];
     if (site) {

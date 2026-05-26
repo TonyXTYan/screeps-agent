@@ -138,6 +138,51 @@ If you want to turn it off:
 remoteMining.disable('W7N9', 'W8N9')
 ```
 
+## Danger / Invader Events
+
+When an invader, InvaderCore, or hostile controller is spotted in a remote room the bot logs a one-time event and locks out the room for `REMOTE_DANGER_TICKS` (1500 ticks, ~8 min at 3 t/s):
+
+```
+[REMOTE-DANGER] t=71219200 W9N9: invaderCore detected — dangerUntil=71220700 (~1500t)
+[REMOTE-DANGER] t=71219200 W9N9: hostiles=2 detected — dangerUntil=71220700 (~1500t)
+[REMOTE-DANGER] t=71219200 W9N9: hostileControl detected — dangerUntil=71220700 (~1500t)
+```
+
+When the lockout expires and the room is clear again:
+
+```
+[REMOTE-DANGER] t=71220800 W9N9: cleared — resuming harvest
+```
+
+While the lockout is active the `[REMOTE]` status header includes a warning:
+
+```
+[REMOTE] t=71219250 W9N9 (home: W7N9):  ⚠ DANGER until=71220700 (~1450t)
+```
+
+### What happens during danger lockout
+
+- All creeps assigned to the remote room are routed home via `travelRoom`.
+- No new miners, haulers, maintainers, or claimers are spawned for the room.
+- Road/container planning for the room is suspended for that tick.
+- The lockout resets to `now + 1500` every tick the room is visible and hostiles are still present; it only expires once the room is visible *and* clear.
+
+### Manually clearing or extending danger
+
+```js
+// Check current danger state
+remoteMining.status('W7N9', 'W9N9')   // shows dangerUntil in the output
+
+// Force-resume immediately (set dangerUntil to 0)
+Memory.rooms['W7N9'].plan.remoteRooms['W9N9'].dangerUntil = 0
+
+// Extend manually (e.g. 3000 more ticks)
+Memory.rooms['W7N9'].plan.remoteRooms['W9N9'].dangerUntil = Game.time + 3000
+
+// Use the built-in pause helper (default 1500 ticks)
+remoteMining.pause('W7N9', 'W9N9', 3000)
+```
+
 ## Troubleshooting
 
 - `remoteMining is undefined`:

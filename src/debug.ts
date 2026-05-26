@@ -321,7 +321,10 @@ function printRemoteCreepStatus(filterHome?: string, filterRemote?: string): voi
                     a.slice(17, 31).localeCompare(b.slice(17, 31));
             });
 
-            console.log(`[REMOTE] t=${Game.time} ${remoteName} (home: ${room.name}):`);
+            const dangerSuffix = plan.dangerUntil && plan.dangerUntil > Game.time
+                ? `  ⚠ DANGER until=${plan.dangerUntil} (~${plan.dangerUntil - Game.time}t)`
+                : '';
+            console.log(`[REMOTE] t=${Game.time} ${remoteName} (home: ${room.name}):${dangerSuffix}`);
             for (const line of lines) {
                 console.log(`  ${line}`);
             }

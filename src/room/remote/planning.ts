@@ -98,15 +98,22 @@ export function updateRemoteRoomPlans(homeRoom: Room): void {
         const hostileControl = Boolean(visible.controller?.owner && visible.controller.owner.username !== myUsername) ||
             Boolean(visible.controller?.reservation && visible.controller.reservation.username !== myUsername);
         if (hostiles.length > 0 || hostileCore.length > 0 || hostileControl) {
+            const wasAlreadyDanger = remote.skipReason === 'danger';
             remote.lastSeenHostiles = Game.time;
             remote.dangerUntil = Game.time + REMOTE_DANGER_TICKS;
             remote.skipReason = 'danger';
+            if (!wasAlreadyDanger) {
+                const who = hostiles.length > 0 ? `hostiles=${hostiles.length}` :
+                    hostileCore.length > 0 ? `invaderCore` : `hostileControl`;
+                console.log(`[REMOTE-DANGER] t=${Game.time} ${remoteName}: ${who} detected — dangerUntil=${remote.dangerUntil} (~${REMOTE_DANGER_TICKS}t)`);
+            }
             continue;
         }
         const hadAutoDanger = remote.skipReason === 'danger';
         remote.skipReason = undefined;
         if (hadAutoDanger) {
             remote.dangerUntil = undefined;
+            console.log(`[REMOTE-DANGER] t=${Game.time} ${remoteName}: cleared — resuming harvest`);
         }
 
         if (!remote.sources) { remote.sources = {}; }

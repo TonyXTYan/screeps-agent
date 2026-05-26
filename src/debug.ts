@@ -563,6 +563,48 @@ function printMineralStatus(room: Room): void {
         `container=${containerStr}`);
 }
 
+function countAssignedRemoteMaintainers(homeRoom: string, remoteRoom: string): number {
+    let count = 0;
+    for (const name in Game.creeps) {
+        const creep = Game.creeps[name];
+        if (creep.spawning) { continue; }
+        if (ensureArchetype(creep) !== 'remoteMaintainer') { continue; }
+        if (creep.memory.homeRoom !== homeRoom) { continue; }
+        if (creep.memory.remoteRoom !== remoteRoom) { continue; }
+        count++;
+    }
+    return count;
+}
+
+function printRemoteMaintainerTargetStatus(homeRoom: string): void {
+    const remotes = Memory.rooms[homeRoom]?.plan?.remoteRooms ?? {};
+    for (const remoteRoom in remotes) {
+        const plan = remotes[remoteRoom];
+        if (!plan.enabled) { continue; }
+        if (plan.mode !== 'harvest') { continue; }
+
+        const maintenance = plan.maintenance;
+        const currentMaintainers = countAssignedRemoteMaintainers(homeRoom, remoteRoom);
+        const snapshotMaintainers = maintenance?.lastMaintainerCount ?? 0;
+        const targetMaintainers = desiredRemoteMaintainerCount(plan);
+        const stale = maintenance?.stale ? 'yes' : 'no';
+        const needsRefresh = maintenance?.needsRefresh ? 'yes' : 'no';
+        const trigger = maintenance?.lastTrigger ?? 'none';
+        const observedAt = maintenance?.observedAt ?? '-';
+
+        console.log(
+            `[REMOTE-MAINT] t=${Game.time} ${homeRoom}->${remoteRoom}` +
+            ` current=${currentMaintainers}` +
+            ` snapshot=${snapshotMaintainers}` +
+            ` target=${targetMaintainers}` +
+            ` stale=${stale}` +
+            ` needsRefresh=${needsRefresh}` +
+            ` trigger=${trigger}` +
+            ` observedAt=${observedAt}`
+        );
+    }
+}
+
 function printHomeCreepStatus(homeRoom: string): void {
     const room = Game.rooms[homeRoom];
     if (room) { printMineralStatus(room); }
@@ -724,7 +766,10 @@ export function tickAutoDebug(): void {
         }
     } else if (tick === 2) {
         for (const room of ownedRooms()) {
-            if (room.memory.debug_remotes) { printRemoteCreepStatus(room.name); }
+            if (room.memory.debug_remotes) {
+                printRemoteCreepStatus(room.name);
+                printRemoteMaintainerTargetStatus(room.name);
+            }
         }
     }
 }

@@ -361,20 +361,38 @@ function retreatRemoteCreepFromHostiles(creep: Creep): boolean {
 }
 
 function markRemoteDanger(creep: Creep, homeRoom: string): void {
-    // Use the room the creep is currently IN — not its assigned remoteRoom.
-    // A creep passing through a dangerous intermediate room (e.g. a W9N8 maintainer
-    // transiting through W9N9 while an InvaderCore is there) should mark the room
-    // it's standing in, not its destination.
-    const remoteRoom = creep.room.name;
-    const plan = Memory.rooms[homeRoom]?.plan?.remoteRooms?.[remoteRoom];
-    if (!plan) { return; }
+    const currentRoom = creep.room.name;       // room the hostile is actually in
+    const assignedRoom = creep.memory.remoteRoom; // room the creep is destined for
 
-    const wasAlreadyDanger = plan.skipReason === 'danger';
-    plan.lastSeenHostiles = Game.time;
-    plan.dangerUntil = Math.max(plan.dangerUntil ?? 0, Game.time + REMOTE_RETREAT_DANGER_TICKS);
-    plan.skipReason = 'danger';
-    if (!wasAlreadyDanger) {
-        console.log(`[REMOTE-DANGER] t=${Game.time} ${remoteRoom}: creep-retreat detected — dangerUntil=${plan.dangerUntil} (~${REMOTE_RETREAT_DANGER_TICKS}t)`);
+    // Mark the room where the hostile is physically located ('danger').
+    // planning.ts will clear this immediately once that room is visibly safe.
+    const currentPlan = Memory.rooms[homeRoom]?.plan?.remoteRooms?.[currentRoom];
+    if (currentPlan) {
+        const wasAlreadyDanger = currentPlan.skipReason === 'danger' ||
+            (currentPlan.dangerUntil !== undefined && currentPlan.dangerUntil > Game.time);
+        currentPlan.lastSeenHostiles = Game.time;
+        currentPlan.dangerUntil = Math.max(currentPlan.dangerUntil ?? 0, Game.time + REMOTE_RETREAT_DANGER_TICKS);
+        currentPlan.skipReason = 'danger';
+        if (!wasAlreadyDanger) {
+            console.log(`[REMOTE-DANGER] t=${Game.time} ${currentRoom}: creep-retreat detected — dangerUntil=${currentPlan.dangerUntil} (~${REMOTE_RETREAT_DANGER_TICKS}t)`);
+        }
+    }
+
+    // If the creep's assigned remote room differs from the current room, also block
+    // the assigned room with 'transit-danger': its route goes through a hostile area.
+    // planning.ts does NOT eagerly clear 'transit-danger' — the dangerUntil timer
+    // must expire so creeps stop bouncing back through the dangerous transit room.
+    if (assignedRoom && assignedRoom !== currentRoom) {
+        const assignedPlan = Memory.rooms[homeRoom]?.plan?.remoteRooms?.[assignedRoom];
+        if (assignedPlan && assignedPlan.skipReason !== 'danger') { // don't downgrade direct danger
+            const wasAlreadyBlocked = assignedPlan.skipReason === 'transit-danger' ||
+                (assignedPlan.dangerUntil !== undefined && assignedPlan.dangerUntil > Game.time);
+            assignedPlan.dangerUntil = Math.max(assignedPlan.dangerUntil ?? 0, Game.time + REMOTE_RETREAT_DANGER_TICKS);
+            assignedPlan.skipReason = 'transit-danger';
+            if (!wasAlreadyBlocked) {
+                console.log(`[REMOTE-DANGER] t=${Game.time} ${assignedRoom}: transit-blocked via ${currentRoom} — dangerUntil=${assignedPlan.dangerUntil} (~${REMOTE_RETREAT_DANGER_TICKS}t)`);
+            }
+        }
     }
 }
 

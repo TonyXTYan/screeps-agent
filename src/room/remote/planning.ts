@@ -109,11 +109,24 @@ export function updateRemoteRoomPlans(homeRoom: Room): void {
             }
             continue;
         }
-        const hadAutoDanger = remote.skipReason === 'danger';
-        remote.skipReason = undefined;
-        if (hadAutoDanger) {
+        const hadDirectDanger = remote.skipReason === 'danger';
+        const hadTransitDanger = remote.skipReason === 'transit-danger';
+        remote.skipReason = undefined; // always clean up the flag when the room itself is safe
+
+        if (hadDirectDanger) {
+            // Room had hostiles detected by planning scan — clear the timer immediately,
+            // the room is confirmed safe right now.
             remote.dangerUntil = undefined;
             console.log(`[REMOTE-DANGER] t=${Game.time} ${remoteName}: cleared — resuming harvest`);
+        } else if (hadTransitDanger) {
+            // Route to this room was blocked by a dangerous intermediate room.
+            // Don't clear dangerUntil eagerly — let the timer expire so creeps stop
+            // bouncing back through the dangerous transit room.  Log once when it finally
+            // lapses (dangerUntil already past or unset after skipReason was cleared).
+            if (!remote.dangerUntil || remote.dangerUntil <= Game.time) {
+                remote.dangerUntil = undefined;
+                console.log(`[REMOTE-DANGER] t=${Game.time} ${remoteName}: transit-block expired — resuming harvest`);
+            }
         }
 
         if (!remote.sources) { remote.sources = {}; }

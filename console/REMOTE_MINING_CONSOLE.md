@@ -140,18 +140,27 @@ remoteMining.disable('W7N9', 'W8N9')
 
 ## Danger / Invader Events
 
-When an invader, InvaderCore, or hostile controller is spotted in a remote room the bot logs a one-time event and locks out the room for `REMOTE_DANGER_TICKS` (1500 ticks, ~8 min at 3 t/s):
+Two sources can trigger danger events, each with different clearing behaviour:
 
+**Direct danger** — hostiles detected inside the remote room itself (planning scan):
 ```
 [REMOTE-DANGER] t=71219200 W9N9: invaderCore detected — dangerUntil=71220700 (~1500t)
 [REMOTE-DANGER] t=71219200 W9N9: hostiles=2 detected — dangerUntil=71220700 (~1500t)
 [REMOTE-DANGER] t=71219200 W9N9: hostileControl detected — dangerUntil=71220700 (~1500t)
 ```
-
-When the lockout expires and the room is clear again:
-
+Cleared immediately once the room is confirmed safe (visible + no hostiles):
 ```
 [REMOTE-DANGER] t=71220800 W9N9: cleared — resuming harvest
+```
+
+**Transit danger** — a creep assigned to room B encountered hostiles while passing through room A on its way there:
+```
+[REMOTE-DANGER] t=71219200 W9N9: creep-retreat detected — dangerUntil=71220700 (~1500t)
+[REMOTE-DANGER] t=71219200 W9N8: transit-blocked via W9N9 — dangerUntil=71220700 (~1500t)
+```
+W9N9 clears as above (direct danger). W9N8 does **not** clear early even when W9N8 itself is safe — its `dangerUntil` timer must expire first to prevent creeps from bouncing back through the hostile transit room:
+```
+[REMOTE-DANGER] t=71220800 W9N8: transit-block expired — resuming harvest
 ```
 
 While the lockout is active the `[REMOTE]` status header includes a warning:
@@ -165,7 +174,8 @@ While the lockout is active the `[REMOTE]` status header includes a warning:
 - All creeps assigned to the remote room are routed home via `travelRoom`.
 - No new miners, haulers, maintainers, or claimers are spawned for the room.
 - Road/container planning for the room is suspended for that tick.
-- The lockout resets to `now + 1500` every tick the room is visible and hostiles are still present; it only expires once the room is visible *and* clear.
+- Direct danger resets to `now + 1500` every tick hostiles are visible; clears immediately when the room is safe.
+- Transit danger resets to `now + 1500` each time a creep retreats through the transit room; only the timer expiry resumes the room (prevents bounce loops).
 
 ### Manually clearing or extending danger
 

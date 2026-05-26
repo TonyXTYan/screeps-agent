@@ -16,10 +16,11 @@ import {
     countRemoteHaulersForRoom, countActiveRemoteMinersForRoom, countSourceLessRemoteStandbyMiners,
     sourceNeedingStandbyReplacement, projectedRemoteMinerWork, projectedRemoteHaulerCapacity,
     countRemoteMinersForSource, remoteSourceActiveMinerLimit, hasRemoteStandbyMinerForSource,
-    countRemoteHaulersForSource, hasIdleRemoteHauler, remoteNeedsMaintainer, hasRemoteMaintainer,
+    countRemoteHaulersForSource, hasIdleRemoteHauler, remoteNeedsMaintainer, countRemoteMaintainersForRoom,
     remoteSourceHasContainerStation, remoteSourceReplacementHorizon, countFleetForArchetype,
 } from './fleet';
 import { remoteNeedsRouteHealthMaintainer } from './planning';
+import { desiredRemoteMaintainerCount } from './maintenance';
 import { sourceSpawnDeficit, stationaryTargetIdForSource, stationaryTargetIdForMineral, activeMinerCount } from '../source';
 import { mineralReadyToMine } from '../work';
 import { storedEnergy } from '../energy';
@@ -413,10 +414,19 @@ function remoteSpawnRequest(
                 }
             }
 
-            if (remote.maintainRoads !== false && remoteNeedsMaintainer(roomName) &&
-                !hasRemoteMaintainer(homeFleet, roomName) &&
-                !pending.some(r => r.archetype === 'remoteMaintainer' && r.remoteRoom === roomName)) {
-                const request: SpawnRequest = { archetype: 'remoteMaintainer', reason: 'remote maintenance ' + roomName, remoteRoom: roomName, remoteMode: remote.mode };
+            const maintainerTarget = desiredRemoteMaintainerCount(remote);
+            const maintainerCount = countRemoteMaintainersForRoom(homeFleet, roomName);
+            const pendingMaintainerCount = pendingRemoteArchetypeCount(pending, 'remoteMaintainer', roomName);
+            if (remote.maintainRoads !== false &&
+                remoteNeedsMaintainer(roomName) &&
+                maintainerCount + pendingMaintainerCount < maintainerTarget) {
+                const request: SpawnRequest = {
+                    archetype: 'remoteMaintainer',
+                    reason: 'remote maintenance ' + roomName + ' target=' + maintainerTarget +
+                        ' current=' + (maintainerCount + pendingMaintainerCount),
+                    remoteRoom: roomName,
+                    remoteMode: remote.mode
+                };
                 const blockReason = remoteRequestBlockReason(context, homeFleet, remoteRooms, roomName, request);
                 if (!blockReason) { return request; }
                 logRemoteSpawnSkip(context, request, blockReason);
@@ -614,4 +624,3 @@ function logRemoteSpawnSkip(context: RoomControllerContext, request: SpawnReques
         ' stored=' + storedEnergy(context) +
         ' energy=' + context.room.energyAvailable + '/' + context.room.energyCapacityAvailable);
 }
-

@@ -149,7 +149,7 @@ interface MineralPlanMemory {
     staticMining: boolean;
 }
 
-type RemoteMaintenanceTrigger = 'setup' | 'maintainerDeath' | 'memoryAudit';
+type RemoteMaintenanceTrigger = 'setup' | 'maintainerDeath' | 'maintainerTtl500' | 'memoryAudit';
 
 interface RemoteMaintenanceDecayPressure {
     roadCount: number;

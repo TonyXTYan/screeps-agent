@@ -1,5 +1,6 @@
 import { ensureArchetype } from './creep/capabilities';
 import { getRoomStructures } from './room/structures';
+import { desiredRemoteMaintainerCount } from './room/remote/maintenance';
 
 const DEBUG_CREEP_INTERVAL = 10;
 let debugCreepsLastPrintedAt: number | undefined;
@@ -480,7 +481,8 @@ function printRemoteCreepStatus(filterHome?: string, filterRemote?: string): voi
                     ` observedAt=${maintenance.observedAt ?? '-'}` +
                     ` stale=${maintenance.stale ? 'yes' : 'no'}` +
                     ` needsRefresh=${maintenance.needsRefresh ? 'yes' : 'no'}` +
-                    ` maintainers=${maintenance.lastMaintainerCount}`
+                    ` maintainers=${maintenance.lastMaintainerCount}` +
+                    ` target=${desiredRemoteMaintainerCount(plan)}`
                 );
                 console.log(
                     `  decay roads=${maintenance.decay.roadCount}` +

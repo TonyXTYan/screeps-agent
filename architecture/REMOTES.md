@@ -33,7 +33,7 @@ skipReason?: string
 maintenance?: {
   observedAt?: number
   stale: boolean
-  lastTrigger?: 'setup' | 'maintainerDeath' | 'memoryAudit'
+  lastTrigger?: 'setup' | 'maintainerDeath' | 'maintainerTtl500' | 'memoryAudit'
   needsRefresh: boolean
   lastMaintainerCount: number
   decay: {
@@ -68,10 +68,16 @@ sources?: {
 - The telemetry is event-driven, not per-tick:
   - `setup` trigger on `remoteMining.activate(...)`
   - `maintainerDeath` trigger when assigned remoteMaintainer count drops for that remote
+  - `maintainerTtl500` trigger when an assigned remoteMaintainer reaches `TTL == 500`
   - `memoryAudit` trigger during `runMemoryAudit()`
 - Recompute only runs when `needsRefresh=true` and the remote room is visible.
 - If a trigger fires without visibility, previous values are preserved, `stale=true`, and refresh stays pending.
-- This telemetry does not yet compute a combined decay+backlog "overall pressure" score and does not auto-scale maintainer bodies/counts.
+- This telemetry does not auto-scale maintainer bodies, but it does auto-scale maintainer count:
+  - base target `1`
+  - `+1` when decay energy/tick `> 2`
+  - `+1` per `50,000` backlog energy, capped at `+3`
+  - max target `5`
+  - stale/pending telemetry caps target to `1`
 
 ## Remote Creep Archetypes
 

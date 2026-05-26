@@ -76,11 +76,14 @@ export function updateRemoteRoomPlans(homeRoom: Room): void {
         if (remote.maintainRoads === undefined) { remote.maintainRoads = true; }
         if (remote.debugPaths === undefined) { remote.debugPaths = false; }
         const maintenance = ensureRemoteMaintenancePressure(remote);
-        const currentMaintainerCount = countAssignedRemoteMaintainers(homeRoom.name, remoteName);
-        if (currentMaintainerCount < maintenance.lastMaintainerCount) {
+        const maintainerSnapshot = assignedRemoteMaintainerSnapshot(homeRoom.name, remoteName);
+        if (maintainerSnapshot.count < maintenance.lastMaintainerCount) {
             markRemoteMaintenanceRefresh(remote, 'maintainerDeath');
         }
-        snapshotRemoteMaintainerCount(remote, currentMaintainerCount);
+        if (maintainerSnapshot.hasTtl500) {
+            markRemoteMaintenanceRefresh(remote, 'maintainerTtl500');
+        }
+        snapshotRemoteMaintainerCount(remote, maintainerSnapshot.count);
         refreshRemoteMaintenancePressureIfNeeded(remote, remoteName);
         if (remote.mode !== 'harvest') { continue; }
 
@@ -243,8 +246,12 @@ export function updateRemoteRoomPlans(homeRoom: Room): void {
     }
 }
 
-function countAssignedRemoteMaintainers(homeRoomName: string, remoteRoomName: string): number {
+function assignedRemoteMaintainerSnapshot(
+    homeRoomName: string,
+    remoteRoomName: string
+): { count: number; hasTtl500: boolean } {
     let count = 0;
+    let hasTtl500 = false;
     for (const name in Game.creeps) {
         const creep = Game.creeps[name];
         if (creep.spawning) { continue; }
@@ -252,8 +259,11 @@ function countAssignedRemoteMaintainers(homeRoomName: string, remoteRoomName: st
         if (creep.memory.homeRoom !== homeRoomName) { continue; }
         if (creep.memory.remoteRoom !== remoteRoomName) { continue; }
         count++;
+        if (creep.ticksToLive === 500) {
+            hasTtl500 = true;
+        }
     }
-    return count;
+    return { count, hasTtl500 };
 }
 
 export function rememberPlans(context: RoomControllerContext): void {

@@ -402,6 +402,17 @@ export function hasRemoteMaintainer(creeps: Creep[], remoteRoom: string): boolea
     return false;
 }
 
+export function countRemoteMaintainersForRoom(creeps: Creep[], remoteRoom: string): number {
+    let count = 0;
+    for (const creep of creeps) {
+        if (creep.spawning) { continue; }
+        if (ensureArchetype(creep) !== 'remoteMaintainer') { continue; }
+        if (creep.memory.remoteRoom !== remoteRoom) { continue; }
+        count++;
+    }
+    return count;
+}
+
 export function remoteNeedsMaintainer(remoteRoom: string): boolean {
     const room = Game.rooms[remoteRoom];
     if (!room) { return false; }

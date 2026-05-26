@@ -25,6 +25,12 @@ const EMPTY_BACKLOG = (): RemoteMaintenanceBacklogPressure => ({
     totalBacklogEnergy: 0
 });
 
+const REMOTE_MAINTAINER_BASE_COUNT = 1;
+const REMOTE_MAINTAINER_MAX_COUNT = 5;
+const REMOTE_MAINTAINER_DECAY_ENERGY_THRESHOLD = 2;
+const REMOTE_MAINTAINER_BACKLOG_STEP = 50000;
+const REMOTE_MAINTAINER_MAX_BACKLOG_BONUS = 3;
+
 export function createEmptyRemoteMaintenancePressure(): RemoteMaintenancePressure {
     return {
         stale: true,
@@ -47,6 +53,21 @@ export function ensureRemoteMaintenancePressure(remotePlan: RemoteRoomPlan): Rem
     }
     remotePlan.maintenance = createEmptyRemoteMaintenancePressure();
     return remotePlan.maintenance;
+}
+
+export function desiredRemoteMaintainerCount(remotePlan: RemoteRoomPlan): number {
+    const maintenance = ensureRemoteMaintenancePressure(remotePlan);
+    if (maintenance.stale || maintenance.needsRefresh) { return REMOTE_MAINTAINER_BASE_COUNT; }
+
+    let target = REMOTE_MAINTAINER_BASE_COUNT;
+    if (maintenance.decay.totalDecayEnergyPerTick > REMOTE_MAINTAINER_DECAY_ENERGY_THRESHOLD) {
+        target++;
+    }
+    target += Math.min(
+        REMOTE_MAINTAINER_MAX_BACKLOG_BONUS,
+        Math.floor(maintenance.backlog.totalBacklogEnergy / REMOTE_MAINTAINER_BACKLOG_STEP)
+    );
+    return Math.max(REMOTE_MAINTAINER_BASE_COUNT, Math.min(REMOTE_MAINTAINER_MAX_COUNT, target));
 }
 
 export function markRemoteMaintenanceRefresh(remotePlan: RemoteRoomPlan, trigger: RemoteMaintenanceTrigger): void {

@@ -19,6 +19,7 @@ import { findHostiles, isHostile } from './hostileUtils';
 import { bodyCost } from './creep/capabilities';
 import { BUILD_COMMIT } from './env';
 import { acquireRenewSpawn, nearestSpawn } from './spawn/renewal';
+import { wrapWithProfiler } from './profiler';
 
 const DOCTOR_EMERGENCY_HITS_RATIO = 0.35;
 const DOCTOR_THREAT_RADIUS = 4;
@@ -83,6 +84,10 @@ function detectCodeChange(): boolean {
 }
 
 export function loop(): void {
+    wrapWithProfiler(loopBody);
+}
+
+function loopBody(): void {
     if (debugPathsLastScannedAt !== undefined && Game.time < debugPathsLastScannedAt) {
         debugPathsLastScannedAt = undefined;
     }

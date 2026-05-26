@@ -1,5 +1,6 @@
 import typescript from '@rollup/plugin-typescript';
 import resolve from '@rollup/plugin-node-resolve';
+import commonjs from '@rollup/plugin-commonjs';
 import { execSync } from 'child_process';
 
 let buildCommit = 'unknown';
@@ -18,5 +19,5 @@ export default {
     sourcemap: true,
     banner: `var __BUILD_COMMIT__ = "${buildCommit}";`,
   },
-  plugins: [resolve(), typescript()],
+  plugins: [resolve(), commonjs(), typescript()],
 };

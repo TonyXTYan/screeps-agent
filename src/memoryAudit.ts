@@ -17,6 +17,7 @@ export function runFullAudit(): number {
     }
 
     fixed += cleanupOrphanedRoomMemory(activeRooms);
+    fixed += migrateLegacyDefenseRoles();
     fixed += cleanupStaleRemotePlans(activeRooms);
     fixed += fixDuplicateSourceAssignments(activeRooms);
     fixed += fixOrphanedSourceReferences(activeRooms);
@@ -31,6 +32,33 @@ export function runFullAudit(): number {
     }
 
     return fixed;
+}
+
+function migrateLegacyDefenseRoles(): number {
+    let changed = 0;
+    for (const name in Memory.creeps) {
+        const memory = Memory.creeps[name];
+        if (!memory) { continue; }
+
+        if (memory.role === 'defender' || memory.archetype === 'defender') {
+            memory.role = 'patrol';
+            memory.archetype = 'patrol';
+            memory.attacking = undefined;
+            memory.rallySpawnId = undefined;
+            changed++;
+            continue;
+        }
+        if (memory.role === 'doctor' || memory.archetype === 'doctor') {
+            memory.role = 'builder';
+            memory.archetype = 'worker';
+            changed++;
+        }
+    }
+
+    if (changed > 0) {
+        console.log(`[memoryAudit] Migrated legacy defense roles: ${changed}`);
+    }
+    return changed;
 }
 
 function refreshRemoteMaintenanceTelemetry(activeRooms: Set<string>): void {

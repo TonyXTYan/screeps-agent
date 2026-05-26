@@ -10,8 +10,8 @@ Memory
 ├── lastBuildCommit?: string         — Git hash of last deployed build (triggers audit)
 ├── creeps: {
 │     [name: string]: {
-│       role?: string                — Legacy role label (harvester/builder/upgrader/doctor/defender/manual)
-│       archetype?: CreepArchetype   — Capability archetype (worker/miner/hauler/doctor/claimer/remote*)
+│       role?: string                — Runtime role label (harvester/builder/upgrader/manual/patrol + legacy compatibility values)
+│       archetype?: CreepArchetype   — Capability archetype (worker/miner/hauler/patrol/claimer/remote* + legacy compatibility values)
 │       homeRoom?: string            — Room this creep belongs to
 │
 │       // Job system (strategic path)
@@ -72,7 +72,10 @@ Memory
 │       upgrading?: boolean
 │       attacking?: boolean
 │       stationaryWorking?: boolean
-│       rallySpawnId?: string         — Defender rally point
+│       rallySpawnId?: string         — Legacy defender rally point (migration compatibility)
+│       patrolRoom?: string           — Current patrol destination room
+│       patrolRotateAt?: number       — Tick to rotate patrol target
+│       patrolRouteIndex?: number     — Deterministic patrol route slot
 │       harvestTargetSourceIndex?: number
 │       harvestTargetSourceId?: string
 │     }
@@ -124,18 +127,19 @@ built `containerId`, pending `containerSiteId`, cached path/distance fields, dem
 ## CreepMemory (types.d.ts)
 
 Key interface `CreepMemory` extends Screeps default with all the fields above. Type union `CreepJobType`
-enumerates all 19 job types. Type union `CreepArchetype` enumerates all 11 archetypes.
+enumerates all 19 job types. Type union `CreepArchetype` includes strategic archetypes plus legacy compatibility values.
 
 ### Archetype assignment
 
-`ensureArchetype(creep)` in `creep/capabilities.ts` infers from body parts:
+`ensureArchetype(creep)` in `creep/capabilities.ts` infers from role/body parts:
+- Has role `patrol` → `patrol`
+- Has role `defender` → `patrol` (migration compatibility)
 - Has CLAIM → `claimer`
 - Has HEAL → `doctor`
 - Has WORK + CARRY + manual role → `remoteMaintainer`
 - Has WORK + CARRY + harvester/builder/upgrader role → `worker`
 - Has WORK + CARRY → `worker`
 - Has CARRY only → `hauler`
-- Has role `defender` with combat body → `defender`
 - Fallback → `worker`
 
 Miners, remote roles, and mineral miners must have `archetype` set explicitly at spawn time.
@@ -165,6 +169,7 @@ Runs on first tick after deploy (build commit hash changed). Auto-fixes:
 
 | Issue | Fix |
 |-------|-----|
+| Legacy defense migration | Convert `defender -> patrol`, `doctor -> worker/builder` memory roles |
 | Orphaned room memory | Delete `Memory.rooms` entries not owned and not referenced |
 | Stale remote plans | Clear expired `dangerUntil`, stale `skipReason`, old `lastSeenHostiles`, deleted source IDs |
 | Duplicate source assignments | Keep miner with most WORK (then best TTL), unassign others |

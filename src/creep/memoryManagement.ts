@@ -1,6 +1,8 @@
 import { ensureArchetype } from './capabilities';
 
 export function run(): void {
+    migrateLegacyDefenseMemoryEntries();
+
     const spawningNames = creepsCurrentlySpawning();
     for (const name in Memory.creeps) {
         if (!Game.creeps[name] && !spawningNames[name]) {
@@ -54,6 +56,26 @@ function restoreRemoteAssignmentIfSafe(creep: Creep, archetype: CreepArchetype):
     console.log('creep.MemoryManagement: restored remote assignment for ' + creep.name + ' -> ' + soleEnabledRemote);
 }
 
+function migrateLegacyDefenseMemoryEntries(): void {
+    for (const name in Memory.creeps) {
+        const memory = Memory.creeps[name];
+        if (!memory) { continue; }
+
+        if (memory.role === 'defender' || memory.archetype === 'defender') {
+            memory.role = 'patrol';
+            memory.archetype = 'patrol';
+            memory.attacking = undefined;
+            memory.rallySpawnId = undefined;
+            continue;
+        }
+
+        if (memory.role === 'doctor' || memory.archetype === 'doctor') {
+            memory.role = 'builder';
+            memory.archetype = 'worker';
+        }
+    }
+}
+
 function isRemoteArchetype(archetype: CreepArchetype): boolean {
     return archetype === 'remoteMiner' ||
         archetype === 'remoteHauler' ||
@@ -63,7 +85,8 @@ function isRemoteArchetype(archetype: CreepArchetype): boolean {
 }
 
 function fallbackRoleForArchetype(archetype: CreepArchetype): string {
-    if (archetype === 'doctor') { return 'doctor'; }
+    if (archetype === 'patrol') { return 'patrol'; }
+    if (archetype === 'doctor') { return 'builder'; }
     if (archetype === 'miner' || archetype === 'hauler' || archetype === 'mineralMiner' || archetype === 'remoteHauler' || archetype === 'remoteMiner') { return 'harvester'; }
     if (archetype === 'remoteMaintainer' || archetype === 'remoteScout') { return 'manual'; }
     if (archetype === 'claimer') { return 'manual'; }

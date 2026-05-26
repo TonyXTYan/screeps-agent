@@ -19,6 +19,7 @@ type CreepArchetype =
     'worker' |
     'miner' |
     'hauler' |
+    'patrol' |
     'doctor' |
     'claimer' |
     'defender' |
@@ -196,9 +197,11 @@ interface RemoteRoomPlan {
     debugPaths?: boolean;
     debugCreeps?: boolean;
     dangerUntil?: number;
+    manualPauseUntil?: number;
     lastScouted?: number;
     lastSeenHostiles?: number;
     skipReason?: string;
+    lastPatrolDangerNotifyAt?: number;
     maintenance?: RemoteMaintenancePressure;
     sources?: { [sourceId: string]: RemoteSourcePlan };
 }
@@ -280,6 +283,9 @@ interface CreepMemory {
     trafficYieldY?: number;
     trafficYieldRoom?: string;
     trafficYieldUntil?: number;
+    patrolRoom?: string;
+    patrolRotateAt?: number;
+    patrolRouteIndex?: number;
     standbyParkStuckTicks?: number;
     standbyParkLastX?: number;
     standbyParkLastY?: number;

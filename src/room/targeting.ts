@@ -92,7 +92,8 @@ export function isEmergencyHealTarget(target: Creep): boolean {
 }
 
 export function legacyRoleForArchetype(archetype: CreepArchetype): string {
-    if (archetype === 'doctor') { return 'doctor'; }
+    if (archetype === 'patrol') { return 'patrol'; }
+    if (archetype === 'doctor') { return 'builder'; }
     if (archetype === 'hauler' || archetype === 'miner' || archetype === 'mineralMiner' || archetype === 'remoteHauler' || archetype === 'remoteMiner') { return 'harvester'; }
     if (archetype === 'remoteMaintainer' || archetype === 'remoteScout') { return 'manual'; }
     if (archetype === 'claimer') { return 'manual'; }

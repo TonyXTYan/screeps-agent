@@ -2,7 +2,6 @@ import { ensureArchetype, getCreepCapabilities } from '../creep/capabilities';
 import { clearJob } from '../creep/jobRunner';
 import { getRoomStructures } from './structures';
 import { repairStructureFilter } from '../role/doctor';
-import { findHostiles } from '../hostileUtils';
 import { closest, closestReachable, bestHealTarget, worstHits } from './targeting';
 import { setJob, setTravelJob, setResourceJob, rememberPrimaryJob } from './jobMemory';
 import {
@@ -149,7 +148,8 @@ export function assignRemoteCreep(creep: Creep): boolean {
         setJob(creep, 'idle', creep.room.storage ?? creep.room.find(FIND_MY_SPAWNS)[0]);
         return true;
     }
-    if (configuredRemotePlan?.dangerUntil && configuredRemotePlan.dangerUntil > Game.time) {
+    if (configuredRemotePlan?.manualPauseUntil && configuredRemotePlan.manualPauseUntil > Game.time) {
+        clearJob(creep);
         if (creep.room.name !== homeRoom) {
             setTravelJob(creep, homeRoom);
             return true;
@@ -191,11 +191,6 @@ export function assignRemoteCreep(creep: Creep): boolean {
         }
         if (remoteRoomCrowdedForScout(creep, homeRoom, remoteRoom)) {
             return assignOverflowRemoteScout(creep, homeRoom, remoteRoom);
-        }
-
-        if (findHostiles(creep.room).length > 0 && creep.room.name !== homeRoom) {
-            setTravelJob(creep, homeRoom);
-            return true;
         }
 
         if (creep.room.name !== remoteRoom) {
@@ -599,7 +594,7 @@ function reportPassiveInfrastructure(context: RoomControllerContext): void {
 function assignJobs(context: RoomControllerContext): void {
     const reservations = createReservations(context);
     const creeps = context.creeps
-        .filter((creep) => !creep.spawning && creep.memory.role !== 'defender')
+        .filter((creep) => !creep.spawning && creep.memory.role !== 'patrol' && creep.memory.role !== 'defender')
         .filter((creep) => !isDedicatedRemoteCreep(creep, context.room.name))
         .sort((a, b) => assignmentPriority(ensureArchetype(a)) - assignmentPriority(ensureArchetype(b)));
 

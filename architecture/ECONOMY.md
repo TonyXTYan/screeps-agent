@@ -32,7 +32,7 @@ runSpawnPlanner()   → spawn creeps to fill measured deficits
 | `miner` | WORK-heavy, static (5W1C1M) or mobile (5W1C3M), scales down with energy |
 | `hauler` | CARRY+MOVE triples (2C1M per 150 energy), optional trailing WORK when budget allows; capped at 20 CARRY (1000 carry capacity) |
 | `worker` | WORK×workRatio + CARRY + MOVE×ceil((workRatio+1)/2) per unit; MOVE count gives full road speed. workRatio 1→[W,C,M], 2→[W,W,C,M,M], 3→[W,W,W,C,M,M]; capped at 20 CARRY (1000 carry capacity) |
-| `doctor` | Fixed templates with HEAL; WORK+CARRY for energy handling |
+| `patrol` | Combat interceptor template (`2 TOUGH, 6 ATTACK, 7 MOVE, 1 HEAL`) with scaled fallbacks |
 | `mineralMiner` | Same body as static miner, assigned to mineral |
 | `remoteMiner` | Static (container) or mobile variant, WORK-heavy |
 | `remoteHauler` | CARRY+MOVE triples + WORK+MOVE (unless minimal [CARRY, MOVE] fallback) |
@@ -41,11 +41,11 @@ runSpawnPlanner()   → spawn creeps to fill measured deficits
 | `claimer` | CLAIM+MOVE pairs scaled to budget; min 1 part, reserve mode min 2 |
 
 Body planning lives in `planBodyForArchetype()` in `creep/capabilities.ts`. Legacy body planning
-(`balanceSpec()` in `creep/roleBalance.ts`) is used only for emergency defenders.
+(`balanceSpec()` in `creep/roleBalance.ts`) is retained for legacy compatibility modules.
 
 **Body budget cap:** All archetypes are planned against `max(BODY_MIN_BUDGET, floor(energyCapacityAvailable × BODY_BUDGET_RATIO))` rather than the raw `energyCapacityAvailable`. With `BODY_BUDGET_RATIO = 0.5` and `BODY_MIN_BUDGET = 300`, bodies target at most 50% of room energy capacity, so creeps can spawn with partial extension fill. Demand calculations (`desiredHaulerCapacity`, `desiredWorkerWork`) use the same capped budget so population counts stay consistent with actual body sizes. At RCL 8 the 50-part body limit typically binds first, so those bodies are unaffected.
 
-**Carry capacity cap:** Dynamic body builders (`hauler`, `remoteHauler`, `worker`) are hard-capped at `MAX_CARRY_CAPACITY = 1000` units (20 CARRY parts). This applies regardless of energy budget or room RCL. Fixed-template archetypes (miners, remoteMaintainer, doctor, etc.) are unaffected as their CARRY counts are already well below 20.
+**Carry capacity cap:** Dynamic body builders (`hauler`, `remoteHauler`, `worker`) are hard-capped at `MAX_CARRY_CAPACITY = 1000` units (20 CARRY parts). This applies regardless of energy budget or room RCL. Fixed-template archetypes (miners, remoteMaintainer, patrol, etc.) are unaffected as their CARRY counts are already low.
 
 ## Spawn Planning Priority
 
@@ -55,7 +55,7 @@ Body planning lives in `planBodyForArchetype()` in `creep/capabilities.ts`. Lega
 1. Emergency worker          → if no creeps exist (recovery)
 2. Local source miner        → per uncovered source
 3. Standby local miner       → 1 per room (renewable substitute)
-4. Doctor                    → if no heal capability & energy ≥ 450
+4. Patrol                    → `RCL >= 6`, `ceil(enabledRemotes / 2) + visibleArmedHostiles`
 5. Hauler                    → minimum 2 at RCL4+ with storage
 6. Hauler capacity           → capacity deficit
 7. Worker work capacity      → work deficit
@@ -181,8 +181,7 @@ Reservations track:
   - upgraderWork: total                  for controller upgrade
 ```
 
-Creeps are sorted by archetype priority (miner=1, mineralMiner=2, hauler=3, doctor=4, worker=5)
-and assigned jobs in order, deducting from reservations to avoid pile-ups.
+Creeps are sorted by economic archetype priority (miner=1, mineralMiner=2, hauler=3, worker=5), then assigned jobs in order while deducting reservations to avoid pile-ups. Patrol creeps are excluded from economic assignment.
 
 ## Links
 

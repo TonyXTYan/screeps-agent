@@ -1,12 +1,10 @@
 import * as roleHarvester from './role/harvester';
 import * as roleUpgrader from './role/upgrader';
 import * as roleBuilder from './role/builder';
-import * as roleDoctor from './role/doctor';
-import * as roleDefender from './role/defender';
+import * as rolePatrol from './role/patrol';
 import * as roleManual from './role/manual';
 import * as creepMemoryManagement from './creep/memoryManagement';
 import * as creepJobRunner from './creep/jobRunner';
-import * as populationControl from './creep/populationControl';
 import * as roomController from './room/controller';
 import * as towerBasics from './tower/basics';
 import * as memoryAudit from './memoryAudit';
@@ -20,6 +18,7 @@ import { bodyCost } from './creep/capabilities';
 import { BUILD_COMMIT } from './env';
 import { acquireRenewSpawn, nearestSpawn } from './spawn/renewal';
 import { wrapWithProfiler } from './profiler';
+import { REMOTE_HOSTILE_EVADE_DISTANCE } from './room/constants';
 
 const DOCTOR_EMERGENCY_HITS_RATIO = 0.35;
 const DOCTOR_THREAT_RADIUS = 4;
@@ -30,7 +29,6 @@ const HOME_RENEW_CRITICAL_TTL = 120;
 const STANDBY_MINER_PARK_MIN_RANGE = 2;
 const STANDBY_MINER_PARK_MAX_RANGE = 4;
 const DEBUG_PATH_SCAN_INTERVAL = 25;
-const REMOTE_RETREAT_DANGER_TICKS = 1500;
 const DEFAULT_ROLE_PATH_STYLE = {
     fill: 'transparent',
     lineStyle: 'dashed' as const,
@@ -47,6 +45,7 @@ const ROLE_PATH_COLORS: { [role: string]: string } = {
     hauler: '#38bdf8',
     worker: '#22c55e',
     doctor: '#ef4444',
+    patrol: '#f97316',
     builder: '#22c55e',
     harvester: '#eab308',
     upgrader: '#60a5fa',
@@ -112,7 +111,6 @@ function loopBody(): void {
 
     const controlledRooms = debug.ownedRooms();
     for (const room of controlledRooms) {
-        populationControl.checkDefenders(room); // runs before roomController to win the spawn slot
         roomController.run(room);
         towerBasics.run(room);
     }
@@ -124,9 +122,7 @@ function loopBody(): void {
         if (creep.memory.remoteRoom) { roomController.assignRemoteCreep(creep); }
         tryRenewStandbyMiner(creep);
 
-        // Defenders must run before the job runner — they get misclassified as 'worker'
-        // archetype and would receive economic jobs that bypass their combat behavior.
-        if (creep.memory.role === 'defender') { roleDefender.run(creep); continue; }
+        if (creep.memory.role === 'patrol') { rolePatrol.run(creep); continue; }
 
         if (fleeFromHostiles(creep)) { continue; }
         if (tryRenewHomeCreep(creep)) { continue; }
@@ -135,7 +131,6 @@ function loopBody(): void {
         if (creep.memory.role === 'builder') { roleBuilder.run(creep); }
         if (creep.memory.role === 'harvester') { roleHarvester.run(creep); }
         if (creep.memory.role === 'upgrader') { roleUpgrader.run(creep); }
-        if (creep.memory.role === 'doctor') { roleDoctor.run(creep); }
         if (creep.memory.role === 'manual') { roleManual.run(creep); }
     }
 
@@ -188,8 +183,8 @@ function installConsoleHelpers(): void {
         pause(homeRoom: string, remoteRoom: string, ticks: number = 1500): string {
             const plan = Memory.rooms[homeRoom]?.plan?.remoteRooms?.[remoteRoom];
             if (!plan) { return `remoteMining: missing ${homeRoom} -> ${remoteRoom}`; }
-            plan.dangerUntil = Game.time + Math.max(1, ticks);
-            return `remoteMining: paused ${homeRoom} -> ${remoteRoom} until ${plan.dangerUntil}`;
+            plan.manualPauseUntil = Game.time + Math.max(1, ticks);
+            return `remoteMining: paused ${homeRoom} -> ${remoteRoom} until ${plan.manualPauseUntil}`;
         },
         disable(homeRoom: string, remoteRoom: string): string {
             const plan = Memory.rooms[homeRoom]?.plan?.remoteRooms?.[remoteRoom];
@@ -291,12 +286,11 @@ function mergeRolePathStyle(opts: MoveToOpts | undefined, color: string): MoveTo
 }
 
 function fleeFromHostiles(creep: Creep): boolean {
+    if (creep.memory.role === 'patrol') { return false; }
     const hostiles = findHostiles(creep.room);
     if (hostiles.length === 0) { return false; }
-    const nearbyHostile = hostiles.find(h => creep.pos.getRangeTo(h) <= 5);
+    const nearbyHostile = hostiles.find(h => creep.pos.getRangeTo(h) <= REMOTE_HOSTILE_EVADE_DISTANCE);
     if (!nearbyHostile) { return false; }
-
-    if (retreatRemoteCreepFromHostiles(creep)) { return true; }
 
     const emergencyTarget = emergencyHealTarget(creep);
     if (emergencyTarget) {
@@ -314,7 +308,7 @@ function fleeFromHostiles(creep: Creep): boolean {
     creep.say('😱');
     const result = PathFinder.search(
         creep.pos,
-        hostiles.map(h => ({ pos: h.pos, range: 5 })),
+        hostiles.map(h => ({ pos: h.pos, range: REMOTE_HOSTILE_EVADE_DISTANCE })),
         { flee: true, maxRooms: 1 }
     );
     if (result.path.length > 0) {
@@ -325,75 +319,6 @@ function fleeFromHostiles(creep: Creep): boolean {
         nudgeFromEdge(creep);
     }
     return true;
-}
-
-function retreatRemoteCreepFromHostiles(creep: Creep): boolean {
-    const homeRoom = creep.memory.homeRoom;
-    if (!homeRoom || creep.room.name === homeRoom) { return false; }
-
-    markRemoteDanger(creep, homeRoom);
-    emergencyHealWhileRetreating(creep);
-    creep.say('🏠');
-
-    const exitDir = Game.map.findExit(creep.room, homeRoom);
-    if (typeof exitDir === 'number' && exitDir >= TOP && exitDir <= LEFT) {
-        const closestExit = creep.pos.findClosestByPath(exitDir as ExitConstant, {
-            ignoreCreeps: true
-        });
-        if (closestExit) {
-            const exitCode = creep.moveTo(closestExit, {
-                ignoreCreeps: true,
-                maxRooms: 1,
-                reusePath: 0,
-                visualizePathStyle: { stroke: '#ff4d4d' }
-            });
-            if (exitCode !== ERR_NO_PATH) { return true; }
-        }
-    }
-
-    creep.moveTo(new RoomPosition(25, 25, homeRoom), {
-        ignoreCreeps: true,
-        maxRooms: 8,
-        reusePath: 0,
-        visualizePathStyle: { stroke: '#ff4d4d' }
-    });
-    return true;
-}
-
-function markRemoteDanger(creep: Creep, homeRoom: string): void {
-    const currentRoom = creep.room.name;       // room the hostile is actually in
-    const assignedRoom = creep.memory.remoteRoom; // room the creep is destined for
-
-    // Mark the room where the hostile is physically located ('danger').
-    // planning.ts will clear this immediately once that room is visibly safe.
-    const currentPlan = Memory.rooms[homeRoom]?.plan?.remoteRooms?.[currentRoom];
-    if (currentPlan) {
-        const wasAlreadyDanger = currentPlan.skipReason === 'danger' ||
-            (currentPlan.dangerUntil !== undefined && currentPlan.dangerUntil > Game.time);
-        currentPlan.lastSeenHostiles = Game.time;
-        currentPlan.dangerUntil = Math.max(currentPlan.dangerUntil ?? 0, Game.time + REMOTE_RETREAT_DANGER_TICKS);
-        currentPlan.skipReason = 'danger';
-        if (!wasAlreadyDanger) {
-            console.log(`[REMOTE-DANGER] t=${Game.time} ${currentRoom}: creep-retreat detected — dangerUntil=${currentPlan.dangerUntil} (~${REMOTE_RETREAT_DANGER_TICKS}t)`);
-        }
-    }
-
-    // If the creep's assigned remote room differs from the current room, also block
-    // the assigned room with 'transit-danger': its route goes through a hostile area.
-    // planning.ts does NOT eagerly clear 'transit-danger' — the dangerUntil timer
-    // must expire so creeps stop bouncing back through the dangerous transit room.
-    if (assignedRoom && assignedRoom !== currentRoom) {
-        const assignedPlan = Memory.rooms[homeRoom]?.plan?.remoteRooms?.[assignedRoom];
-        if (assignedPlan && assignedPlan.skipReason !== 'danger') { // don't downgrade direct danger
-            const wasAlreadyBlocked = assignedPlan.skipReason === 'transit-danger' ||
-                (assignedPlan.dangerUntil !== undefined && assignedPlan.dangerUntil > Game.time);
-            assignedPlan.dangerUntil = Math.max(assignedPlan.dangerUntil ?? 0, Game.time + REMOTE_RETREAT_DANGER_TICKS);
-            assignedPlan.skipReason = 'transit-danger';
-            if (!wasAlreadyBlocked) {
-                console.log(`[REMOTE-DANGER] t=${Game.time} ${assignedRoom}: transit-blocked via ${currentRoom} — dangerUntil=${assignedPlan.dangerUntil} (~${REMOTE_RETREAT_DANGER_TICKS}t)`);
-            }
-        }
-    }
 }
 
 function emergencyHealTarget(creep: Creep): Creep | null {
@@ -497,7 +422,6 @@ function nudgeFromEdge(creep: Creep): void {
 
 function tryRenewHomeCreep(creep: Creep): boolean {
     if (creep.memory.remoteRoom) { return false; }
-    if (creep.memory.role === 'defender') { return false; }
 
     const ttl = creep.ticksToLive;
     if (!ttl) { return false; }

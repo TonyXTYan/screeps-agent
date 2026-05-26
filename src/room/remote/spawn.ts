@@ -19,6 +19,7 @@ import {
     countRemoteHaulersForSource, hasIdleRemoteHauler, remoteNeedsMaintainer, countRemoteMaintainersForRoom,
     remoteSourceHasContainerStation, remoteSourceReplacementHorizon, countFleetForArchetype,
 } from './fleet';
+import { findHostiles } from '../../hostileUtils';
 import { remoteNeedsRouteHealthMaintainer } from './planning';
 import { desiredRemoteMaintainerCount } from './maintenance';
 import { sourceSpawnDeficit, stationaryTargetIdForSource, stationaryTargetIdForMineral, activeMinerCount } from '../source';
@@ -226,9 +227,9 @@ function chooseSpawnRequest(context: RoomControllerContext, pending: PendingSpaw
         };
     }
 
-    if (capacities.heal === 0 && !pending.some(r => r.archetype === 'doctor') &&
-        context.room.energyCapacityAvailable >= 450) {
-        return { archetype: 'doctor', reason: 'no heal-capable creep' };
+    const patrolRequest = patrolSpawnRequest(context, pending);
+    if (patrolRequest) {
+        return patrolRequest;
     }
 
     const pendingHaulerCount = pendingArchetypeCount(pending, 'hauler');
@@ -290,7 +291,7 @@ function remoteSpawnRequest(
     for (const roomName in remoteRooms) {
         const remote = remoteRooms[roomName];
         if (!remote.enabled) { continue; }
-        if (remote.dangerUntil && remote.dangerUntil > Game.time) { continue; }
+        if (remote.manualPauseUntil && remote.manualPauseUntil > Game.time) { continue; }
         if (remote.mode === 'harvest' && (!remote.sources || Object.keys(remote.sources).length === 0)) {
             if (countRemoteScouts(context.room.name, roomName) === 0 &&
                 !pending.some(r => r.archetype === 'remoteScout' && r.remoteRoom === roomName) &&
@@ -455,6 +456,42 @@ function remoteSpawnRequest(
     }
 
     return null;
+}
+
+function patrolSpawnRequest(
+    context: RoomControllerContext,
+    pending: PendingSpawnRequest[]
+): SpawnRequest | null {
+    const rcl = context.room.controller?.level ?? 0;
+    if (rcl < 6) { return null; }
+
+    const remoteRooms = context.room.memory.plan?.remoteRooms ?? {};
+    const enabledRemoteNames: string[] = [];
+    for (const roomName in remoteRooms) {
+        if (remoteRooms[roomName].enabled) {
+            enabledRemoteNames.push(roomName);
+        }
+    }
+    if (enabledRemoteNames.length === 0) { return null; }
+
+    let visibleArmedHostiles = 0;
+    for (const roomName of enabledRemoteNames) {
+        const room = Game.rooms[roomName];
+        if (!room) { continue; }
+        visibleArmedHostiles += findHostiles(room).length;
+    }
+
+    const baselinePatrol = Math.ceil(enabledRemoteNames.length / 2);
+    const targetPatrol = baselinePatrol + visibleArmedHostiles;
+    const homeFleet = creepsForHomeRoom(context.room.name);
+    const patrolCount = countFleetForArchetype(homeFleet, 'patrol') + pendingArchetypeCount(pending, 'patrol');
+    if (patrolCount >= targetPatrol) { return null; }
+
+    return {
+        archetype: 'patrol',
+        reason: 'patrol target ' + patrolCount + '/' + targetPatrol +
+            ' baseline=' + baselinePatrol + ' hostiles=' + visibleArmedHostiles
+    };
 }
 
 function remoteRequestBlockReason(

@@ -19,6 +19,13 @@ export interface CreepCapabilities {
 export const BODY_BUDGET_RATIO = 0.5;
 export const BODY_MIN_BUDGET = 300;
 export const MAX_CARRY_CAPACITY = 1000;
+const PATROL_BODY_TEMPLATES: BodyPartConstant[][] = [
+    [TOUGH, TOUGH, ATTACK, ATTACK, ATTACK, ATTACK, ATTACK, ATTACK, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, HEAL],
+    [TOUGH, TOUGH, ATTACK, ATTACK, ATTACK, ATTACK, MOVE, MOVE, MOVE, MOVE, MOVE, HEAL],
+    [TOUGH, ATTACK, ATTACK, ATTACK, MOVE, MOVE, MOVE, MOVE, HEAL],
+    [TOUGH, ATTACK, ATTACK, MOVE, MOVE, MOVE],
+    [TOUGH, ATTACK, MOVE]
+];
 
 const BODY_PART_COST: { [part in BodyPartConstant]: number } = {
     [MOVE]: 50,
@@ -89,6 +96,8 @@ export function getBodyCapabilities(body: BodyPartConstant[]): CreepCapabilities
 
 export function inferArchetype(creep: Creep): CreepArchetype {
     if (creep.memory.archetype) { return creep.memory.archetype; }
+    if (creep.memory.role === 'patrol') { return 'patrol'; }
+    if (creep.memory.role === 'defender') { return 'patrol'; }
 
     const capabilities = getCreepCapabilities(creep);
     if (capabilities.claim > 0) { return 'claimer'; }
@@ -100,7 +109,6 @@ export function inferArchetype(creep: Creep): CreepArchetype {
     if (capabilities.work > 0 && creep.memory.role === 'doctor') { return 'doctor'; }
     if (capabilities.work > 0 && capabilities.carry > 0) { return 'worker'; }
     if (capabilities.carry > 0) { return 'hauler'; }
-    if (creep.memory.role === 'defender') { return 'defender'; }
     return 'worker';
 }
 
@@ -207,6 +215,10 @@ export function planBodyForArchetype(
             [WORK, WORK, CARRY, CARRY, MOVE, MOVE, HEAL, MOVE],
             [WORK, CARRY, MOVE, HEAL, MOVE]
         ], energyBudget);
+    }
+
+    if (archetype === 'patrol') {
+        return selectLargestWithinBudget(PATROL_BODY_TEMPLATES, energyBudget);
     }
 
     if (archetype === 'claimer') {

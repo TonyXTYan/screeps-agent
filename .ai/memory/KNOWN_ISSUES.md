@@ -16,13 +16,13 @@ This file tracks known follow-up work that future agents should consider before 
 
 - Local miners now include one standby substitute, but active source miner scaling is still mostly count-based and does not explicitly add extra active miners when per-source WORK is under target.
 - Legacy role scripts (`role/harvester.ts`, `role/builder.ts`) still `delete Memory.creeps[creep.name]` when idle. This can destroy remote-creep memory (archetype, remoteRoom, sourceId, homeRoom) if a remote creep falls through to legacy fallback and happens to be idle. Remove or add a guard.
-- Remote danger detection is visibility-driven only; unseen hostiles between scout passes can still cause delayed pauses. Danger events are now logged (`[REMOTE-DANGER]`) — see `console/REMOTE_MINING_CONSOLE.md`.
+- Patrol combat is expel-mode only today; war-defense and war-offense orchestration are deferred (tracked in `.ai/plans/patrol-defense-modes.md`).
 - Remote maintenance pressure telemetry now tracks decay and backlog in memory, but maintainer count/body auto-scaling from that telemetry is not implemented yet (intentional follow-up).
 - (Fixed) Remote hauler target convergence is now mitigated in two layers: remote energy selection subtracts other empty remote-hauler claims, and per-target assignment now applies an access-tile-aware soft cap (up to 2 empty haulers per target). Stuck haulers on `withdrawEnergy`/`pickupEnergy` also retarget after 4+ stuck ticks.
 - (Fixed) Haulers no longer prioritize source links over source containers. For the overflow/fallback path, source containers are selected before source links, preventing light source-link buffers from diverting haulers away from full source containers. Hub/controller/sink links are the primary pickup (drained first to keep capacity for runLinks); source containers/links are only reached as overflow. Remote haulers also prioritize full containers over dropped-energy piles.
 - (Fixed) Remote haulers no longer path directly at occupied source containers. When withdrawing from a remote source container, haulers choose a free adjacent access tile because the static miner normally occupies the container tile.
 - (Fixed) Shared movement now negotiates creep congestion: stuck creeps request nearby blockers to yield into valid adjacent tiles, and blockers execute that yield request on their own turn. Static miners on source containers are explicitly exempt.
-- (Fixed) Remote danger handling now lets any remote creep that sees nearby hostiles mark `dangerUntil` for the remote and head toward the home-room exit instead of only local-fleeing inside the dangerous room.
+- (Fixed, revised) Remote hostile response no longer forces remote creeps to retreat home. Non-patrol creeps now evade within `REMOTE_HOSTILE_EVADE_DISTANCE`, and `dangerUntil` is a fail-safe marker only when patrol coverage is zero.
 - (Fixed) Remote miner over-spawning: `projectedRemoteMinerWork` now uses full body capabilities for spawning creeps and the spawn loop caps room miners at `sourceCount` active to prevent accumulation.
 - (Fixed) Remote miner/source congestion: active remote miners are now capped by per-source slot capacity (1 for container/fixed-station sources), reassigned by available slots, and overflow miners fall back to standby-return flow instead of crowding a single static station.
 - (Fixed) Remote pending-container handoff: remote source plans now track pending container construction sites separately from built containers. Pending sites count as static mining stations for miner caps/body planning, but haulers only withdraw from built containers.
@@ -80,7 +80,7 @@ This file tracks known follow-up work that future agents should consider before 
 - Power processing is not enabled.
 - Observer automation is not enabled.
 - Nuker automation is not enabled.
-- Combat squads and remote defense are not enabled.
+- Full combat squad orchestration is not enabled (only patrol expel mode is enabled).
 - Autonomous claiming is not enabled.
 
 These should stay disabled until `architecture/*.md` (or explicit `room.memory.plan` policy config) documents enabling rules.

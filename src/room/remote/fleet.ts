@@ -531,7 +531,7 @@ export function assignOverflowRemoteScout(
 ): boolean {
     const hostiles = findHostiles(creep.room);
     if (hostiles.length > 0) {
-        setTravelJob(creep, homeRoomName);
+        clearJob(creep);
         return true;
     }
 

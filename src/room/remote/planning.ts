@@ -27,6 +27,8 @@ import {
     TOWER_RESERVE_RATIO, MAX_REMOTE_HAULER_CAPACITY_PER_SOURCE,
 } from '../constants';
 
+const PATROL_DANGER_NOTIFY_COOLDOWN = 500;
+
 export function remoteSourceRouteDegraded(sourcePlan: RemoteSourcePlan | undefined): boolean {
     return sourcePlan?.routeHealth === 'degraded';
 }
@@ -92,54 +94,32 @@ export function updateRemoteRoomPlans(homeRoom: Room): void {
 
         remote.lastScouted = Game.time;
         const hostiles = findHostiles(visible);
-        const hostileCore = visible.find(FIND_STRUCTURES, {
-            filter: s => s.structureType === STRUCTURE_INVADER_CORE
-        });
-        const hostileControl = Boolean(visible.controller?.owner && visible.controller.owner.username !== myUsername) ||
-            Boolean(visible.controller?.reservation && visible.controller.reservation.username !== myUsername);
-        if (hostiles.length > 0 || hostileCore.length > 0 || hostileControl) {
-            const wasAlreadyDanger = remote.skipReason === 'danger';
+        if (hostiles.length > 0) {
             remote.lastSeenHostiles = Game.time;
-            // Use TTL×1.1 so the lockout tracks how long the threat will actually live,
-            // rather than a fixed 1500t window.  Cap at REMOTE_DANGER_TICKS so no room
-            // is locked longer than the old fixed ceiling.  Use Math.max so repeated
-            // detections can only extend (not shorten) the window.
-            const creepTtl = hostiles.length > 0
-                ? Math.max(...hostiles.map(h => h.ticksToLive ?? REMOTE_DANGER_TICKS)) : 0;
-            const coreTtl = hostileCore.length > 0
-                // ticksToCollapse exists at runtime but is missing from the community typings
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                ? Math.max(...hostileCore.map(c => (c as any).ticksToCollapse ?? REMOTE_DANGER_TICKS)) : 0;
-            const rawTtl = Math.max(creepTtl, coreTtl);
-            const windowTtl = rawTtl > 0
-                ? Math.min(Math.ceil(rawTtl * 1.1), REMOTE_DANGER_TICKS)
-                : REMOTE_DANGER_TICKS;
-            remote.dangerUntil = Math.max(remote.dangerUntil ?? 0, Game.time + windowTtl);
+        }
+
+        if (hostiles.length > 0 && patrolCoverageForHome(homeRoom.name) === 0) {
+            const wasAlreadyDanger = remote.skipReason === 'danger';
+            remote.dangerUntil = Math.max(remote.dangerUntil ?? 0, Game.time + REMOTE_DANGER_TICKS);
             remote.skipReason = 'danger';
             if (!wasAlreadyDanger) {
-                const who = hostiles.length > 0 ? `hostiles=${hostiles.length}` :
-                    hostileCore.length > 0 ? `invaderCore` : `hostileControl`;
-                console.log(`[REMOTE-DANGER] t=${Game.time} ${remoteName}: ${who} detected — dangerUntil=${remote.dangerUntil} (~${windowTtl}t)`);
+                console.log(`[REMOTE-DANGER] t=${Game.time} ${remoteName}: unguarded hostiles=${hostiles.length} — dangerUntil=${remote.dangerUntil} (~${REMOTE_DANGER_TICKS}t)`);
+            }
+            if ((remote.lastPatrolDangerNotifyAt ?? 0) + PATROL_DANGER_NOTIFY_COOLDOWN <= Game.time) {
+                Game.notify(`[REMOTE-DANGER] ${homeRoom.name}->${remoteName} has hostiles=${hostiles.length} and zero patrol coverage at t=${Game.time}`);
+                remote.lastPatrolDangerNotifyAt = Game.time;
             }
             continue;
         }
-        const hadDirectDanger = remote.skipReason === 'danger';
-        const hadTransitDanger = remote.skipReason === 'transit-danger';
-        remote.skipReason = undefined; // always clean up the flag when the room itself is safe
 
-        if (hadDirectDanger) {
-            // Room had hostiles detected by planning scan — clear the timer immediately,
-            // the room is confirmed safe right now.
-            remote.dangerUntil = undefined;
-            console.log(`[REMOTE-DANGER] t=${Game.time} ${remoteName}: cleared — resuming harvest`);
-        } else if (hadTransitDanger) {
-            // Route to this room was blocked by a dangerous intermediate room.
-            // Don't clear dangerUntil eagerly — let the timer expire so creeps stop
-            // bouncing back through the dangerous transit room.  Log once when it finally
-            // lapses (dangerUntil already past or unset after skipReason was cleared).
-            if (!remote.dangerUntil || remote.dangerUntil <= Game.time) {
+        if (remote.skipReason === 'danger' || remote.skipReason === 'transit-danger') {
+            if (hostiles.length === 0) {
+                remote.skipReason = undefined;
                 remote.dangerUntil = undefined;
-                console.log(`[REMOTE-DANGER] t=${Game.time} ${remoteName}: transit-block expired — resuming harvest`);
+                console.log(`[REMOTE-DANGER] t=${Game.time} ${remoteName}: cleared`);
+            } else {
+                remote.skipReason = undefined;
+                remote.dangerUntil = undefined;
             }
         }
 
@@ -278,6 +258,18 @@ export function updateRemoteRoomPlans(homeRoom: Room): void {
             }
         }
     }
+}
+
+function patrolCoverageForHome(homeRoomName: string): number {
+    let coverage = 0;
+    for (const name in Game.creeps) {
+        const creep = Game.creeps[name];
+        if (creep.spawning) { continue; }
+        if ((creep.memory.homeRoom ?? creep.room.name) !== homeRoomName) { continue; }
+        if (ensureArchetype(creep) !== 'patrol') { continue; }
+        coverage++;
+    }
+    return coverage;
 }
 
 function assignedRemoteMaintainerSnapshot(

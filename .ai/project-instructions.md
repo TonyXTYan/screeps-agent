@@ -11,12 +11,7 @@ npm run deploy   # build + push in one shot
 npm run watch    # auto-recompile on file save during development
 ```
 
-Deployment requires a `.env` file (copy from `.env.example`):
-```
-SCREEPS_EMAIL=...
-SCREEPS_TOKEN=...
-SCREEPS_BRANCH=default
-```
+**After code changes:** Run `npm run build` to check for compilation errors. If it passes, run `codegraph init -i` to update the symbol index. **Agents never run `npm run push` or `npm run deploy` unless explicitly instructed — user controls deployment.**
 
 ## Architecture
 
@@ -61,6 +56,7 @@ This is a Screeps bot written in TypeScript, bundled by Rollup into a single `di
   - `room/jobMemory.ts` — `setJob`, `setTravelJob`, `setResourceJob`, primary-job memory helpers
   - `room/jobManage.ts` — job retention (`keepCurrentJob`), emergency energy delivery, job validity checks
   - `room/storeUtils.ts` — store utility helpers
+  - `room/flags.ts` — named-flag overrides; `isMaintenanceDisabled(structure)` checks for a `DONOT_MAINTAIN*` flag on the structure's tile (tick-cached); see `console/FLAGS_CONSOLE.md`
   - `room/remote/` — remote mining subsystem:
     - `remote/fleet.ts` — remote creep fleet queries (counts, caps, assignments)
     - `remote/energy.ts` — remote energy source selection and claim tracking
@@ -95,11 +91,24 @@ This is a Screeps bot written in TypeScript, bundled by Rollup into a single `di
 - Build injects the current 8-char git commit hash into the bundle banner (`var __BUILD_COMMIT__ = "hash";`) so server-side code can detect new deployments and trigger the memory audit
 - `grunt-screeps` reads from `dist/` and pushes `**/*.{js,wasm}`; source maps stay local
 
+## Code Navigation
+
+This codebase has a CodeGraph index for fast structural lookups:
+- `codegraph_search` — find symbols by name
+- `codegraph_trace` — trace flow from function A to function B (one call, all hops)
+- `codegraph_callers` / `codegraph_callees` — what calls/calls-what
+- `codegraph_impact` — what would break if I changed this?
+
+CodeGraph reads the AST, not text, so it's faster and more accurate than grep 
+for symbol lookups. See `.ai/memory/codegraph.md` for the full reference.
+
 ## Combat Strategy Notes
 
 When discussing or designing single-creep siege profiles, use:
 - `.ai/strategy/solo-siege.md` — tower sustain formulas, per-tier boost requirements, and practical/impractical 1-6 tower body envelopes.
 - `.ai/strategy/paired-siege.md` — two-creep melee+ranged siege envelopes by tower count and boost package.
+- `.ai/strategy/remote-invader-core.md` — light-invader (`RCL < 4`) defense sizing, lesser invader-core busting, and shared-vs-specialized body tradeoffs.
+- `.ai/strategy/source-keeper-remotes.md` — source-keeper remote combat envelopes (single/pair) and concurrent-aggro sizing.
 
 Guardrails:
 - Use official Screeps docs (`docs.screeps.com`) as source of truth for boost multipliers.
@@ -157,9 +166,9 @@ Config is saved to `~/.screepsconsole.yaml` on first run (credentials stored the
 When completing edit tasks, close with a concise report:
 
 ```
-Brief description of the change
+Brief description of the change (<50 characters that can be used for commit subject)
 
-the change includes: specific details about what was modified
+Then detailed description about the change (commit details).
 ```
 
 This format helps track what was done without verbose preamble.

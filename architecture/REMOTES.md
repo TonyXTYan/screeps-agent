@@ -185,6 +185,22 @@ tiles, swamp tiles, the latest stall tile, then the remaining cached path via `r
 `1` and `48` are valid corridor road positions; true room borders `0` and `49` are skipped. Roads are
 **skipped in owned rooms** so manual base layouts are preserved.
 
+## Per-Structure Maintenance Suppression (DONOT_MAINTAIN flag)
+
+Place a flag whose name starts with `DONOT_MAINTAIN` on the **exact tile** of a road or container
+to tell all creeps to skip repairing it and let it decay naturally.
+
+This is the primary escape hatch for reserved remote rooms (RCL 0) where structures cannot be
+destroyed and you want specific infrastructure to decay without the bot fighting you.
+
+Affected behaviours (all skip the flagged structure):
+- `remoteMaintainer` primary repair-target selection
+- `remoteMaintainer` opportunistic in-transit repair (range 3)
+- `remoteMiner` idle-source opportunistic repair
+
+Implemented in `src/room/flags.ts` (`isMaintenanceDisabled(structure)`), which caches the flag
+scan once per tick. See `console/FLAGS_CONSOLE.md` for console usage.
+
 ## Danger Handling
 
 When a remote room is visible and contains armed hostiles, an invader core, or hostile controller control/reservation:

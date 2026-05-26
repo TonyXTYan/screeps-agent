@@ -48,6 +48,7 @@ src/
     jobMemory.ts           setJob / setTravelJob / setResourceJob / primary-job memory helpers
     jobManage.ts           Job retention, emergency energy delivery, job validity checks
     storeUtils.ts          Store utility helpers
+    flags.ts               Named-flag overrides (DONOT_MAINTAIN → skip repair for flagged structure)
     remote/
       fleet.ts             Remote fleet queries: counts, caps, assignments, wander helpers
       energy.ts            Remote energy source selection and claim tracking

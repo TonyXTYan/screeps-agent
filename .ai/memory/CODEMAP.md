@@ -38,6 +38,7 @@ src/
     jobMemory.ts          setJob / setTravelJob / setResourceJob / primary-job memory helpers
     source.ts             Source/mineral plan building, static harvest memory, assignment helpers
     spawn.ts              Home spawn planning: body sizing, demand sizing, pending capability tracking
+    flags.ts              Named-flag overrides: isMaintenanceDisabled (DONOT_MAINTAIN → skip repair)
     storeUtils.ts         Store utility helpers
     structures.ts         Structure discovery, link classification
     targeting.ts          closest / closestReachable / closestByRange / heal-target helpers

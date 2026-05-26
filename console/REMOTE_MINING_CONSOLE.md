@@ -148,3 +148,5 @@ remoteMining.disable('W7N9', 'W8N9')
   - bot needs visibility in that remote room before it can discover sources/paths.
 - Remote roads are not being placed:
   - roads are intentionally skipped in owned rooms; automatic remote road placement is for non-owned rooms.
+- Want a specific road or container to decay (can't destroy at RCL 0):
+  - place a `DONOT_MAINTAIN` flag on its tile — see `console/FLAGS_CONSOLE.md`.

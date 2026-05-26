@@ -50,6 +50,7 @@ import {
 import { assignRemoteHaulerCycle } from './remote/haulers';
 import { runSpawnPlanner } from './remote/spawn';
 import { keepCurrentJob, assignEmergencyEnergyDelivery, resumePrimaryEnergyJob } from './jobManage';
+import { isMaintenanceDisabled } from './flags';
 import { RoomControllerContext, JobReservations } from './types';
 import {
     LINK_TRANSFER_THRESHOLD,
@@ -127,7 +128,8 @@ function selectRemoteMaintainerRepairTarget(
     claimedTargets: Set<string>,
     filter: (structure: AnyStructure) => boolean
 ): AnyStructure | null {
-    const targets = creep.room.find(FIND_STRUCTURES, { filter }) as AnyStructure[];
+    const targets = (creep.room.find(FIND_STRUCTURES, { filter }) as AnyStructure[])
+        .filter(s => !isMaintenanceDisabled(s));
     const pool = preferUnclaimedTargets(targets, claimedTargets);
     return worstHits(creep, pool);
 }
@@ -337,7 +339,8 @@ export function assignRemoteCreep(creep: Creep): boolean {
             const damagedNearby = closest(creep, creep.room.find(FIND_STRUCTURES, {
                 filter: s => (s.structureType === STRUCTURE_CONTAINER || s.structureType === STRUCTURE_ROAD) &&
                              s.hits < s.hitsMax * REMOTE_MINER_REPAIR_THRESHOLD &&
-                             creep.pos.getRangeTo(s) <= REMOTE_MINER_REPAIR_RANGE
+                             creep.pos.getRangeTo(s) <= REMOTE_MINER_REPAIR_RANGE &&
+                             !isMaintenanceDisabled(s as AnyStructure)
             }) as AnyStructure[]);
             if (damagedNearby) {
                 if (creep.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {

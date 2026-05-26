@@ -1,4 +1,5 @@
 import { wallRampartRepairCap } from '../role/doctor';
+import { isMaintenanceDisabled } from '../room/flags';
 import { honorTrafficYieldRequest, requestTrafficYieldForPath } from './traffic';
 import {
     moveToJobTarget, moveToWithdrawTarget, forceStepTowardsRoomExit,
@@ -500,6 +501,7 @@ function opportunisticMaintainerRepair(creep: Creep, jobType: CreepJobType, resu
 
     const repairs = creep.pos.findInRange(FIND_STRUCTURES, 3, {
         filter: (s: AnyStructure) => {
+            if (isMaintenanceDisabled(s)) { return false; }
             if (s.structureType === STRUCTURE_CONTAINER) { return s.hits < s.hitsMax * 0.9; }
             if (s.structureType === STRUCTURE_ROAD) { return s.hits < s.hitsMax * 0.8; }
             return false;

@@ -142,10 +142,14 @@ remoteMining.disable('W7N9', 'W8N9')
 
 Two sources can trigger danger events, each with different clearing behaviour:
 
-**Direct danger** — hostiles detected inside the remote room itself (planning scan):
+**Direct danger** — hostiles detected inside the remote room itself (planning scan).
+The lockout window is `ceil(longestHostileTTL × 1.1)`, capped at 1500 ticks.
+For InvaderCores the TTL comes from `ticksToCollapse`; for hostile creeps from `ticksToLive`; for
+hostile controller ownership a fixed 1500 is used. The window is set once at first detection and
+can only extend (never shorten) on subsequent ticks:
 ```
-[REMOTE-DANGER] t=71219200 W9N9: invaderCore detected — dangerUntil=71220700 (~1500t)
-[REMOTE-DANGER] t=71219200 W9N9: hostiles=2 detected — dangerUntil=71220700 (~1500t)
+[REMOTE-DANGER] t=71219200 W9N9: invaderCore detected — dangerUntil=71219990 (~726t)
+[REMOTE-DANGER] t=71219200 W9N9: hostiles=2 detected — dangerUntil=71220480 (~1236t)
 [REMOTE-DANGER] t=71219200 W9N9: hostileControl detected — dangerUntil=71220700 (~1500t)
 ```
 Cleared immediately once the room is confirmed safe (visible + no hostiles):
@@ -174,7 +178,7 @@ While the lockout is active the `[REMOTE]` status header includes a warning:
 - All creeps assigned to the remote room are routed home via `travelRoom`.
 - No new miners, haulers, maintainers, or claimers are spawned for the room.
 - Road/container planning for the room is suspended for that tick.
-- Direct danger resets to `now + 1500` every tick hostiles are visible; clears immediately when the room is safe.
+- Direct danger lockout is sized to the threat (`ceil(TTL × 1.1)`, max 1500t); set once at first sighting and only extended if a longer-lived hostile appears. Clears immediately when the room is confirmed safe.
 - Transit danger resets to `now + 1500` each time a creep retreats through the transit room; only the timer expiry resumes the room (prevents bounce loops).
 
 ### Manually clearing or extending danger

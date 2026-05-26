@@ -100,12 +100,26 @@ export function updateRemoteRoomPlans(homeRoom: Room): void {
         if (hostiles.length > 0 || hostileCore.length > 0 || hostileControl) {
             const wasAlreadyDanger = remote.skipReason === 'danger';
             remote.lastSeenHostiles = Game.time;
-            remote.dangerUntil = Game.time + REMOTE_DANGER_TICKS;
+            // Use TTL×1.1 so the lockout tracks how long the threat will actually live,
+            // rather than a fixed 1500t window.  Cap at REMOTE_DANGER_TICKS so no room
+            // is locked longer than the old fixed ceiling.  Use Math.max so repeated
+            // detections can only extend (not shorten) the window.
+            const creepTtl = hostiles.length > 0
+                ? Math.max(...hostiles.map(h => h.ticksToLive ?? REMOTE_DANGER_TICKS)) : 0;
+            const coreTtl = hostileCore.length > 0
+                // ticksToCollapse exists at runtime but is missing from the community typings
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                ? Math.max(...hostileCore.map(c => (c as any).ticksToCollapse ?? REMOTE_DANGER_TICKS)) : 0;
+            const rawTtl = Math.max(creepTtl, coreTtl);
+            const windowTtl = rawTtl > 0
+                ? Math.min(Math.ceil(rawTtl * 1.1), REMOTE_DANGER_TICKS)
+                : REMOTE_DANGER_TICKS;
+            remote.dangerUntil = Math.max(remote.dangerUntil ?? 0, Game.time + windowTtl);
             remote.skipReason = 'danger';
             if (!wasAlreadyDanger) {
                 const who = hostiles.length > 0 ? `hostiles=${hostiles.length}` :
                     hostileCore.length > 0 ? `invaderCore` : `hostileControl`;
-                console.log(`[REMOTE-DANGER] t=${Game.time} ${remoteName}: ${who} detected — dangerUntil=${remote.dangerUntil} (~${REMOTE_DANGER_TICKS}t)`);
+                console.log(`[REMOTE-DANGER] t=${Game.time} ${remoteName}: ${who} detected — dangerUntil=${remote.dangerUntil} (~${windowTtl}t)`);
             }
             continue;
         }

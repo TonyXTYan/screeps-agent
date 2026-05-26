@@ -323,8 +323,11 @@ function reserveController(creep: Creep): number {
     const controller = getTarget<StructureController>(creep) ?? creep.room.controller;
     if (!controller) { return ERR_INVALID_TARGET; }
 
-    const code = creep.reserveController(controller);
-    if (code === ERR_NOT_IN_RANGE) {
+    let code = creep.reserveController(controller);
+    if (code === ERR_INVALID_TARGET && shouldAttackController(creep, controller)) {
+        code = creep.attackController(controller);
+    }
+    if (code === ERR_NOT_IN_RANGE || code === ERR_INVALID_TARGET) {
         moveToJobTarget(creep, controller, '#ffffff');
     }
     return code;
@@ -334,11 +337,22 @@ function claimController(creep: Creep): number {
     const controller = getTarget<StructureController>(creep) ?? creep.room.controller;
     if (!controller) { return ERR_INVALID_TARGET; }
 
-    const code = creep.claimController(controller);
-    if (code === ERR_NOT_IN_RANGE) {
+    let code = creep.claimController(controller);
+    if (code === ERR_INVALID_TARGET && shouldAttackController(creep, controller)) {
+        code = creep.attackController(controller);
+    }
+    if (code === ERR_NOT_IN_RANGE || code === ERR_INVALID_TARGET) {
         moveToJobTarget(creep, controller, '#ffffff');
     }
     return code;
+}
+
+function shouldAttackController(creep: Creep, controller: StructureController): boolean {
+    if (creep.getActiveBodyparts(CLAIM) <= 0) { return false; }
+    const myUsername = creep.owner.username;
+    if (controller.owner && controller.owner.username !== myUsername) { return true; }
+    if (controller.reservation && controller.reservation.username !== myUsername) { return true; }
+    return false;
 }
 
 function travelRoom(creep: Creep): number {

@@ -45,14 +45,20 @@ Wall/rampart caps are still provided by `wallRampartRepairCap()` in `role/doctor
 At `RCL >= 6`, patrol target per home room is:
 
 - `baseline = ceil(enabledRemoteRooms / 2)`
-- `target = baseline + visibleArmedHostilesInEnabledRemotes`
+- `target = baseline + visibleArmedHostiles` (home + enabled remotes)
+
+At `RCL < 6`, patrol is only used as an emergency home-defense fallback:
+
+- `target = armedHostilesInHomeRoom`
+- no remote combat dispatch below RCL 6
 
 `enabledRemoteRooms` counts all enabled remote modes (`harvest`, `reserve`, `claim`).
 
 ### Patrol behavior (expel mode)
 
-- Patrols scan enabled remotes and converge on visible armed hostiles.
+- Patrols converge on visible armed hostiles in home room and enabled remotes.
 - Hostile target priority: `HEAL` parts first, then `RANGED_ATTACK`, then `ATTACK`.
+- When no armed hostile is visible in the chosen room, patrols can clear visible invader cores.
 - If no active threat is visible, patrols rotate through enabled remotes.
 - Rotation cadence is provided by `getPatrolRotationTicks()` (currently returns `100`).
 - Patrols renew in home room when no active threat and TTL is low.
@@ -65,7 +71,7 @@ When a non-patrol creep has an armed hostile nearby:
 2. Otherwise use `PathFinder` flee from hostile danger zones.
 3. Fallback to edge nudge if no flee path.
 
-Remote creeps no longer hard-retreat to home room on contact.
+Remote creeps no longer hard-retreat to home room on contact by default.
 
 ### Tunable evade distance
 
@@ -75,11 +81,14 @@ Evade radius is controlled by:
 
 ## Patrol Fail-Safe Danger Marker
 
-`dangerUntil/skipReason` is now a fail-safe telemetry marker, not a normal retreat gate.
+`dangerUntil/skipReason` is primarily telemetry, with one armed-threat fail-safe gate.
 
 A remote is marked danger only when:
 
 - armed hostiles are visible, and
 - patrol coverage for the home room is zero.
 
-When that happens, the bot logs and sends `Game.notify` (cooldown throttled per remote).
+When that happens, the bot logs and sends `Game.notify` (cooldown throttled per remote), and:
+
+- non-combat remote creeps assigned to that remote retreat to home room.
+- non-combat remote spawns for that remote are blocked until danger clears or patrol coverage returns.

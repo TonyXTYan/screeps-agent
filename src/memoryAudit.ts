@@ -58,6 +58,7 @@ function migrateLegacyDefenseRoles(): number {
     if (changed > 0) {
         console.log(`[memoryAudit] Migrated legacy defense roles: ${changed}`);
     }
+    Memory.legacyDefenseMigrationDone = true;
     return changed;
 }
 
@@ -158,6 +159,14 @@ function cleanupStaleRemotePlans(activeRooms: Set<string>): number {
 
             if (remote.lastSeenHostiles && remote.lastSeenHostiles + 5000 < Game.time) {
                 remote.lastSeenHostiles = undefined;
+                count++;
+            }
+            if (remote.lastSeenInvaderCoreAt && remote.lastSeenInvaderCoreAt + 5000 < Game.time) {
+                remote.lastSeenInvaderCoreAt = undefined;
+                count++;
+            }
+            if (remote.lastSeenHostileControllerAt && remote.lastSeenHostileControllerAt + 5000 < Game.time) {
+                remote.lastSeenHostileControllerAt = undefined;
                 count++;
             }
 

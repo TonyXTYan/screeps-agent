@@ -8,6 +8,8 @@ const PATROL_RENEW_STOP_TTL = 1400;
 type VisibleThreat = {
     roomName: string;
     hostiles: Creep[];
+    invaderCore: StructureInvaderCore | null;
+    isHomeThreat: boolean;
 };
 
 // Keep as a dedicated function so cadence can become dynamic later.
@@ -18,7 +20,7 @@ export function getPatrolRotationTicks(): number {
 export function run(creep: Creep): void {
     const homeRoom = creep.memory.homeRoom ?? creep.room.name;
     const enabledRemotes = enabledRemoteRooms(homeRoom);
-    const visibleThreats = visibleRemoteThreats(enabledRemotes);
+    const visibleThreats = visibleRemoteThreats(homeRoom, enabledRemotes);
 
     if (visibleThreats.length === 0 && tryRenewPatrol(creep, homeRoom)) {
         return;
@@ -48,13 +50,15 @@ function runThreatResponse(creep: Creep, threats: VisibleThreat[]): void {
     }
 
     const target = selectCombatTarget(creep, targetRoom.hostiles);
-    if (!target) { return; }
-
-    if (creep.pos.getRangeTo(target) <= 3) {
-        creep.rangedAttack(target);
+    if (target) {
+        if (creep.attack(target) === ERR_NOT_IN_RANGE) {
+            creep.moveTo(target, { reusePath: 1, visualizePathStyle: { stroke: '#ef4444' } });
+        }
+        return;
     }
-    if (creep.attack(target) === ERR_NOT_IN_RANGE) {
-        creep.moveTo(target, { reusePath: 1, visualizePathStyle: { stroke: '#ef4444' } });
+    if (!targetRoom.invaderCore) { return; }
+    if (creep.attack(targetRoom.invaderCore) === ERR_NOT_IN_RANGE) {
+        creep.moveTo(targetRoom.invaderCore, { reusePath: 1, visualizePathStyle: { stroke: '#ef4444' } });
     }
 }
 
@@ -112,14 +116,16 @@ function enabledRemoteRooms(homeRoom: string): string[] {
     return rooms;
 }
 
-function visibleRemoteThreats(remoteRooms: string[]): VisibleThreat[] {
+function visibleRemoteThreats(homeRoom: string, remoteRooms: string[]): VisibleThreat[] {
     const threats: VisibleThreat[] = [];
+    const homeThreat = visibleThreatInRoom(homeRoom, true);
+    if (homeThreat) {
+        threats.push(homeThreat);
+    }
     for (const roomName of remoteRooms) {
-        const room = Game.rooms[roomName];
-        if (!room) { continue; }
-        const hostiles = findHostiles(room);
-        if (hostiles.length === 0) { continue; }
-        threats.push({ roomName, hostiles });
+        const threat = visibleThreatInRoom(roomName, false);
+        if (!threat) { continue; }
+        threats.push(threat);
     }
     return threats;
 }
@@ -127,12 +133,12 @@ function visibleRemoteThreats(remoteRooms: string[]): VisibleThreat[] {
 function selectThreatRoom(creep: Creep, threats: VisibleThreat[]): VisibleThreat | null {
     if (threats.length === 0) { return null; }
     let best = threats[0];
-    let bestDistance = Game.map.getRoomLinearDistance(creep.room.name, best.roomName);
+    let bestPriority = threatPriority(best, creep);
     for (const threat of threats) {
-        const distance = Game.map.getRoomLinearDistance(creep.room.name, threat.roomName);
-        if (distance < bestDistance) {
+        const priority = threatPriority(threat, creep);
+        if (priority > bestPriority) {
             best = threat;
-            bestDistance = distance;
+            bestPriority = priority;
         }
     }
     return best;
@@ -168,6 +174,30 @@ function healFriendly(creep: Creep): void {
     if (healCode === ERR_NOT_IN_RANGE) {
         creep.rangedHeal(closest);
     }
+}
+
+function visibleThreatInRoom(roomName: string, isHomeThreat: boolean): VisibleThreat | null {
+    const room = Game.rooms[roomName];
+    if (!room) { return null; }
+    const hostiles = findHostiles(room);
+    const invaderCore = findHostileInvaderCore(room);
+    if (hostiles.length === 0 && !invaderCore) { return null; }
+    return { roomName, hostiles, invaderCore, isHomeThreat };
+}
+
+function findHostileInvaderCore(room: Room): StructureInvaderCore | null {
+    const cores = room.find(FIND_HOSTILE_STRUCTURES, {
+        filter: (structure) => structure.structureType === STRUCTURE_INVADER_CORE
+    }) as StructureInvaderCore[];
+    return cores[0] ?? null;
+}
+
+function threatPriority(threat: VisibleThreat, creep: Creep): number {
+    const homeBoost = threat.isHomeThreat && threat.hostiles.length > 0 ? 10000 : 0;
+    const armedBoost = threat.hostiles.length > 0 ? 1000 : 0;
+    const coreBoost = threat.invaderCore ? 100 : 0;
+    const distancePenalty = Game.map.getRoomLinearDistance(creep.room.name, threat.roomName);
+    return homeBoost + armedBoost + coreBoost - distancePenalty;
 }
 
 function tryRenewPatrol(creep: Creep, homeRoomName: string): boolean {

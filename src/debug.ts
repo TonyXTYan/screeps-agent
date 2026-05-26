@@ -324,7 +324,13 @@ function printRemoteCreepStatus(filterHome?: string, filterRemote?: string): voi
             const dangerSuffix = plan.dangerUntil && plan.dangerUntil > Game.time
                 ? `  ⚠ DANGER until=${plan.dangerUntil} (~${plan.dangerUntil - Game.time}t)`
                 : '';
-            console.log(`[REMOTE] t=${Game.time} ${remoteName} (home: ${room.name}):${dangerSuffix}`);
+            const coreSuffix = plan.lastSeenInvaderCoreAt
+                ? `  coreSeen=${plan.lastSeenInvaderCoreAt}`
+                : '';
+            const controllerSuffix = plan.lastSeenHostileControllerAt
+                ? `  hostileCtlSeen=${plan.lastSeenHostileControllerAt}`
+                : '';
+            console.log(`[REMOTE] t=${Game.time} ${remoteName} (home: ${room.name}):${dangerSuffix}${coreSuffix}${controllerSuffix}`);
             for (const line of lines) {
                 console.log(`  ${line}`);
             }

@@ -57,6 +57,8 @@ function restoreRemoteAssignmentIfSafe(creep: Creep, archetype: CreepArchetype):
 }
 
 function migrateLegacyDefenseMemoryEntries(): void {
+    if (Memory.legacyDefenseMigrationDone) { return; }
+    let changed = 0;
     for (const name in Memory.creeps) {
         const memory = Memory.creeps[name];
         if (!memory) { continue; }
@@ -66,13 +68,19 @@ function migrateLegacyDefenseMemoryEntries(): void {
             memory.archetype = 'patrol';
             memory.attacking = undefined;
             memory.rallySpawnId = undefined;
+            changed++;
             continue;
         }
 
         if (memory.role === 'doctor' || memory.archetype === 'doctor') {
             memory.role = 'builder';
             memory.archetype = 'worker';
+            changed++;
         }
+    }
+    Memory.legacyDefenseMigrationDone = true;
+    if (changed > 0) {
+        console.log(`[memoryManagement] Migrated legacy defense memory entries: ${changed}`);
     }
 }
 

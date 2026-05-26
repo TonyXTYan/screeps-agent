@@ -169,9 +169,9 @@ Runs on first tick after deploy (build commit hash changed). Auto-fixes:
 
 | Issue | Fix |
 |-------|-----|
-| Legacy defense migration | Convert `defender -> patrol`, `doctor -> worker/builder` memory roles |
+| Legacy defense migration | Convert `defender -> patrol`, `doctor -> worker/builder` memory roles, set one-time migration guard |
 | Orphaned room memory | Delete `Memory.rooms` entries not owned and not referenced |
-| Stale remote plans | Clear expired `dangerUntil`, stale `skipReason`, old `lastSeenHostiles`, deleted source IDs |
+| Stale remote plans | Clear expired `dangerUntil`, stale `skipReason`, old hostile/core/controller seen markers, deleted source IDs |
 | Duplicate source assignments | Keep miner with most WORK (then best TTL), unassign others |
 | Orphaned source references | Clear `sourceId`/`assignedSourceId` pointing to non-existent sources |
 | Stale travel memory | Reset stuck > 20 ticks |

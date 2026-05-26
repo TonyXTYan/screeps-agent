@@ -9,7 +9,8 @@
   - `target = baseline + visibleArmedHostiles`
 - Patrol creeps rotate enabled remotes and converge on visible armed hostiles.
 - Target priority: hostile `HEAL` > `RANGED_ATTACK` > `ATTACK`.
-- Remote economy creeps no longer auto-retreat home; they evade near hostiles.
+- Remote economy creeps no longer auto-retreat home by default; they evade near hostiles.
+- Armed-hostile remotes with zero patrol coverage trigger a fail-safe retreat/block for non-combat remote operations.
 
 ## Deferred Modes
 

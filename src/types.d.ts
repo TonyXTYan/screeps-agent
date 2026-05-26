@@ -200,6 +200,8 @@ interface RemoteRoomPlan {
     manualPauseUntil?: number;
     lastScouted?: number;
     lastSeenHostiles?: number;
+    lastSeenInvaderCoreAt?: number;
+    lastSeenHostileControllerAt?: number;
     skipReason?: string;
     lastPatrolDangerNotifyAt?: number;
     maintenance?: RemoteMaintenancePressure;
@@ -309,4 +311,5 @@ interface SpawnMemory {
 
 interface Memory {
     lastBuildCommit?: string;
+    legacyDefenseMigrationDone?: boolean;
 }

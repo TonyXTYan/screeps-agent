@@ -11,7 +11,11 @@ npm run deploy   # build + push in one shot
 npm run watch    # auto-recompile on file save during development
 ```
 
-**After code changes:** Run `npm run build` to check for compilation errors. If it passes, run `codegraph init -i` to update the symbol index. **Agents never run `npm run push` or `npm run deploy` unless explicitly instructed — user controls deployment.**
+**After code changes:** Run `npm run build` to check for compilation errors. If it passes, run `codegraph sync` to update the symbol index. **Agents never run `npm run push` or `npm run deploy` unless explicitly instructed — user controls deployment.**
+
+If anything is unclear, ambiguous, or has multiple plausible options, always clarify with the user before proceeding.
+
+Address the user as Boss嚴. When signing off, end responses with "<agent name> Out!".
 
 ## Architecture
 

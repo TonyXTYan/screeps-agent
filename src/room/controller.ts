@@ -34,7 +34,7 @@ import {
 import {
     remoteSourceRouteDegraded,
     initialiseRoomPlan, updateRemoteRoomPlans, rememberPlans,
-    rememberRcl, updatePlanAssignments, rememberLoad,
+    rememberRcl, updatePlanAssignments, rememberLoad, patrolCoverageForHome, remoteArmedFailsafeActive,
 } from './remote/planning';
 import {
     creepsForHomeRoom,
@@ -149,6 +149,16 @@ export function assignRemoteCreep(creep: Creep): boolean {
         return true;
     }
     if (configuredRemotePlan?.manualPauseUntil && configuredRemotePlan.manualPauseUntil > Game.time) {
+        clearJob(creep);
+        if (creep.room.name !== homeRoom) {
+            setTravelJob(creep, homeRoom);
+            return true;
+        }
+        setJob(creep, 'idle', creep.room.storage ?? creep.room.find(FIND_MY_SPAWNS)[0]);
+        return true;
+    }
+    const patrolCoverage = patrolCoverageForHome(homeRoom);
+    if (remoteArmedFailsafeActive(homeRoom, remoteRoom, configuredRemotePlan, patrolCoverage)) {
         clearJob(creep);
         if (creep.room.name !== homeRoom) {
             setTravelJob(creep, homeRoom);

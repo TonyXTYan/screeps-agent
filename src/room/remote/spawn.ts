@@ -20,7 +20,7 @@ import {
     remoteSourceHasContainerStation, remoteSourceReplacementHorizon, countFleetForArchetype,
 } from './fleet';
 import { findHostiles } from '../../hostileUtils';
-import { remoteNeedsRouteHealthMaintainer } from './planning';
+import { patrolCoverageForHome, remoteArmedFailsafeActive, remoteNeedsRouteHealthMaintainer } from './planning';
 import { desiredRemoteMaintainerCount } from './maintenance';
 import { sourceSpawnDeficit, stationaryTargetIdForSource, stationaryTargetIdForMineral, activeMinerCount } from '../source';
 import { mineralReadyToMine } from '../work';
@@ -287,11 +287,13 @@ function remoteSpawnRequest(
     if (pending.some(r => !r.remoteRoom)) { return null; }
 
     const homeFleet = creepsForHomeRoom(context.room.name);
+    const patrolCoverage = patrolCoverageForHome(context.room.name);
     const remoteRooms = context.room.memory.plan?.remoteRooms ?? {};
     for (const roomName in remoteRooms) {
         const remote = remoteRooms[roomName];
         if (!remote.enabled) { continue; }
         if (remote.manualPauseUntil && remote.manualPauseUntil > Game.time) { continue; }
+        if (remoteArmedFailsafeActive(context.room.name, roomName, remote, patrolCoverage)) { continue; }
         if (remote.mode === 'harvest' && (!remote.sources || Object.keys(remote.sources).length === 0)) {
             if (countRemoteScouts(context.room.name, roomName) === 0 &&
                 !pending.some(r => r.archetype === 'remoteScout' && r.remoteRoom === roomName) &&
@@ -463,7 +465,18 @@ function patrolSpawnRequest(
     pending: PendingSpawnRequest[]
 ): SpawnRequest | null {
     const rcl = context.room.controller?.level ?? 0;
-    if (rcl < 6) { return null; }
+    const homeArmedHostiles = findHostiles(context.room).length;
+    if (rcl < 6) {
+        if (homeArmedHostiles === 0) { return null; }
+        const homeFleet = creepsForHomeRoom(context.room.name);
+        const patrolCount = countFleetForArchetype(homeFleet, 'patrol') + pendingArchetypeCount(pending, 'patrol');
+        if (patrolCount >= homeArmedHostiles) { return null; }
+        return {
+            archetype: 'patrol',
+            reason: 'home defense target ' + patrolCount + '/' + homeArmedHostiles +
+                ' armedHostiles=' + homeArmedHostiles
+        };
+    }
 
     const remoteRooms = context.room.memory.plan?.remoteRooms ?? {};
     const enabledRemoteNames: string[] = [];
@@ -472,9 +485,9 @@ function patrolSpawnRequest(
             enabledRemoteNames.push(roomName);
         }
     }
-    if (enabledRemoteNames.length === 0) { return null; }
+    if (enabledRemoteNames.length === 0 && homeArmedHostiles === 0) { return null; }
 
-    let visibleArmedHostiles = 0;
+    let visibleArmedHostiles = homeArmedHostiles;
     for (const roomName of enabledRemoteNames) {
         const room = Game.rooms[roomName];
         if (!room) { continue; }

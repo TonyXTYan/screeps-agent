@@ -72,8 +72,9 @@ src/
 ## Defense Model
 
 - Towers are first line.
-- Patrol creeps are strategic expel units (RCL6+ baseline plus hostile surge).
+- Patrol creeps are strategic expel units (RCL6+ baseline plus hostile surge), with low-RCL home-only emergency fallback.
 - Non-patrol creeps evade nearby armed hostiles.
+- Armed-hostile remotes with zero patrol coverage trigger a temporary non-combat retreat/spawn block failsafe.
 - Emergency defender spawn override is retired.
 
 ## Build

@@ -10,7 +10,7 @@ Key fields:
 
 - `enabled`, `roomName`, `mode` (`harvest|reserve|claim`)
 - `reserve`, `buildRoads`, `maintainRoads`
-- `dangerUntil`, `manualPauseUntil`, `skipReason`, `lastSeenHostiles`, `lastPatrolDangerNotifyAt`
+- `dangerUntil`, `manualPauseUntil`, `skipReason`, `lastSeenHostiles`, `lastSeenInvaderCoreAt`, `lastSeenHostileControllerAt`, `lastPatrolDangerNotifyAt`
 - `maintenance` pressure snapshot
 - `sources` source-level route/station/demand metadata
 
@@ -30,20 +30,20 @@ Local spawn planner chooses requests in strategic priority, then remote requests
 At `RCL >= 6`, patrol sizing is:
 
 - `baseline = ceil(enabledRemoteRooms / 2)` (all enabled modes)
-- `target = baseline + visibleArmedHostiles`
+- `target = baseline + visibleArmedHostiles` (home + enabled remotes)
 
 Remote economy requests continue to use source-work/haul/maintenance deficits.
 
 ## Remote Assignment and Safety
 
-- Remote creeps no longer auto-retreat to home room when hostiles appear.
+- Remote creeps no longer auto-retreat to home room when hostiles appear by default.
 - Non-patrol creeps evade nearby armed hostiles using `REMOTE_HOSTILE_EVADE_DISTANCE`.
-- `dangerUntil` is no longer a normal remote assignment/spawn gate.
+- `dangerUntil` is not a normal gate, except armed-hostile fail-safe when patrol coverage is zero.
 - Manual operator pause is still supported through `manualPauseUntil`.
 
 ## Fail-Safe Danger Marker
 
-`dangerUntil` + `skipReason='danger'` is now fail-safe telemetry only.
+`dangerUntil` + `skipReason='danger'` is telemetry plus an armed-hostile failsafe.
 
 A remote is marked danger when:
 
@@ -51,6 +51,13 @@ A remote is marked danger when:
 2. patrol coverage for the home room is zero.
 
 On transition, the system logs and sends `Game.notify` (cooldown throttled per remote).
+
+While the armed failsafe is active for a remote:
+
+- assigned non-combat remote creeps retreat to home room.
+- non-combat remote spawn requests for that remote are skipped.
+
+Non-creep threats (`invader core`, hostile controller owner/reservation) are tracked in telemetry and do not trigger this retreat/block gate by themselves.
 
 ## Remote Miner Lifecycle
 

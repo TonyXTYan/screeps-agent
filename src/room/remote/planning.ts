@@ -28,6 +28,7 @@ import {
 } from '../constants';
 
 const PATROL_DANGER_NOTIFY_COOLDOWN = 500;
+const REMOTE_THREAT_MEMORY_TTL = 5000;
 
 export function remoteSourceRouteDegraded(sourcePlan: RemoteSourcePlan | undefined): boolean {
     return sourcePlan?.routeHealth === 'degraded';
@@ -70,6 +71,7 @@ export function initialiseRoomPlan(room: Room): void {
 export function updateRemoteRoomPlans(homeRoom: Room): void {
     const remotes = homeRoom.memory.plan?.remoteRooms ?? {};
     const myUsername = homeRoom.controller?.owner?.username;
+    const patrolCoverage = patrolCoverageForHome(homeRoom.name);
     for (const remoteName in remotes) {
         const remote = remotes[remoteName];
         if (!remote.enabled) { continue; }
@@ -94,33 +96,49 @@ export function updateRemoteRoomPlans(homeRoom: Room): void {
 
         remote.lastScouted = Game.time;
         const hostiles = findHostiles(visible);
-        if (hostiles.length > 0) {
+        const hasArmedHostiles = hostiles.length > 0;
+        const hostileCore = findHostileInvaderCore(visible);
+        const hostileController = hasHostileController(visible, myUsername);
+        if (hasArmedHostiles) {
             remote.lastSeenHostiles = Game.time;
         }
+        if (hostileCore) {
+            remote.lastSeenInvaderCoreAt = Game.time;
+        }
+        if (hostileController) {
+            remote.lastSeenHostileControllerAt = Game.time;
+        }
 
-        if (hostiles.length > 0 && patrolCoverageForHome(homeRoom.name) === 0) {
+        if (hasArmedHostiles && patrolCoverage === 0) {
             const wasAlreadyDanger = remote.skipReason === 'danger';
             remote.dangerUntil = Math.max(remote.dangerUntil ?? 0, Game.time + REMOTE_DANGER_TICKS);
             remote.skipReason = 'danger';
             if (!wasAlreadyDanger) {
-                console.log(`[REMOTE-DANGER] t=${Game.time} ${remoteName}: unguarded hostiles=${hostiles.length} — dangerUntil=${remote.dangerUntil} (~${REMOTE_DANGER_TICKS}t)`);
+                console.log(`[REMOTE-DANGER] t=${Game.time} ${remoteName}: unguarded armedHostiles=${hostiles.length} — dangerUntil=${remote.dangerUntil} (~${REMOTE_DANGER_TICKS}t)`);
             }
             if ((remote.lastPatrolDangerNotifyAt ?? 0) + PATROL_DANGER_NOTIFY_COOLDOWN <= Game.time) {
-                Game.notify(`[REMOTE-DANGER] ${homeRoom.name}->${remoteName} has hostiles=${hostiles.length} and zero patrol coverage at t=${Game.time}`);
+                Game.notify(`[REMOTE-DANGER] ${homeRoom.name}->${remoteName} has armedHostiles=${hostiles.length} and zero patrol coverage at t=${Game.time}`);
                 remote.lastPatrolDangerNotifyAt = Game.time;
             }
             continue;
         }
 
         if (remote.skipReason === 'danger' || remote.skipReason === 'transit-danger') {
-            if (hostiles.length === 0) {
+            if (!hasArmedHostiles) {
                 remote.skipReason = undefined;
                 remote.dangerUntil = undefined;
                 console.log(`[REMOTE-DANGER] t=${Game.time} ${remoteName}: cleared`);
             } else {
-                remote.skipReason = undefined;
-                remote.dangerUntil = undefined;
+                remote.dangerUntil = Math.max(remote.dangerUntil ?? 0, Game.time + REMOTE_DANGER_TICKS);
+                continue;
             }
+        }
+
+        if (!hostileCore && remote.lastSeenInvaderCoreAt && remote.lastSeenInvaderCoreAt + REMOTE_THREAT_MEMORY_TTL <= Game.time) {
+            remote.lastSeenInvaderCoreAt = undefined;
+        }
+        if (!hostileController && remote.lastSeenHostileControllerAt && remote.lastSeenHostileControllerAt + REMOTE_THREAT_MEMORY_TTL <= Game.time) {
+            remote.lastSeenHostileControllerAt = undefined;
         }
 
         if (!remote.sources) { remote.sources = {}; }
@@ -260,7 +278,7 @@ export function updateRemoteRoomPlans(homeRoom: Room): void {
     }
 }
 
-function patrolCoverageForHome(homeRoomName: string): number {
+export function patrolCoverageForHome(homeRoomName: string): number {
     let coverage = 0;
     for (const name in Game.creeps) {
         const creep = Game.creeps[name];
@@ -270,6 +288,35 @@ function patrolCoverageForHome(homeRoomName: string): number {
         coverage++;
     }
     return coverage;
+}
+
+export function remoteArmedFailsafeActive(
+    homeRoomName: string,
+    remoteRoomName: string,
+    remotePlan: RemoteRoomPlan | undefined,
+    patrolCoverage: number = patrolCoverageForHome(homeRoomName)
+): boolean {
+    if (!remotePlan || remotePlan.skipReason !== 'danger') { return false; }
+    if (!remotePlan.dangerUntil || remotePlan.dangerUntil <= Game.time) { return false; }
+    if (patrolCoverage > 0) { return false; }
+    const room = Game.rooms[remoteRoomName];
+    if (!room) { return true; }
+    return findHostiles(room).length > 0;
+}
+
+function findHostileInvaderCore(room: Room): StructureInvaderCore | null {
+    const cores = room.find(FIND_HOSTILE_STRUCTURES, {
+        filter: (structure) => structure.structureType === STRUCTURE_INVADER_CORE
+    }) as StructureInvaderCore[];
+    return cores[0] ?? null;
+}
+
+function hasHostileController(room: Room, myUsername?: string): boolean {
+    const controller = room.controller;
+    if (!controller) { return false; }
+    if (controller.owner && controller.owner.username !== myUsername) { return true; }
+    if (controller.reservation && controller.reservation.username !== myUsername) { return true; }
+    return false;
 }
 
 function assignedRemoteMaintainerSnapshot(

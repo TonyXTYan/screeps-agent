@@ -62,18 +62,20 @@ src/
 
 - Patrol spawn target (`room/remote/spawn.ts`):
   - `baseline = ceil(enabledRemotes / 2)`
-  - `target = baseline + visibleArmedHostiles`
+  - `target = baseline + visibleArmedHostiles` (home + enabled remotes)
+  - `RCL < 6`: emergency home-defense-only patrol spawning
 - Patrol behavior (`role/patrol.ts`):
-  - converge on visible armed hostiles
+  - converge on visible armed hostiles (home + remotes)
   - target HEAL > RANGED_ATTACK > ATTACK
+  - clear visible invader cores when no armed target is present in threat room
   - rotate remotes every `getPatrolRotationTicks()` (currently 100)
 - Evade radius (`room/constants.ts`): `REMOTE_HOSTILE_EVADE_DISTANCE`
-- Fail-safe danger marker (`room/remote/planning.ts`): only when hostiles visible and patrol coverage is zero.
+- Fail-safe danger marker (`room/remote/planning.ts`): armed-hostile only, with non-combat retreat/spawn blocking when patrol coverage is zero.
 
 ## Types and Memory
 
 - Archetype union includes `patrol` plus legacy compatibility values (`doctor`, `defender`).
-- Remote plan tracks `dangerUntil`, `skipReason`, and `lastPatrolDangerNotifyAt` for fail-safe alerts.
+- Remote plan tracks `dangerUntil`, `skipReason`, `lastPatrolDangerNotifyAt`, plus non-creep threat telemetry (`lastSeenInvaderCoreAt`, `lastSeenHostileControllerAt`).
 
 ## Repair Utilities
 
@@ -87,4 +89,4 @@ These are still consumed by tower/job/room repair logic.
 ## Notes
 
 - `populationControl.ts` and `role/defender.ts` are retained as legacy code but are no longer called from the main loop.
-- Legacy memory migration (`defender -> patrol`, `doctor -> worker`) is handled in both `memoryManagement.ts` and `memoryAudit.ts`.
+- Legacy memory migration (`defender -> patrol`, `doctor -> worker`) is one-time guarded in `memoryManagement.ts` and reinforced in `memoryAudit.ts`.

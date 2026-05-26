@@ -81,7 +81,7 @@ function computeRemoteMaintenancePressure(
     const decay = EMPTY_DECAY();
     const backlog = EMPTY_BACKLOG();
     const terrain = room.getTerrain();
-    const roadDecayTimes = getRoadDecayTimes();
+    const roadDecayMultipliers = getRoadDecayMultipliers();
     const containerDecayTime = room.controller?.my ? CONTAINER_DECAY_TIME_OWNED : CONTAINER_DECAY_TIME;
 
     const structures = room.find(FIND_STRUCTURES, {
@@ -93,8 +93,8 @@ function computeRemoteMaintenancePressure(
             decay.roadHits += structure.hits;
             decay.roadHitsMax += structure.hitsMax;
             const road = structure as StructureRoad;
-            const roadDecayTime = roadDecayTimeForPosition(road.pos, terrain, roadDecayTimes);
-            decay.roadDecayHitsPerTick += ROAD_DECAY_AMOUNT / roadDecayTime;
+            const roadDecayMultiplier = roadDecayMultiplierForPosition(road.pos, terrain, roadDecayMultipliers);
+            decay.roadDecayHitsPerTick += (ROAD_DECAY_AMOUNT * roadDecayMultiplier) / ROAD_DECAY_TIME;
             backlog.roadRepairEnergy += (structure.hitsMax - structure.hits) / REPAIR_POWER;
             continue;
         }
@@ -138,25 +138,21 @@ function computeRemoteMaintenancePressure(
     };
 }
 
-function getRoadDecayTimes(): { plain: number; swamp: number; wall: number } {
-    const roadGlobals = globalThis as {
-        ROAD_DECAY_TIME_SWAMP?: number;
-        ROAD_DECAY_TIME_WALL?: number;
-    };
+function getRoadDecayMultipliers(): { plain: number; swamp: number; wall: number } {
     return {
-        plain: ROAD_DECAY_TIME,
-        swamp: roadGlobals.ROAD_DECAY_TIME_SWAMP ?? ROAD_DECAY_TIME,
-        wall: roadGlobals.ROAD_DECAY_TIME_WALL ?? ROAD_DECAY_TIME
+        plain: 1,
+        swamp: CONSTRUCTION_COST_ROAD_SWAMP_RATIO,
+        wall: CONSTRUCTION_COST_ROAD_WALL_RATIO
     };
 }
 
-function roadDecayTimeForPosition(
+function roadDecayMultiplierForPosition(
     pos: RoomPosition,
     terrain: RoomTerrain,
-    decayTimes: { plain: number; swamp: number; wall: number }
+    multipliers: { plain: number; swamp: number; wall: number }
 ): number {
     const tile = terrain.get(pos.x, pos.y);
-    if (tile === TERRAIN_MASK_WALL) { return decayTimes.wall; }
-    if (tile === TERRAIN_MASK_SWAMP) { return decayTimes.swamp; }
-    return decayTimes.plain;
+    if (tile === TERRAIN_MASK_WALL) { return multipliers.wall; }
+    if (tile === TERRAIN_MASK_SWAMP) { return multipliers.swamp; }
+    return multipliers.plain;
 }

@@ -361,13 +361,21 @@ function retreatRemoteCreepFromHostiles(creep: Creep): boolean {
 }
 
 function markRemoteDanger(creep: Creep, homeRoom: string): void {
-    const remoteRoom = creep.memory.remoteRoom ?? creep.room.name;
+    // Use the room the creep is currently IN — not its assigned remoteRoom.
+    // A creep passing through a dangerous intermediate room (e.g. a W9N8 maintainer
+    // transiting through W9N9 while an InvaderCore is there) should mark the room
+    // it's standing in, not its destination.
+    const remoteRoom = creep.room.name;
     const plan = Memory.rooms[homeRoom]?.plan?.remoteRooms?.[remoteRoom];
     if (!plan) { return; }
 
+    const wasAlreadyDanger = plan.skipReason === 'danger';
     plan.lastSeenHostiles = Game.time;
     plan.dangerUntil = Math.max(plan.dangerUntil ?? 0, Game.time + REMOTE_RETREAT_DANGER_TICKS);
     plan.skipReason = 'danger';
+    if (!wasAlreadyDanger) {
+        console.log(`[REMOTE-DANGER] t=${Game.time} ${remoteRoom}: creep-retreat detected — dangerUntil=${plan.dangerUntil} (~${REMOTE_RETREAT_DANGER_TICKS}t)`);
+    }
 }
 
 function emergencyHealTarget(creep: Creep): Creep | null {

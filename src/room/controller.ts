@@ -77,6 +77,61 @@ export function run(room: Room): void {
     runSpawnPlanner(context);
 }
 
+function remoteMaintainerClaimedTargetIds(creep: Creep): Set<string> {
+    const claimed = new Set<string>();
+    const homeRoom = creep.memory.homeRoom;
+    const remoteRoom = creep.memory.remoteRoom;
+    if (!homeRoom || !remoteRoom) { return claimed; }
+
+    for (const name in Game.creeps) {
+        const other = Game.creeps[name];
+        if (other.id === creep.id) { continue; }
+        if (other.spawning) { continue; }
+        if (ensureArchetype(other) !== 'remoteMaintainer') { continue; }
+        if (other.memory.homeRoom !== homeRoom) { continue; }
+        if (other.memory.remoteRoom !== remoteRoom) { continue; }
+        if (other.memory.jobType !== 'build' && other.memory.jobType !== 'repair') { continue; }
+        if (!other.memory.jobTargetId) { continue; }
+        claimed.add(other.memory.jobTargetId);
+    }
+
+    return claimed;
+}
+
+function preferUnclaimedTargets<T extends { id: string }>(targets: T[], claimed: Set<string>): T[] {
+    if (claimed.size === 0 || targets.length === 0) { return targets; }
+    const unclaimed = targets.filter((target) => !claimed.has(target.id));
+    return unclaimed.length > 0 ? unclaimed : targets;
+}
+
+function closestByPathOrRange(creep: Creep, sites: ConstructionSite[]): ConstructionSite | null {
+    if (sites.length === 0) { return null; }
+    const byPath = creep.pos.findClosestByPath(sites, { ignoreCreeps: true }) as ConstructionSite | null;
+    if (byPath) { return byPath; }
+    return closest(creep, sites);
+}
+
+function selectRemoteMaintainerBuildSite(creep: Creep, claimedTargets: Set<string>): ConstructionSite | null {
+    const infraSites = creep.room.find(FIND_MY_CONSTRUCTION_SITES, {
+        filter: (site) => site.structureType === STRUCTURE_ROAD || site.structureType === STRUCTURE_CONTAINER
+    }) as ConstructionSite[];
+    const preferredInfra = closestByPathOrRange(creep, preferUnclaimedTargets(infraSites, claimedTargets));
+    if (preferredInfra) { return preferredInfra; }
+
+    const allSites = creep.room.find(FIND_MY_CONSTRUCTION_SITES) as ConstructionSite[];
+    return closestByPathOrRange(creep, preferUnclaimedTargets(allSites, claimedTargets));
+}
+
+function selectRemoteMaintainerRepairTarget(
+    creep: Creep,
+    claimedTargets: Set<string>,
+    filter: (structure: AnyStructure) => boolean
+): AnyStructure | null {
+    const targets = creep.room.find(FIND_STRUCTURES, { filter }) as AnyStructure[];
+    const pool = preferUnclaimedTargets(targets, claimedTargets);
+    return worstHits(creep, pool);
+}
+
 export function assignRemoteCreep(creep: Creep): boolean {
     const homeRoom = creep.memory.homeRoom;
     const remoteRoom = creep.memory.remoteRoom;
@@ -166,8 +221,17 @@ export function assignRemoteCreep(creep: Creep): boolean {
         return true;
     }
 
+    const remoteMaintainerClaims = archetype === 'remoteMaintainer'
+        ? remoteMaintainerClaimedTargetIds(creep)
+        : null;
+
+    const remoteBuildCandidate = shouldBuildRemoteInfrastructure(creep, archetype, remotePlan)
+        ? (archetype === 'remoteMaintainer'
+            ? selectRemoteMaintainerBuildSite(creep, remoteMaintainerClaims ?? new Set<string>())
+            : closestRemoteInfrastructureSite(creep, false))
+        : null;
     const remoteBuildSite = shouldBuildRemoteInfrastructure(creep, archetype, remotePlan)
-        ? preferredRemoteInfrastructureSite(creep, archetype, closestRemoteInfrastructureSite(creep, archetype === 'remoteMaintainer'))
+        ? preferredRemoteInfrastructureSite(creep, archetype, remoteBuildCandidate)
         : null;
     if (remoteBuildSite) {
         setJob(creep, 'build', remoteBuildSite);
@@ -295,51 +359,55 @@ export function assignRemoteCreep(creep: Creep): boolean {
     }
 
     if (archetype === 'remoteMaintainer') {
+        const claimedTargets = remoteMaintainerClaims ?? remoteMaintainerClaimedTargetIds(creep);
         const hasEnergy = creep.store.getUsedCapacity(RESOURCE_ENERGY) > 0;
 
         // 1. Critical container repair: most-degraded container below threshold (Fix A: 50%).
-        const criticalContainers = creep.room.find(FIND_STRUCTURES, {
-            filter: s => s.structureType === STRUCTURE_CONTAINER && s.hits < s.hitsMax * REMOTE_CONTAINER_CRITICAL_REPAIR_THRESHOLD
-        }) as AnyStructure[];
-        const criticalContainer = worstHits(creep, criticalContainers);
+        const criticalContainer = selectRemoteMaintainerRepairTarget(
+            creep,
+            claimedTargets,
+            (s) => s.structureType === STRUCTURE_CONTAINER && s.hits < s.hitsMax * REMOTE_CONTAINER_CRITICAL_REPAIR_THRESHOLD
+        );
         if (criticalContainer && hasEnergy) {
             setJob(creep, 'repair', criticalContainer);
             return true;
         }
 
         // 2. Container repair: most-degraded container below 90% — prioritised over building.
-        const damagedContainers = creep.room.find(FIND_STRUCTURES, {
-            filter: s => s.structureType === STRUCTURE_CONTAINER && s.hits < s.hitsMax * 0.9
-        }) as AnyStructure[];
-        const worstContainer = worstHits(creep, damagedContainers);
+        const worstContainer = selectRemoteMaintainerRepairTarget(
+            creep,
+            claimedTargets,
+            (s) => s.structureType === STRUCTURE_CONTAINER && s.hits < s.hitsMax * 0.9
+        );
         if (worstContainer && hasEnergy) {
             setJob(creep, 'repair', worstContainer);
             return true;
         }
 
         // 3. Road repair: most-degraded road below 80% — prioritised over building.
-        const criticalRoads = creep.room.find(FIND_STRUCTURES, {
-            filter: s => s.structureType === STRUCTURE_ROAD && s.hits < s.hitsMax * 0.8
-        }) as AnyStructure[];
-        const worstCriticalRoad = worstHits(creep, criticalRoads);
+        const worstCriticalRoad = selectRemoteMaintainerRepairTarget(
+            creep,
+            claimedTargets,
+            (s) => s.structureType === STRUCTURE_ROAD && s.hits < s.hitsMax * 0.8
+        );
         if (worstCriticalRoad && hasEnergy) {
             setJob(creep, 'repair', worstCriticalRoad);
             return true;
         }
 
         // 4. Build construction sites (roads and containers only; falls back to any site).
-        const site = closestRemoteInfrastructureSite(creep, true) ??
-            closest(creep, creep.room.find(FIND_MY_CONSTRUCTION_SITES));
+        const site = selectRemoteMaintainerBuildSite(creep, claimedTargets);
         if (site && hasEnergy) {
             setJob(creep, 'build', site);
             return true;
         }
 
         // 5. Road repair: roads below 80% (after building, same threshold as step 3).
-        const minorRoads = creep.room.find(FIND_STRUCTURES, {
-            filter: s => s.structureType === STRUCTURE_ROAD && s.hits < s.hitsMax * 0.8
-        }) as AnyStructure[];
-        const worstMinorRoad = worstHits(creep, minorRoads);
+        const worstMinorRoad = selectRemoteMaintainerRepairTarget(
+            creep,
+            claimedTargets,
+            (s) => s.structureType === STRUCTURE_ROAD && s.hits < s.hitsMax * 0.8
+        );
         if (worstMinorRoad && hasEnergy) {
             setJob(creep, 'repair', worstMinorRoad);
             return true;

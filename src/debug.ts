@@ -754,9 +754,14 @@ export type DebugConsoleApi = {
 };
 
 export function tickAutoDebug(): void {
-    const tick = Game.time % 13;
-    if (tick === 0){
+    
+    if (Game.time % 5 === 0){
         console.log(`--- Shard ${Game.shard.name} --- Tick ${Game.time} --- ${new Date().toLocaleTimeString()} --- ${Game.cpu.bucket} bucket --- ${Game.market.credits} credits ---`);
+    }
+
+    const tick = Game.time % 19;
+    if (tick === 0){
+        return
     } else if (tick === 1) {
         for (const room of ownedRooms()) {
             if (room.memory.debug_home) { printHomeCreepStatus(room.name); }
@@ -772,6 +777,7 @@ export function tickAutoDebug(): void {
             }
         }
     }
+    
 }
 
 export function tickRemoteCreepLog(): void {

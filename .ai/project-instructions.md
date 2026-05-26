@@ -99,6 +99,7 @@ This is a Screeps bot written in TypeScript, bundled by Rollup into a single `di
 
 When discussing or designing single-creep siege profiles, use:
 - `.ai/strategy/solo-siege.md` — tower sustain formulas, per-tier boost requirements, and practical/impractical 1-6 tower body envelopes.
+- `.ai/strategy/paired-siege.md` — two-creep melee+ranged siege envelopes by tower count and boost package.
 
 Guardrails:
 - Use official Screeps docs (`docs.screeps.com`) as source of truth for boost multipliers.

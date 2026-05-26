@@ -63,6 +63,7 @@ sources?: {
 ## Maintenance Pressure Telemetry
 
 - `maintenance.decay` models passive road/container decay load in hits/tick and energy/tick.
+  - Road decay uses per-road terrain (plain/swamp/wall) decay timing constants.
 - `maintenance.backlog` models one-time repair/build backlog energy for roads/containers.
 - The telemetry is event-driven, not per-tick:
   - `setup` trigger on `remoteMining.activate(...)`

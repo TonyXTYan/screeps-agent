@@ -80,8 +80,8 @@ function computeRemoteMaintenancePressure(
 ): RemoteMaintenancePressure {
     const decay = EMPTY_DECAY();
     const backlog = EMPTY_BACKLOG();
-    const ownedRoadDecayTime = (globalThis as { ROAD_DECAY_TIME_OWNED?: number }).ROAD_DECAY_TIME_OWNED ?? ROAD_DECAY_TIME;
-    const roadDecayTime = room.controller?.my ? ownedRoadDecayTime : ROAD_DECAY_TIME;
+    const terrain = room.getTerrain();
+    const roadDecayTimes = getRoadDecayTimes();
     const containerDecayTime = room.controller?.my ? CONTAINER_DECAY_TIME_OWNED : CONTAINER_DECAY_TIME;
 
     const structures = room.find(FIND_STRUCTURES, {
@@ -92,6 +92,8 @@ function computeRemoteMaintenancePressure(
             decay.roadCount++;
             decay.roadHits += structure.hits;
             decay.roadHitsMax += structure.hitsMax;
+            const road = structure as StructureRoad;
+            const roadDecayTime = roadDecayTimeForPosition(road.pos, terrain, roadDecayTimes);
             decay.roadDecayHitsPerTick += ROAD_DECAY_AMOUNT / roadDecayTime;
             backlog.roadRepairEnergy += (structure.hitsMax - structure.hits) / REPAIR_POWER;
             continue;
@@ -134,4 +136,27 @@ function computeRemoteMaintenancePressure(
         decay,
         backlog
     };
+}
+
+function getRoadDecayTimes(): { plain: number; swamp: number; wall: number } {
+    const roadGlobals = globalThis as {
+        ROAD_DECAY_TIME_SWAMP?: number;
+        ROAD_DECAY_TIME_WALL?: number;
+    };
+    return {
+        plain: ROAD_DECAY_TIME,
+        swamp: roadGlobals.ROAD_DECAY_TIME_SWAMP ?? ROAD_DECAY_TIME,
+        wall: roadGlobals.ROAD_DECAY_TIME_WALL ?? ROAD_DECAY_TIME
+    };
+}
+
+function roadDecayTimeForPosition(
+    pos: RoomPosition,
+    terrain: RoomTerrain,
+    decayTimes: { plain: number; swamp: number; wall: number }
+): number {
+    const tile = terrain.get(pos.x, pos.y);
+    if (tile === TERRAIN_MASK_WALL) { return decayTimes.wall; }
+    if (tile === TERRAIN_MASK_SWAMP) { return decayTimes.swamp; }
+    return decayTimes.plain;
 }

@@ -236,8 +236,13 @@ export function assignRemoteCreep(creep: Creep): boolean {
         ? preferredRemoteInfrastructureSite(creep, archetype, remoteBuildCandidate)
         : null;
     if (remoteBuildSite) {
-        setJob(creep, 'build', remoteBuildSite);
-        return true;
+        // Bug fix: for remoteMaintainer the pre-block only handles build-job stickiness
+        // (keeping an already-active build target alive).  New build assignments go through
+        // the priority block below so repair always takes precedence over building.
+        if (archetype !== 'remoteMaintainer' || creep.memory.jobType === 'build') {
+            setJob(creep, 'build', remoteBuildSite);
+            return true;
+        }
     }
 
     if (archetype === 'claimer' && creep.room.controller) {
@@ -365,7 +370,22 @@ export function assignRemoteCreep(creep: Creep): boolean {
         const claimedTargets = remoteMaintainerClaims ?? remoteMaintainerClaimedTargetIds(creep);
         const hasEnergy = creep.store.getUsedCapacity(RESOURCE_ENERGY) > 0;
 
-        // 1. Critical container repair: most-degraded container below threshold (Fix A: 50%).
+        // Sticky: keep the current repair or build job while the target still needs work,
+        // rather than re-evaluating to the globally worst target every tick.  This prevents
+        // oscillation between two similarly-degraded structures and avoids wasted travel.
+        const currentJobType = creep.memory.jobType;
+        const currentTargetId = creep.memory.jobTargetId;
+        if (hasEnergy && currentTargetId && (currentJobType === 'repair' || currentJobType === 'build')) {
+            if (currentJobType === 'build') {
+                const site = Game.getObjectById(currentTargetId as Id<ConstructionSite>);
+                if (site && site.progress < site.progressTotal) { return true; }
+            } else {
+                const structure = Game.getObjectById(currentTargetId as Id<AnyStructure>);
+                if (structure && structure.hits < structure.hitsMax) { return true; }
+            }
+        }
+
+        // 1. Critical container repair: most-degraded container below 50%.
         const criticalContainer = selectRemoteMaintainerRepairTarget(
             creep,
             claimedTargets,
@@ -405,19 +425,23 @@ export function assignRemoteCreep(creep: Creep): boolean {
             return true;
         }
 
-        // 5. Road repair: roads below 80% (after building, same threshold as step 3).
+        // 5. Road upkeep: roads below 90% — lower threshold than step 3, runs after building
+        // to catch gradual road decay before it hits the 80% critical threshold.
         const worstMinorRoad = selectRemoteMaintainerRepairTarget(
             creep,
             claimedTargets,
-            (s) => s.structureType === STRUCTURE_ROAD && s.hits < s.hitsMax * 0.8
+            (s) => s.structureType === STRUCTURE_ROAD && s.hits < s.hitsMax * 0.9
         );
         if (worstMinorRoad && hasEnergy) {
             setJob(creep, 'repair', worstMinorRoad);
             return true;
         }
 
-        // 6. Collect energy.
-        if (creep.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
+        // 6. Collect energy — only when there is actual work queued.  Prevents the creep
+        // from filling up on energy when all structures are healthy, which would otherwise
+        // trigger the generic fallback and cause a pointless home↔remote bounce cycle.
+        const hasWorkQueued = !!(criticalContainer || worstContainer || worstCriticalRoad || site || worstMinorRoad);
+        if (hasWorkQueued && creep.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
             const remoteEnergy = findRemoteEnergySource(creep, remotePlan, {
                 droppedFirst: false,
                 droppedMinAmount: 50
@@ -442,6 +466,13 @@ export function assignRemoteCreep(creep: Creep): boolean {
                 return true;
             }
         }
+
+        // 7. Nothing to do: idle in the remote room rather than falling through to the
+        // home-deposit fallback (which causes a pointless home↔remote bounce cycle).
+        // The creep retains any energy it holds and will resume repairs as soon as
+        // structures start to decay below the maintenance thresholds.
+        setJob(creep, 'idle', creep.room.controller ?? creep.room.find(FIND_MY_SPAWNS)[0]);
+        return true;
     }
 
     // Fallback for legacy/misclassified remote creeps that still carry remote assignment.

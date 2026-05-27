@@ -108,6 +108,12 @@ export function updateRemoteRoomPlans(homeRoom: Room): void {
         if (hostileController) {
             remote.lastSeenHostileControllerAt = Game.time;
         }
+        if (!hostileCore && remote.lastSeenInvaderCoreAt && remote.lastSeenInvaderCoreAt + REMOTE_THREAT_MEMORY_TTL <= Game.time) {
+            remote.lastSeenInvaderCoreAt = undefined;
+        }
+        if (!hostileController && remote.lastSeenHostileControllerAt && remote.lastSeenHostileControllerAt + REMOTE_THREAT_MEMORY_TTL <= Game.time) {
+            remote.lastSeenHostileControllerAt = undefined;
+        }
 
         if (hasArmedHostiles && patrolCoverage === 0) {
             const wasAlreadyDanger = remote.skipReason === 'danger';
@@ -132,13 +138,6 @@ export function updateRemoteRoomPlans(homeRoom: Room): void {
                 remote.dangerUntil = Math.max(remote.dangerUntil ?? 0, Game.time + REMOTE_DANGER_TICKS);
                 continue;
             }
-        }
-
-        if (!hostileCore && remote.lastSeenInvaderCoreAt && remote.lastSeenInvaderCoreAt + REMOTE_THREAT_MEMORY_TTL <= Game.time) {
-            remote.lastSeenInvaderCoreAt = undefined;
-        }
-        if (!hostileController && remote.lastSeenHostileControllerAt && remote.lastSeenHostileControllerAt + REMOTE_THREAT_MEMORY_TTL <= Game.time) {
-            remote.lastSeenHostileControllerAt = undefined;
         }
 
         if (!remote.sources) { remote.sources = {}; }

@@ -7,7 +7,7 @@ Quick reference for hard and soft limits on creep counts by archetype and RCL.
 | Archetype | Cap | Formula / Notes |
 |-----------|-----|-----------------|
 | **Miner** | `sourceCount` | 1 per source; renew or respawn based on body/TTL conditions |
-| **Patrol** | Dynamic | `RCL >= 6`: `min(ceil(enabledRemotes / 2) + hostileRooms, 2 + 2*enabledRemotes)`; `RCL < 6`: home-defense-only emergency scaling |
+| **Patrol** | Dynamic | `RCL >= 6`: `min(ceil(enabledRemotes / 2) + hostileRooms, 2 + 2*enabledRemotes)`; `RCL < 6`: spawn up to 1 when home has armed hostiles |
 | **Hauler** | Dynamic | `max(2, ceil(demand / maxCarryPerHauler) + 1)` |
 | **Worker** | RCL-dependent | `[0, 2, 2, 2, 3, 3, 3, 4, 4]` for RCL 0–8 |
 | **Mineral Miner** | 1 (soft) | Spawns when mineral site is ready and no mineral work coverage exists |

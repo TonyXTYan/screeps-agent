@@ -65,12 +65,13 @@ src/
   - `hostileRooms = (homeArmedHostiles > 0 ? 1 : 0) + enabledRemotesWithVisibleArmedHostiles`
   - `cap = 2 + 2 * enabledRemotes`
   - `target = min(baseline + hostileRooms, cap)`
-  - `RCL < 6`: emergency home-defense-only patrol spawning
+  - `RCL < 6`: emergency home-defense-only spawning capped at 1 patrol for any armed home threat
 - Patrol behavior (`role/patrol.ts`):
   - converge on visible armed hostiles (home + remotes)
   - target HEAL > RANGED_ATTACK > ATTACK
   - clear visible invader cores when no armed target is present in threat room
   - rotate remotes every `getPatrolRotationTicks()` (currently 100)
+  - renew logic allows home-room top-up during remote-only threats and critical-TTL sustain during long incursions
 - Evade radius (`room/constants.ts`): `REMOTE_HOSTILE_EVADE_DISTANCE`
 - During armed failsafe home retreat (`main.ts`): creeps already on `travelRoom -> homeRoom` take directed home-exit steering with hostile-avoid costs before generic flee.
 - Fail-safe danger marker (`room/remote/planning.ts`): armed-hostile only, with non-combat retreat/spawn blocking when patrol coverage is zero.

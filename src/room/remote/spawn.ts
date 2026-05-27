@@ -468,13 +468,15 @@ function patrolSpawnRequest(
     const homeArmedHostiles = findHostiles(context.room).length;
     if (rcl < 6) {
         if (homeArmedHostiles === 0) { return null; }
+        const hostileRooms = 1;
+        const targetPatrol = Math.min(hostileRooms, patrolTargetCap(0));
         const homeFleet = creepsForHomeRoom(context.room.name);
         const patrolCount = countFleetForArchetype(homeFleet, 'patrol') + pendingArchetypeCount(pending, 'patrol');
-        if (patrolCount >= homeArmedHostiles) { return null; }
+        if (patrolCount >= targetPatrol) { return null; }
         return {
             archetype: 'patrol',
-            reason: 'home defense target ' + patrolCount + '/' + homeArmedHostiles +
-                ' armedHostiles=' + homeArmedHostiles
+            reason: 'home defense target ' + patrolCount + '/' + targetPatrol +
+                ' hostileRooms=' + hostileRooms + ' armedHostiles=' + homeArmedHostiles
         };
     }
 

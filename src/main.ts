@@ -71,6 +71,7 @@ type RemoteMiningOptions = {
 let debugPathsEnabled = false;
 let debugPathsLastScannedAt: number | undefined;
 let moveDebugHookInstalled = false;
+const hostileRetreatCostCache = new Map<string, { tick: number; matrix: CostMatrix }>();
 
 function detectCodeChange(): boolean {
     const lastCommit = (Memory as { lastBuildCommit?: string }).lastBuildCommit;
@@ -341,7 +342,7 @@ function directedRetreatToHomeStep(creep: Creep, hostiles: Creep[]): boolean {
             maxRooms: 1,
             roomCallback: (roomName) => {
                 if (roomName !== creep.room.name) { return false; }
-                return hostileEvadeRetreatCosts(creep, hostiles);
+                return cachedHostileRetreatCosts(creep.room, hostiles);
             }
         }
     );
@@ -353,18 +354,24 @@ function directedRetreatToHomeStep(creep: Creep, hostiles: Creep[]): boolean {
     return true;
 }
 
-function hostileEvadeRetreatCosts(creep: Creep, hostiles: Creep[]): CostMatrix {
+function cachedHostileRetreatCosts(room: Room, hostiles: Creep[]): CostMatrix {
+    const cached = hostileRetreatCostCache.get(room.name);
+    if (cached && cached.tick === Game.time) {
+        return cached.matrix;
+    }
+
+    const matrix = buildHostileRetreatCosts(room, hostiles);
+    hostileRetreatCostCache.set(room.name, { tick: Game.time, matrix });
+    return matrix;
+}
+
+function buildHostileRetreatCosts(room: Room, hostiles: Creep[]): CostMatrix {
     const matrix = new PathFinder.CostMatrix();
 
-    for (const structure of creep.room.find(FIND_STRUCTURES)) {
+    for (const structure of room.find(FIND_STRUCTURES)) {
         if (structure.structureType === STRUCTURE_ROAD || structure.structureType === STRUCTURE_CONTAINER) { continue; }
         if (structure.structureType === STRUCTURE_RAMPART && (structure as StructureRampart).my) { continue; }
         matrix.set(structure.pos.x, structure.pos.y, 255);
-    }
-
-    for (const other of creep.room.find(FIND_CREEPS)) {
-        if (other.id === creep.id) { continue; }
-        matrix.set(other.pos.x, other.pos.y, 255);
     }
 
     for (const hostile of hostiles) {
@@ -374,7 +381,6 @@ function hostileEvadeRetreatCosts(creep: Creep, hostiles: Creep[]): CostMatrix {
                 const y = hostile.pos.y + dy;
                 if (x < 0 || x > 49 || y < 0 || y > 49) { continue; }
                 if (Math.max(Math.abs(dx), Math.abs(dy)) > REMOTE_HOSTILE_EVADE_DISTANCE) { continue; }
-                if (x === creep.pos.x && y === creep.pos.y) { continue; }
                 matrix.set(x, y, 255);
             }
         }

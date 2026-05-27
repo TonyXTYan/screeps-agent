@@ -1,9 +1,10 @@
-import { findHostiles, isHostile } from '../hostileUtils';
+import { findHostiles } from '../hostileUtils';
 import { acquireRenewSpawn, nearestSpawn } from '../spawn/renewal';
 
 const PATROL_HOLD_RANGE = 8;
 const PATROL_RENEW_START_TTL = 650;
 const PATROL_RENEW_STOP_TTL = 1400;
+const PATROL_RENEW_CRITICAL_TTL = 300;
 
 type VisibleThreat = {
     roomName: string;
@@ -22,7 +23,7 @@ export function run(creep: Creep): void {
     const enabledRemotes = enabledRemoteRooms(homeRoom);
     const visibleThreats = visibleRemoteThreats(homeRoom, enabledRemotes);
 
-    if (visibleThreats.length === 0 && tryRenewPatrol(creep, homeRoom)) {
+    if (shouldRenewPatrolNow(creep, visibleThreats, homeRoom) && tryRenewPatrol(creep, homeRoom)) {
         return;
     }
 
@@ -145,9 +146,15 @@ function selectThreatRoom(creep: Creep, threats: VisibleThreat[]): VisibleThreat
 }
 
 function selectCombatTarget(creep: Creep, hostiles: Creep[]): Creep | null {
-    const sorted = hostiles.slice().sort((a, b) => hostilePriorityScore(b) - hostilePriorityScore(a));
-    const nearest = creep.pos.findClosestByRange(sorted, { filter: isHostile });
-    return nearest ?? sorted[0] ?? null;
+    if (hostiles.length === 0) { return null; }
+    const scored = hostiles.map((hostile) => ({ hostile, score: hostilePriorityScore(hostile) }));
+    scored.sort((a, b) => b.score - a.score);
+
+    const topScore = scored[0].score;
+    const topPriority = scored
+        .filter((entry) => entry.score === topScore)
+        .map((entry) => entry.hostile);
+    return creep.pos.findClosestByRange(topPriority) ?? scored[0].hostile;
 }
 
 function hostilePriorityScore(hostile: Creep): number {
@@ -198,6 +205,18 @@ function threatPriority(threat: VisibleThreat, creep: Creep): number {
     const coreBoost = threat.invaderCore ? 100 : 0;
     const distancePenalty = Game.map.getRoomLinearDistance(creep.room.name, threat.roomName);
     return homeBoost + armedBoost + coreBoost - distancePenalty;
+}
+
+function shouldRenewPatrolNow(creep: Creep, threats: VisibleThreat[], homeRoomName: string): boolean {
+    const ttl = creep.ticksToLive ?? 0;
+    if (ttl <= 0) { return false; }
+    if (threats.length === 0) { return true; }
+    if (creep.memory.renewing) { return true; }
+    if (ttl <= PATROL_RENEW_CRITICAL_TTL) { return true; }
+    if (creep.room.name !== homeRoomName) { return false; }
+    if (ttl > PATROL_RENEW_START_TTL) { return false; }
+
+    return !threats.some((threat) => threat.isHomeThreat && threat.hostiles.length > 0);
 }
 
 function tryRenewPatrol(creep: Creep, homeRoomName: string): boolean {

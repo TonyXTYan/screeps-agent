@@ -51,7 +51,7 @@ At `RCL >= 6`, patrol target per home room is:
 
 At `RCL < 6`, patrol is only used as an emergency home-defense fallback:
 
-- `target = armedHostilesInHomeRoom`
+- `target = 1` when any armed hostile is visible in home room (hostile-room count model)
 - no remote combat dispatch below RCL 6
 
 `enabledRemoteRooms` counts all enabled remote modes (`harvest`, `reserve`, `claim`).
@@ -63,7 +63,7 @@ At `RCL < 6`, patrol is only used as an emergency home-defense fallback:
 - When no armed hostile is visible in the chosen room, patrols can clear visible invader cores.
 - If no active threat is visible, patrols rotate through enabled remotes.
 - Rotation cadence is provided by `getPatrolRotationTicks()` (currently returns `100`).
-- Patrols renew in home room when no active threat and TTL is low.
+- Patrols renew in home room when idle, and may also renew during remote-only threats if already home or critically low TTL.
 
 ## Layer 3: Non-Combat Evade (`main.ts`)
 

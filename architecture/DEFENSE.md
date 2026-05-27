@@ -63,11 +63,11 @@ Patrol body costs, checked against spawn + extension capacity:
 |-----|----------------------|----------------------------|
 | 1 | 300 | 140 energy: `TOUGH, ATTACK, MOVE` |
 | 2 | 550 | 440 energy: `TOUGH, ATTACK, MOVE, MOVE, HEAL` |
-| 3 | 800 | 700 energy: `TOUGH, ATTACK, ATTACK, ATTACK, MOVE, MOVE, MOVE, MOVE, HEAL` |
-| 4 | 1300 | 1100 energy: `TOUGH, TOUGH, ATTACK x6, MOVE x7, HEAL` |
-| 5 | 1800 | 1100 energy: same as RCL 4 |
+| 3 | 800 | 770 energy: `TOUGH, ATTACK x2, RANGED_ATTACK, MOVE x4, HEAL` |
+| 4 | 1300 | 1160 energy: `TOUGH x2, ATTACK x3, RANGED_ATTACK x2, MOVE x7, HEAL` |
+| 5 | 1800 | 1160 energy: same as RCL 4 |
 
-The full-capacity exception mainly matters at RCL 3: the global 50% cap would plan against 400 energy and select a 320-energy no-HEAL patrol, even though the room can support a 700-energy self-healing patrol once extensions are filled.
+The full-capacity exception mainly matters at RCL 3: the global 50% cap would plan against 400 energy and select a 320-energy no-HEAL patrol, even though the room can support a 770-energy self-healing hybrid patrol once extensions are filled.
 
 ### Patrol behavior (expel mode)
 
@@ -77,8 +77,9 @@ The full-capacity exception mainly matters at RCL 3: the global 50% cap would pl
 - Hostile target priority: `HEAL` parts first, then `RANGED_ATTACK`, then `ATTACK`.
 - When no armed hostile is visible in the chosen room, patrols can clear visible invader cores.
 - If no active threat is visible, patrols rotate through enabled remotes.
-- Rotation cadence is provided by `getPatrolRotationTicks()` (currently returns `100`).
-- Patrols renew in home room when idle; critical renew is blocked while any armed hostile threat is visible.
+- Rotation cadence is provided by `getPatrolRotationTicks()` (currently returns `50`).
+- During threat-free rotation, patrols loiter around the remote controller (about range 5) with short jitter for one cadence window, then rotate to the next remote.
+- Patrols start renew at `TTL <= 300`; while armed threats are visible they continue renewing only until `TTL > 500`, then re-engage threats; without armed threats they renew until `TTL >= 1400`.
 
 ## Layer 3: Non-Combat Evade (`main.ts`)
 

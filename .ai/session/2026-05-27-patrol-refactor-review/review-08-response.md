@@ -3,7 +3,8 @@
 **Date:** 2026-05-27  
 **Branch:** `RCL7/dev1`  
 **Scope implemented:** `R8-1`, `R8-2`, `R8-3`, `R8-7`  
-**Deferred:** `R8-4`, `R8-5`, `R8-6`, `R8-8`
+**Follow-up implemented (Patch 10):** `R8-1 edge`, `R8-4`, `R8-5`, `R8-6`  
+**Still deferred:** `R8-8`
 
 ## Implemented
 
@@ -34,9 +35,13 @@
 
 ## Deferred items
 
-- **R8-4** Melee-only patrol body composition (war-mode/combat doctrine scope)
-- **R8-5** Center-tile navigation optimization
-- **R8-6** Per-tick assignment scan optimization
 - **R8-8** Legacy `populationControl`/`defender` tree cleanup
 
-These are intentionally deferred to avoid expanding this patch beyond the selected `R8-1/2/3 + cleanup` scope.
+## Follow-up patch notes (Patch 10)
+
+- **R8-1 edge case** fixed: renewing patrols now use the 300/500/1400 FSM (`start<=300`, threat-abort `>500`, threat-free stop `>=1400`).
+- **R8-4** addressed with hybrid patrol templates (`ATTACK + RANGED_ATTACK + HEAL`) at mid/high tiers.
+- **R8-5** addressed by replacing cross-room center-tile navigation with controller/entry-anchor routing and 50-tick controller-area loiter.
+- **R8-6** addressed with tick-scoped caches for patrol threat assignments and remote-room patrol coverage scans.
+
+Only `R8-8` remains intentionally deferred.

@@ -288,6 +288,8 @@ interface CreepMemory {
     patrolRoom?: string;
     patrolRotateAt?: number;
     patrolRouteIndex?: number;
+    patrolLoiterRoom?: string;
+    patrolLoiterUntil?: number;
     standbyParkStuckTicks?: number;
     standbyParkLastX?: number;
     standbyParkLastY?: number;

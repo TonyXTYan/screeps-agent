@@ -42,6 +42,7 @@ Remote economy requests continue to use source-work/haul/maintenance deficits.
 - Non-patrol creeps evade nearby armed hostiles using `REMOTE_HOSTILE_EVADE_DISTANCE`.
 - `dangerUntil` is not a normal gate, except armed-hostile fail-safe triggered when threatened-room deployed patrol coverage is zero.
 - Manual operator pause is still supported through `manualPauseUntil`.
+- In peacetime, patrols remain on a remote-only loop, route into remotes via controller/entry anchors, and loiter around the remote controller for 50 ticks before rotating.
 
 ## Fail-Safe Danger Marker
 

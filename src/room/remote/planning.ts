@@ -29,6 +29,8 @@ import {
 
 const PATROL_DANGER_NOTIFY_COOLDOWN = 500;
 const REMOTE_THREAT_MEMORY_TTL = 5000;
+let patrolCoverageCacheTick = -1;
+const patrolCoverageByHomeCache = new Map<string, { [remoteRoomName: string]: number }>();
 
 export function remoteSourceRouteDegraded(sourcePlan: RemoteSourcePlan | undefined): boolean {
     return sourcePlan?.routeHealth === 'degraded';
@@ -71,6 +73,7 @@ export function initialiseRoomPlan(room: Room): void {
 export function updateRemoteRoomPlans(homeRoom: Room): void {
     const remotes = homeRoom.memory.plan?.remoteRooms ?? {};
     const myUsername = homeRoom.controller?.owner?.username;
+    const patrolCoverageByRemote = patrolCoverageByRemoteRoom(homeRoom.name);
     for (const remoteName in remotes) {
         const remote = remotes[remoteName];
         if (!remote.enabled) { continue; }
@@ -114,7 +117,7 @@ export function updateRemoteRoomPlans(homeRoom: Room): void {
             remote.lastSeenHostileControllerAt = undefined;
         }
 
-        const threatCoverage = patrolCoverageForRemoteRoom(homeRoom.name, remoteName);
+        const threatCoverage = patrolCoverageByRemote[remoteName] ?? 0;
         if (hasArmedHostiles && threatCoverage === 0) {
             const wasAlreadyDanger = remote.skipReason === 'danger';
             remote.dangerUntil = Math.max(remote.dangerUntil ?? 0, Game.time + REMOTE_DANGER_TICKS);
@@ -286,17 +289,32 @@ export function updateRemoteRoomPlans(homeRoom: Room): void {
 }
 
 export function patrolCoverageForRemoteRoom(homeRoomName: string, remoteRoomName: string): number {
-    let coverage = 0;
+    const byRemote = patrolCoverageByRemoteRoom(homeRoomName);
+    return byRemote[remoteRoomName] ?? 0;
+}
+
+function patrolCoverageByRemoteRoom(homeRoomName: string): { [remoteRoomName: string]: number } {
+    refreshPatrolCoverageCacheForTick();
+    const cached = patrolCoverageByHomeCache.get(homeRoomName);
+    if (cached) { return cached; }
+    const coverageByRemote: { [remoteRoomName: string]: number } = {};
     for (const name in Game.creeps) {
         const creep = Game.creeps[name];
         if (creep.spawning) { continue; }
         if ((creep.memory.homeRoom ?? creep.room.name) !== homeRoomName) { continue; }
         if (creep.memory.renewing) { continue; }
         if (ensureArchetype(creep) !== 'patrol') { continue; }
-        if (creep.room.name !== remoteRoomName) { continue; }
-        coverage++;
+        const remoteRoomName = creep.room.name;
+        coverageByRemote[remoteRoomName] = (coverageByRemote[remoteRoomName] ?? 0) + 1;
     }
-    return coverage;
+    patrolCoverageByHomeCache.set(homeRoomName, coverageByRemote);
+    return coverageByRemote;
+}
+
+function refreshPatrolCoverageCacheForTick(): void {
+    if (patrolCoverageCacheTick === Game.time) { return; }
+    patrolCoverageCacheTick = Game.time;
+    patrolCoverageByHomeCache.clear();
 }
 
 export function remoteArmedFailsafeActive(

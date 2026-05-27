@@ -1,11 +1,19 @@
 import { findHostiles } from '../hostileUtils';
 import { acquireRenewSpawn, nearestSpawn } from '../spawn/renewal';
 import { ensureArchetype } from '../creep/capabilities';
+import { mirrorExitPositionIntoRoom } from '../room/remote/routing';
 
 const PATROL_HOLD_RANGE = 8;
-const PATROL_RENEW_START_TTL = 650;
+const PATROL_RENEW_START_TTL = 300;
+const PATROL_RENEW_THREAT_STOP_TTL = 500;
 const PATROL_RENEW_STOP_TTL = 1400;
-const PATROL_RENEW_CRITICAL_TTL = 300;
+const PATROL_CONTROLLER_LOITER_RANGE = 5;
+const PATROL_CONTROLLER_LOITER_MIN_RANGE = 4;
+const PATROL_CONTROLLER_LOITER_MAX_RANGE = 6;
+
+let patrolCacheTick = -1;
+const activePatrolNamesCache = new Map<string, string[]>();
+const patrolThreatAssignmentCache = new Map<string, { [creepName: string]: string }>();
 
 type VisibleThreat = {
     roomName: string;
@@ -16,7 +24,7 @@ type VisibleThreat = {
 
 // Keep as a dedicated function so cadence can become dynamic later.
 export function getPatrolRotationTicks(): number {
-    return 100;
+    return 50;
 }
 
 export function run(creep: Creep): void {
@@ -24,7 +32,7 @@ export function run(creep: Creep): void {
     const enabledRemotes = enabledRemoteRooms(homeRoom);
     const visibleThreats = visibleRemoteThreats(homeRoom, enabledRemotes);
 
-    if (shouldRenewPatrolNow(creep, visibleThreats, homeRoom) && tryRenewPatrol(creep, homeRoom)) {
+    if (shouldRenewPatrolNow(creep, visibleThreats) && tryRenewPatrol(creep, homeRoom)) {
         return;
     }
 
@@ -44,11 +52,7 @@ function runThreatResponse(creep: Creep, threats: VisibleThreat[]): void {
     healFriendly(creep);
 
     if (creep.room.name !== targetRoom.roomName) {
-        creep.moveTo(new RoomPosition(25, 25, targetRoom.roomName), {
-            reusePath: 3,
-            ignoreCreeps: false,
-            visualizePathStyle: { stroke: '#ef4444' }
-        });
+        movePatrolToRoom(creep, targetRoom.roomName, homeRoom, '#ef4444', 3);
         return;
     }
 
@@ -74,35 +78,40 @@ function runPatrolRotation(creep: Creep, enabledRemotes: string[], homeRoom: str
         return;
     }
 
-    const now = Game.time;
-    const rotateAt = creep.memory.patrolRotateAt ?? 0;
     const currentTarget = creep.memory.patrolRoom;
-    const currentIndex = creep.memory.patrolRouteIndex ?? 0;
     const currentStillValid = currentTarget ? enabledRemotes.includes(currentTarget) : false;
-    const shouldRotate = now >= rotateAt || !currentStillValid;
-
-    if (shouldRotate) {
-        const nextIndex = currentStillValid
-            ? (Math.max(0, enabledRemotes.indexOf(currentTarget!)) + 1) % enabledRemotes.length
-            : Math.abs(hashString(creep.name)) % enabledRemotes.length;
-        creep.memory.patrolRouteIndex = nextIndex;
-        creep.memory.patrolRoom = enabledRemotes[nextIndex];
-        creep.memory.patrolRotateAt = now + cadence;
+    if (!currentStillValid) {
+        rotatePatrolTarget(creep, enabledRemotes, true);
     }
 
-    const patrolRoom = creep.memory.patrolRoom ?? enabledRemotes[currentIndex % enabledRemotes.length];
+    const patrolRoom = creep.memory.patrolRoom ?? enabledRemotes[0];
     if (creep.room.name !== patrolRoom) {
-        creep.moveTo(new RoomPosition(25, 25, patrolRoom), {
-            reusePath: 5,
-            ignoreCreeps: false,
-            visualizePathStyle: { stroke: '#f59e0b' }
-        });
+        markPatrolTravelTarget(creep, patrolRoom);
+        movePatrolToRoom(creep, patrolRoom, homeRoom, '#f59e0b', 5);
         return;
     }
 
-    const hold = new RoomPosition(25, 25, patrolRoom);
-    if (creep.pos.getRangeTo(hold) > PATROL_HOLD_RANGE) {
-        creep.moveTo(hold, { reusePath: 8, visualizePathStyle: { stroke: '#f59e0b' } });
+    startPatrolLoiterWindow(creep, patrolRoom, cadence);
+    const loiterUntil = creep.memory.patrolLoiterUntil ?? (Game.time + cadence);
+    if (Game.time >= loiterUntil) {
+        rotatePatrolTarget(creep, enabledRemotes);
+        const nextRoom = creep.memory.patrolRoom ?? patrolRoom;
+        if (nextRoom === patrolRoom) {
+            creep.memory.patrolLoiterUntil = Game.time + cadence;
+        } else {
+            startPatrolLoiterWindow(creep, nextRoom, cadence);
+        }
+        if (nextRoom !== patrolRoom) {
+            movePatrolToRoom(creep, nextRoom, homeRoom, '#f59e0b', 5);
+            return;
+        }
+    }
+
+    if (!controllerLoiterStep(creep, patrolRoom)) {
+        const hold = new RoomPosition(25, 25, patrolRoom);
+        if (creep.pos.getRangeTo(hold) > PATROL_HOLD_RANGE) {
+            creep.moveTo(hold, { reusePath: 8, visualizePathStyle: { stroke: '#f59e0b' } });
+        }
     }
     healFriendly(creep);
 }
@@ -117,6 +126,116 @@ function enabledRemoteRooms(homeRoom: string): string[] {
     }
     rooms.sort();
     return rooms;
+}
+
+function rotatePatrolTarget(creep: Creep, enabledRemotes: string[], seedOnly: boolean = false): void {
+    if (enabledRemotes.length === 0) { return; }
+    const currentTarget = creep.memory.patrolRoom;
+    const currentIndex = currentTarget ? enabledRemotes.indexOf(currentTarget) : -1;
+    const nextIndex = seedOnly || currentIndex < 0
+        ? Math.abs(hashString(creep.name)) % enabledRemotes.length
+        : (currentIndex + 1) % enabledRemotes.length;
+    creep.memory.patrolRouteIndex = nextIndex;
+    creep.memory.patrolRoom = enabledRemotes[nextIndex];
+    creep.memory.patrolRotateAt = Game.time + getPatrolRotationTicks();
+}
+
+function startPatrolLoiterWindow(creep: Creep, patrolRoom: string, cadence: number): void {
+    if (creep.memory.patrolLoiterRoom !== patrolRoom || !creep.memory.patrolLoiterUntil) {
+        creep.memory.patrolLoiterRoom = patrolRoom;
+        creep.memory.patrolLoiterUntil = Game.time + cadence;
+    }
+}
+
+function markPatrolTravelTarget(creep: Creep, patrolRoom: string): void {
+    if (creep.memory.patrolLoiterRoom === patrolRoom) { return; }
+    creep.memory.patrolLoiterRoom = patrolRoom;
+    creep.memory.patrolLoiterUntil = undefined;
+}
+
+function movePatrolToRoom(
+    creep: Creep,
+    targetRoomName: string,
+    homeRoomName: string,
+    stroke: string,
+    reusePath: number
+): void {
+    const anchor = patrolTravelAnchor(targetRoomName, homeRoomName);
+    creep.moveTo(anchor, {
+        reusePath,
+        ignoreCreeps: false,
+        visualizePathStyle: { stroke }
+    });
+}
+
+function patrolTravelAnchor(targetRoomName: string, homeRoomName: string): RoomPosition {
+    const visibleTarget = Game.rooms[targetRoomName];
+    if (visibleTarget?.controller) {
+        return visibleTarget.controller.pos;
+    }
+    const entry = remoteEntryAnchor(homeRoomName, targetRoomName);
+    if (entry) { return entry; }
+    return new RoomPosition(25, 25, targetRoomName);
+}
+
+function remoteEntryAnchor(homeRoomName: string, targetRoomName: string): RoomPosition | null {
+    const homeRoom = Game.rooms[homeRoomName];
+    if (!homeRoom) { return null; }
+    const exitDirection = Game.map.findExit(homeRoomName, targetRoomName);
+    if (typeof exitDirection !== 'number' || exitDirection < TOP || exitDirection > LEFT) { return null; }
+    const exits = homeRoom.find(exitDirection as ExitConstant) as RoomPosition[];
+    if (exits.length === 0) { return null; }
+    const origin = homeRoom.storage?.pos ?? homeRoom.find(FIND_MY_SPAWNS)[0]?.pos ?? new RoomPosition(25, 25, homeRoomName);
+    let best = exits[0];
+    let bestRange = origin.getRangeTo(best);
+    for (const exit of exits) {
+        const range = origin.getRangeTo(exit);
+        if (range < bestRange) {
+            best = exit;
+            bestRange = range;
+        }
+    }
+    return mirrorExitPositionIntoRoom(best, targetRoomName);
+}
+
+function controllerLoiterStep(creep: Creep, patrolRoom: string): boolean {
+    const room = Game.rooms[patrolRoom];
+    const controller = room?.controller;
+    if (!controller || creep.room.name !== patrolRoom) { return false; }
+    const controllerRange = creep.pos.getRangeTo(controller);
+    if (controllerRange < PATROL_CONTROLLER_LOITER_MIN_RANGE || controllerRange > PATROL_CONTROLLER_LOITER_MAX_RANGE) {
+        creep.moveTo(controller, { range: PATROL_CONTROLLER_LOITER_RANGE, reusePath: 2, visualizePathStyle: { stroke: '#f59e0b' } });
+        return true;
+    }
+    const loiter = controllerLoiterPoint(controller, creep.name);
+    if (!loiter) { return false; }
+    creep.moveTo(loiter, { reusePath: 1, visualizePathStyle: { stroke: '#f59e0b' } });
+    return true;
+}
+
+function controllerLoiterPoint(controller: StructureController, creepName: string): RoomPosition | null {
+    const room = controller.room;
+    const terrain = room.getTerrain();
+    for (let i = 0; i < 20; i++) {
+        const seed = Math.abs(hashString(creepName + ':' + room.name + ':' + Game.time + ':' + i));
+        const dx = (seed % 13) - 6;
+        const dy = (Math.floor(seed / 13) % 13) - 6;
+        const range = Math.max(Math.abs(dx), Math.abs(dy));
+        if (range < PATROL_CONTROLLER_LOITER_MIN_RANGE || range > PATROL_CONTROLLER_LOITER_MAX_RANGE) { continue; }
+        const x = controller.pos.x + dx;
+        const y = controller.pos.y + dy;
+        if (x < 1 || x > 48 || y < 1 || y > 48) { continue; }
+        if (terrain.get(x, y) === TERRAIN_MASK_WALL) { continue; }
+        const pos = new RoomPosition(x, y, room.name);
+        const blocked = pos.lookFor(LOOK_STRUCTURES).some((structure) =>
+            structure.structureType !== STRUCTURE_ROAD &&
+            structure.structureType !== STRUCTURE_CONTAINER &&
+            structure.structureType !== STRUCTURE_RAMPART);
+        if (blocked) { continue; }
+        if (pos.lookFor(LOOK_CREEPS).length > 0) { continue; }
+        return pos;
+    }
+    return null;
 }
 
 function visibleRemoteThreats(homeRoom: string, remoteRooms: string[]): VisibleThreat[] {
@@ -157,8 +276,12 @@ function selectThreatRoomFallback(homeRoom: string, threats: VisibleThreat[]): V
 }
 
 function assignPatrolThreatRooms(homeRoom: string, threats: VisibleThreat[]): { [creepName: string]: string } {
+    refreshPatrolCachesForTick();
     const assignments: { [creepName: string]: string } = {};
     if (threats.length === 0) { return assignments; }
+    const cacheKey = homeRoom + '|' + threatSignature(threats);
+    const cached = patrolThreatAssignmentCache.get(cacheKey);
+    if (cached) { return cached; }
 
     const patrolNames = activeHomePatrolNames(homeRoom);
     if (patrolNames.length === 0) { return assignments; }
@@ -172,11 +295,14 @@ function assignPatrolThreatRooms(homeRoom: string, threats: VisibleThreat[]): { 
     for (let i = 0; i < patrolNames.length; i++) {
         assignments[patrolNames[i]] = slots[i];
     }
-
+    patrolThreatAssignmentCache.set(cacheKey, assignments);
     return assignments;
 }
 
 function activeHomePatrolNames(homeRoom: string): string[] {
+    refreshPatrolCachesForTick();
+    const cached = activePatrolNamesCache.get(homeRoom);
+    if (cached) { return cached; }
     const names: string[] = [];
     for (const name in Game.creeps) {
         const creep = Game.creeps[name];
@@ -187,7 +313,22 @@ function activeHomePatrolNames(homeRoom: string): string[] {
         names.push(name);
     }
     names.sort();
+    activePatrolNamesCache.set(homeRoom, names);
     return names;
+}
+
+function refreshPatrolCachesForTick(): void {
+    if (patrolCacheTick === Game.time) { return; }
+    patrolCacheTick = Game.time;
+    activePatrolNamesCache.clear();
+    patrolThreatAssignmentCache.clear();
+}
+
+function threatSignature(threats: VisibleThreat[]): string {
+    const parts = threats.map((threat) =>
+        threat.roomName + ':' + threat.hostiles.length + ':' + (threat.invaderCore ? '1' : '0'));
+    parts.sort();
+    return parts.join('|');
 }
 
 type ThreatScore = {
@@ -284,32 +425,29 @@ function threatPriority(threat: VisibleThreat, originRoomName: string): number {
     return homeBoost + armedBoost + coreBoost - distancePenalty;
 }
 
-function shouldRenewPatrolNow(creep: Creep, threats: VisibleThreat[], homeRoomName: string): boolean {
+function shouldRenewPatrolNow(creep: Creep, threats: VisibleThreat[]): boolean {
     const ttl = creep.ticksToLive ?? 0;
     if (ttl <= 0) { return false; }
-    const hasArmedHomeThreat = threats.some((threat) => threat.isHomeThreat && threat.hostiles.length > 0);
     const hasAnyArmedThreat = threats.some((threat) => threat.hostiles.length > 0);
-    if (threats.length === 0) { return true; }
-    if (creep.memory.renewing) { return !hasArmedHomeThreat; }
-    if (ttl <= PATROL_RENEW_CRITICAL_TTL && !hasAnyArmedThreat) { return true; }
-    if (creep.room.name !== homeRoomName) { return false; }
+    if (creep.memory.renewing) {
+        if (hasAnyArmedThreat && ttl > PATROL_RENEW_THREAT_STOP_TTL) {
+            creep.memory.renewing = false;
+            return false;
+        }
+        if (!hasAnyArmedThreat && ttl >= PATROL_RENEW_STOP_TTL) {
+            creep.memory.renewing = false;
+            return false;
+        }
+        return true;
+    }
     if (ttl > PATROL_RENEW_START_TTL) { return false; }
-
-    return !hasArmedHomeThreat;
+    creep.memory.renewing = true;
+    return true;
 }
 
 function tryRenewPatrol(creep: Creep, homeRoomName: string): boolean {
     const ttl = creep.ticksToLive ?? 0;
     if (ttl <= 0) { return false; }
-    if (!creep.memory.renewing && ttl > PATROL_RENEW_START_TTL) { return false; }
-
-    if (!creep.memory.renewing && ttl <= PATROL_RENEW_START_TTL) {
-        creep.memory.renewing = true;
-    }
-    if (creep.memory.renewing && ttl >= PATROL_RENEW_STOP_TTL) {
-        creep.memory.renewing = false;
-        return false;
-    }
     if (!creep.memory.renewing) { return false; }
 
     if (creep.room.name !== homeRoomName) {

@@ -91,65 +91,67 @@ export function updateRemoteRoomPlans(homeRoom: Room): void {
         }
         snapshotRemoteMaintainerCount(remote, maintainerSnapshot.count);
         refreshRemoteMaintenancePressureIfNeeded(remote, remoteName);
-        if (remote.mode !== 'harvest') { continue; }
-
         const visible = Game.rooms[remoteName];
-        if (!visible) { continue; }
 
-        remote.lastScouted = Game.time;
-        const hostiles = findHostiles(visible);
-        const hasArmedHostiles = hostiles.length > 0;
-        const hostileCore = findHostileInvaderCore(visible);
-        const hostileController = hasHostileController(visible, myUsername);
-        if (hasArmedHostiles) {
-            remote.lastSeenHostiles = Game.time;
-        }
-        if (hostileCore) {
-            remote.lastSeenInvaderCoreAt = Game.time;
-        }
-        if (hostileController) {
-            remote.lastSeenHostileControllerAt = Game.time;
-        }
-        if (!hostileCore && remote.lastSeenInvaderCoreAt && remote.lastSeenInvaderCoreAt + REMOTE_THREAT_MEMORY_TTL <= Game.time) {
-            remote.lastSeenInvaderCoreAt = undefined;
-        }
-        if (!hostileController && remote.lastSeenHostileControllerAt && remote.lastSeenHostileControllerAt + REMOTE_THREAT_MEMORY_TTL <= Game.time) {
-            remote.lastSeenHostileControllerAt = undefined;
-        }
-
-        const threatCoverage = patrolCoverageByRemote[remoteName] ?? 0;
-        if (hasArmedHostiles && threatCoverage === 0) {
-            const wasAlreadyDanger = remote.skipReason === 'danger';
-            remote.dangerUntil = Math.max(remote.dangerUntil ?? 0, Game.time + REMOTE_DANGER_TICKS);
-            remote.skipReason = 'danger';
-            if (!wasAlreadyDanger) {
-                console.log(`[REMOTE-DANGER] t=${Game.time} ${remoteName}: unguarded armedHostiles=${hostiles.length} — dangerUntil=${remote.dangerUntil} (~${REMOTE_DANGER_TICKS}t)`);
+        if (visible) {
+            remote.lastScouted = Game.time;
+            const hostiles = findHostiles(visible);
+            const hasArmedHostiles = hostiles.length > 0;
+            const hostileCore = findHostileInvaderCore(visible);
+            const hostileController = hasHostileController(visible, myUsername);
+            if (hasArmedHostiles) {
+                remote.lastSeenHostiles = Game.time;
             }
-            if ((remote.lastPatrolDangerNotifyAt ?? 0) + PATROL_DANGER_NOTIFY_COOLDOWN <= Game.time) {
-                Game.notify(`[REMOTE-DANGER] ${homeRoom.name}->${remoteName} has armedHostiles=${hostiles.length} and zero patrol coverage at t=${Game.time}`);
-                remote.lastPatrolDangerNotifyAt = Game.time;
+            if (hostileCore) {
+                remote.lastSeenInvaderCoreAt = Game.time;
             }
-            continue;
-        }
+            if (hostileController) {
+                remote.lastSeenHostileControllerAt = Game.time;
+            }
+            if (!hostileCore && remote.lastSeenInvaderCoreAt && remote.lastSeenInvaderCoreAt + REMOTE_THREAT_MEMORY_TTL <= Game.time) {
+                remote.lastSeenInvaderCoreAt = undefined;
+            }
+            if (!hostileController && remote.lastSeenHostileControllerAt && remote.lastSeenHostileControllerAt + REMOTE_THREAT_MEMORY_TTL <= Game.time) {
+                remote.lastSeenHostileControllerAt = undefined;
+            }
 
-        if (remote.skipReason === 'danger' || remote.skipReason === 'transit-danger') {
-            if (!hasArmedHostiles) {
-                const holdUntil = Game.time + REMOTE_DANGER_CLEAR_HOLD_TICKS;
-                if (!remote.dangerUntil || remote.dangerUntil > holdUntil) {
-                    remote.dangerUntil = holdUntil;
-                }
-                if (remote.dangerUntil > Game.time) {
-                    remote.skipReason = 'danger';
-                    continue;
-                }
-                remote.skipReason = undefined;
-                remote.dangerUntil = undefined;
-                console.log(`[REMOTE-DANGER] t=${Game.time} ${remoteName}: cleared`);
-            } else {
+            const threatCoverage = patrolCoverageByRemote[remoteName] ?? 0;
+            if (hasArmedHostiles && threatCoverage === 0) {
+                const wasAlreadyDanger = remote.skipReason === 'danger';
                 remote.dangerUntil = Math.max(remote.dangerUntil ?? 0, Game.time + REMOTE_DANGER_TICKS);
+                remote.skipReason = 'danger';
+                if (!wasAlreadyDanger) {
+                    console.log(`[REMOTE-DANGER] t=${Game.time} ${remoteName}: unguarded armedHostiles=${hostiles.length} — dangerUntil=${remote.dangerUntil} (~${REMOTE_DANGER_TICKS}t)`);
+                }
+                if ((remote.lastPatrolDangerNotifyAt ?? 0) + PATROL_DANGER_NOTIFY_COOLDOWN <= Game.time) {
+                    Game.notify(`[REMOTE-DANGER] ${homeRoom.name}->${remoteName} has armedHostiles=${hostiles.length} and zero patrol coverage at t=${Game.time}`);
+                    remote.lastPatrolDangerNotifyAt = Game.time;
+                }
                 continue;
             }
+
+            if (remote.skipReason === 'danger') {
+                if (!hasArmedHostiles) {
+                    const holdUntil = Game.time + REMOTE_DANGER_CLEAR_HOLD_TICKS;
+                    if (!remote.dangerUntil || remote.dangerUntil > holdUntil) {
+                        remote.dangerUntil = holdUntil;
+                    }
+                    if (remote.dangerUntil > Game.time) {
+                        remote.skipReason = 'danger';
+                        continue;
+                    }
+                    remote.skipReason = undefined;
+                    remote.dangerUntil = undefined;
+                    console.log(`[REMOTE-DANGER] t=${Game.time} ${remoteName}: cleared`);
+                } else {
+                    remote.dangerUntil = Math.max(remote.dangerUntil ?? 0, Game.time + REMOTE_DANGER_TICKS);
+                    continue;
+                }
+            }
         }
+
+        if (remote.mode !== 'harvest') { continue; }
+        if (!visible) { continue; }
 
         if (!remote.sources) { remote.sources = {}; }
         let roadsPlaced = 0;

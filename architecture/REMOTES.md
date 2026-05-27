@@ -63,6 +63,7 @@ While the armed failsafe is active for a remote:
 - once triggered, fail-safe remains active until armed hostiles are gone and the danger timer clears.
 - when the room is visible and armed hostiles are gone, a 50-tick danger hold is applied before `dangerUntil/skipReason` clears and retreat/spawn blocking stops.
 - if the room is not visible, the fail-safe can stay active until `dangerUntil` expires.
+- **renew-window gap:** if the sole patrol for a remote begins renewing and leaves, the remote room becomes invisible; `hostileRooms` in the patrol spawn formula does not spike (threat invisible → no extra spawn); the fail-safe keeps the remote shut down until `dangerUntil` expires or the patrol physically returns and clears the room on the next rotation visit.
 
 Non-creep threats (`invader core`, hostile controller owner/reservation) are tracked in telemetry and intentionally do not trigger this retreat/block gate by themselves.
 

@@ -522,7 +522,9 @@ function patrolSpawnRequest(
         archetype: 'patrol',
         reason: 'patrol target ' + patrolCount + '/' + targetPatrol +
             ' baseline=' + baselinePatrol + ' hostileRooms=' + hostileRooms +
-            ' cap=' + patrolTargetCap(enabledRemoteNames.length)
+            ' cap=' + patrolTargetCap(enabledRemoteNames.length),
+        useFullEnergyCapacity: true,
+        minimumBodyCost: bodyCost(planBodyForArchetype('patrol', context.room.energyCapacityAvailable))
     };
 }
 

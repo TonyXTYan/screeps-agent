@@ -79,7 +79,7 @@ The full-capacity exception mainly matters at RCL 3: the global 50% cap would pl
 - If no active threat is visible, patrols rotate through enabled remotes.
 - Rotation cadence is provided by `getPatrolRotationTicks()` (currently returns `50`).
 - During threat-free rotation, patrols loiter around the remote controller (about range 5) with short jitter for one cadence window, then rotate to the next remote.
-- Patrols start renew at `TTL <= 300`; while armed threats are visible they continue renewing only until `TTL > 500`, then re-engage threats; without armed threats they renew until `TTL >= 1400`.
+- Patrols start renew at `TTL <= 300`; while armed threats are **visible in the creep's current room** they continue renewing only until `TTL > 500`, then re-engage; without armed threats they renew until `TTL >= 1400`. A renewing patrol is in the home room and cannot see remote threats (remote room not in `Game.rooms`). If a remote threat appears while the sole patrol for that remote is renewing, the fail-safe danger marker fires and the remote shuts down; no extra patrol is spawned (the threat is invisible so `hostileRooms` does not spike). The patrol resumes normal rotation after renewal and responds on the next visit, or the fail-safe clears via `dangerUntil` expiry.
 
 ## Layer 3: Non-Combat Evade (`main.ts`)
 

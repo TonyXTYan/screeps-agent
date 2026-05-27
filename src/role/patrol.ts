@@ -210,13 +210,14 @@ function threatPriority(threat: VisibleThreat, creep: Creep): number {
 function shouldRenewPatrolNow(creep: Creep, threats: VisibleThreat[], homeRoomName: string): boolean {
     const ttl = creep.ticksToLive ?? 0;
     if (ttl <= 0) { return false; }
+    const hasArmedHomeThreat = threats.some((threat) => threat.isHomeThreat && threat.hostiles.length > 0);
     if (threats.length === 0) { return true; }
-    if (creep.memory.renewing) { return true; }
+    if (creep.memory.renewing) { return !hasArmedHomeThreat; }
     if (ttl <= PATROL_RENEW_CRITICAL_TTL) { return true; }
     if (creep.room.name !== homeRoomName) { return false; }
     if (ttl > PATROL_RENEW_START_TTL) { return false; }
 
-    return !threats.some((threat) => threat.isHomeThreat && threat.hostiles.length > 0);
+    return !hasArmedHomeThreat;
 }
 
 function tryRenewPatrol(creep: Creep, homeRoomName: string): boolean {

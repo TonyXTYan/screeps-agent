@@ -6,7 +6,9 @@
 
 - Home rooms at `RCL >= 6` maintain patrol coverage:
   - `baseline = ceil(enabledRemoteRooms / 2)`
-  - `target = baseline + visibleArmedHostiles`
+  - `hostileRooms = (homeArmedHostiles > 0 ? 1 : 0) + enabledRemotesWithVisibleArmedHostiles`
+  - `cap = 2 + 2 * enabledRemoteRooms`
+  - `target = min(baseline + hostileRooms, cap)`
 - Patrol creeps rotate enabled remotes and converge on visible armed hostiles.
 - Target priority: hostile `HEAL` > `RANGED_ATTACK` > `ATTACK`.
 - Remote economy creeps no longer auto-retreat home by default; they evade near hostiles.
@@ -25,6 +27,7 @@
 - Intentional assault mode for hostile rooms/structures.
 - Target package planning (harass, deny mining, structure teardown).
 - Formation-level orchestration and boost-aware composition.
+- Explicit opt-in policy for player-controller attack (default remains NPC Invader-only controller attack fallback).
 
 ## Entry Criteria For Future Work
 

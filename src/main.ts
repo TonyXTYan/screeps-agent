@@ -19,6 +19,7 @@ import { BUILD_COMMIT } from './env';
 import { acquireRenewSpawn, nearestSpawn } from './spawn/renewal';
 import { wrapWithProfiler } from './profiler';
 import { REMOTE_HOSTILE_EVADE_DISTANCE } from './room/constants';
+import { nearestExitTileToRoom } from './creep/movement';
 
 const DOCTOR_EMERGENCY_HITS_RATIO = 0.35;
 const DOCTOR_THREAT_RADIUS = 4;
@@ -306,6 +307,10 @@ function fleeFromHostiles(creep: Creep): boolean {
     emergencyHealWhileRetreating(creep);
 
     creep.say('😱');
+    if (directedRetreatToHomeStep(creep, hostiles)) {
+        return true;
+    }
+
     const result = PathFinder.search(
         creep.pos,
         hostiles.map(h => ({ pos: h.pos, range: REMOTE_HOSTILE_EVADE_DISTANCE })),
@@ -319,6 +324,63 @@ function fleeFromHostiles(creep: Creep): boolean {
         nudgeFromEdge(creep);
     }
     return true;
+}
+
+function directedRetreatToHomeStep(creep: Creep, hostiles: Creep[]): boolean {
+    const homeRoom = creep.memory.homeRoom;
+    if (!homeRoom || creep.room.name === homeRoom) { return false; }
+    if (creep.memory.jobType !== 'travelRoom' || creep.memory.jobRoomName !== homeRoom) { return false; }
+
+    const exit = nearestExitTileToRoom(creep, homeRoom);
+    if (!exit) { return false; }
+
+    const retreat = PathFinder.search(
+        creep.pos,
+        [{ pos: exit, range: 0 }],
+        {
+            maxRooms: 1,
+            roomCallback: (roomName) => {
+                if (roomName !== creep.room.name) { return false; }
+                return hostileEvadeRetreatCosts(creep, hostiles);
+            }
+        }
+    );
+    if (retreat.path.length === 0) { return false; }
+    const next = retreat.path[0];
+    if (next.getRangeTo(creep.pos) > 1) { return false; }
+
+    creep.move(creep.pos.getDirectionTo(next));
+    return true;
+}
+
+function hostileEvadeRetreatCosts(creep: Creep, hostiles: Creep[]): CostMatrix {
+    const matrix = new PathFinder.CostMatrix();
+
+    for (const structure of creep.room.find(FIND_STRUCTURES)) {
+        if (structure.structureType === STRUCTURE_ROAD || structure.structureType === STRUCTURE_CONTAINER) { continue; }
+        if (structure.structureType === STRUCTURE_RAMPART && (structure as StructureRampart).my) { continue; }
+        matrix.set(structure.pos.x, structure.pos.y, 255);
+    }
+
+    for (const other of creep.room.find(FIND_CREEPS)) {
+        if (other.id === creep.id) { continue; }
+        matrix.set(other.pos.x, other.pos.y, 255);
+    }
+
+    for (const hostile of hostiles) {
+        for (let dx = -REMOTE_HOSTILE_EVADE_DISTANCE; dx <= REMOTE_HOSTILE_EVADE_DISTANCE; dx++) {
+            for (let dy = -REMOTE_HOSTILE_EVADE_DISTANCE; dy <= REMOTE_HOSTILE_EVADE_DISTANCE; dy++) {
+                const x = hostile.pos.x + dx;
+                const y = hostile.pos.y + dy;
+                if (x < 0 || x > 49 || y < 0 || y > 49) { continue; }
+                if (Math.max(Math.abs(dx), Math.abs(dy)) > REMOTE_HOSTILE_EVADE_DISTANCE) { continue; }
+                if (x === creep.pos.x && y === creep.pos.y) { continue; }
+                matrix.set(x, y, 255);
+            }
+        }
+    }
+
+    return matrix;
 }
 
 function emergencyHealTarget(creep: Creep): Creep | null {

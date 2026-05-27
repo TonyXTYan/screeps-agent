@@ -487,15 +487,20 @@ function patrolSpawnRequest(
     }
     if (enabledRemoteNames.length === 0 && homeArmedHostiles === 0) { return null; }
 
-    let visibleArmedHostiles = homeArmedHostiles;
+    let hostileRooms = homeArmedHostiles > 0 ? 1 : 0;
     for (const roomName of enabledRemoteNames) {
         const room = Game.rooms[roomName];
         if (!room) { continue; }
-        visibleArmedHostiles += findHostiles(room).length;
+        if (findHostiles(room).length > 0) {
+            hostileRooms++;
+        }
     }
 
     const baselinePatrol = Math.ceil(enabledRemoteNames.length / 2);
-    const targetPatrol = baselinePatrol + visibleArmedHostiles;
+    const targetPatrol = Math.min(
+        baselinePatrol + hostileRooms,
+        patrolTargetCap(enabledRemoteNames.length)
+    );
     const homeFleet = creepsForHomeRoom(context.room.name);
     const patrolCount = countFleetForArchetype(homeFleet, 'patrol') + pendingArchetypeCount(pending, 'patrol');
     if (patrolCount >= targetPatrol) { return null; }
@@ -503,8 +508,13 @@ function patrolSpawnRequest(
     return {
         archetype: 'patrol',
         reason: 'patrol target ' + patrolCount + '/' + targetPatrol +
-            ' baseline=' + baselinePatrol + ' hostiles=' + visibleArmedHostiles
+            ' baseline=' + baselinePatrol + ' hostileRooms=' + hostileRooms +
+            ' cap=' + patrolTargetCap(enabledRemoteNames.length)
     };
+}
+
+function patrolTargetCap(enabledRemoteCount: number): number {
+    return 2 + (2 * enabledRemoteCount);
 }
 
 function remoteRequestBlockReason(

@@ -64,6 +64,7 @@ const REMOTE_MINER_AGGRESSIVE_REPATH_TICKS = 6;
 const REMOTE_MINER_SOURCE_FALLBACK_TICKS = 14;
 const REMOTE_CONTAINER_REPAIR_INTERVAL = 5;
 const REMOTE_CONTAINER_REPAIR_THRESHOLD = 0.5;
+const NPC_INVADER_USERNAME = 'Invader';
 
 export function clearJob(creep: Creep): void {
     creep.memory.jobType = undefined;
@@ -349,10 +350,8 @@ function claimController(creep: Creep): number {
 
 function shouldAttackController(creep: Creep, controller: StructureController): boolean {
     if (creep.getActiveBodyparts(CLAIM) <= 0) { return false; }
-    const myUsername = creep.owner.username;
-    if (controller.owner && controller.owner.username !== myUsername) { return true; }
-    if (controller.reservation && controller.reservation.username !== myUsername) { return true; }
-    return false;
+    return controller.owner?.username === NPC_INVADER_USERNAME ||
+        controller.reservation?.username === NPC_INVADER_USERNAME;
 }
 
 function travelRoom(creep: Creep): number {

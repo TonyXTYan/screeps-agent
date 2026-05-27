@@ -45,7 +45,9 @@ Wall/rampart caps are still provided by `wallRampartRepairCap()` in `role/doctor
 At `RCL >= 6`, patrol target per home room is:
 
 - `baseline = ceil(enabledRemoteRooms / 2)`
-- `target = baseline + visibleArmedHostiles` (home + enabled remotes)
+- `hostileRooms = (homeArmedHostiles > 0 ? 1 : 0) + enabledRemotesWithVisibleArmedHostiles`
+- `cap = 2 + 2 * enabledRemoteRooms`
+- `target = min(baseline + hostileRooms, cap)`
 
 At `RCL < 6`, patrol is only used as an emergency home-defense fallback:
 
@@ -68,8 +70,9 @@ At `RCL < 6`, patrol is only used as an emergency home-defense fallback:
 When a non-patrol creep has an armed hostile nearby:
 
 1. HEAL-capable creeps may prioritize emergency ally healing.
-2. Otherwise use `PathFinder` flee from hostile danger zones.
-3. Fallback to edge nudge if no flee path.
+2. If an armed-hostile fail-safe retreat is active and the creep is already traveling home, it steers toward the exit to home with hostile-avoid costs.
+3. Otherwise use `PathFinder` flee from hostile danger zones.
+4. Fallback to edge nudge if no flee path.
 
 Remote creeps no longer hard-retreat to home room on contact by default.
 
@@ -92,3 +95,5 @@ When that happens, the bot logs and sends `Game.notify` (cooldown throttled per 
 
 - non-combat remote creeps assigned to that remote retreat to home room.
 - non-combat remote spawns for that remote are blocked until danger clears or patrol coverage returns.
+
+Controller attack fallback for CLAIM creeps is restricted to NPC Invader controller states only (`owner/reservation.username === 'Invader'`).

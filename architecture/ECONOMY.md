@@ -55,7 +55,7 @@ Body planning lives in `planBodyForArchetype()` in `creep/capabilities.ts`. Lega
 1. Emergency worker          → if no creeps exist (recovery)
 2. Local source miner        → per uncovered source
 3. Standby local miner       → 1 per room (renewable substitute)
-4. Patrol                    → `RCL >= 6`, `ceil(enabledRemotes / 2) + visibleArmedHostiles`
+4. Patrol                    → `RCL >= 6`, `target = min(ceil(enabledRemotes / 2) + hostileRooms, 2 + 2*enabledRemotes)`
 5. Hauler                    → minimum 2 at RCL4+ with storage
 6. Hauler capacity           → capacity deficit
 7. Worker work capacity      → work deficit

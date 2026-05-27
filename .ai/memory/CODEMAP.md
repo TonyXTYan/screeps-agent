@@ -62,7 +62,9 @@ src/
 
 - Patrol spawn target (`room/remote/spawn.ts`):
   - `baseline = ceil(enabledRemotes / 2)`
-  - `target = baseline + visibleArmedHostiles` (home + enabled remotes)
+  - `hostileRooms = (homeArmedHostiles > 0 ? 1 : 0) + enabledRemotesWithVisibleArmedHostiles`
+  - `cap = 2 + 2 * enabledRemotes`
+  - `target = min(baseline + hostileRooms, cap)`
   - `RCL < 6`: emergency home-defense-only patrol spawning
 - Patrol behavior (`role/patrol.ts`):
   - converge on visible armed hostiles (home + remotes)
@@ -70,7 +72,9 @@ src/
   - clear visible invader cores when no armed target is present in threat room
   - rotate remotes every `getPatrolRotationTicks()` (currently 100)
 - Evade radius (`room/constants.ts`): `REMOTE_HOSTILE_EVADE_DISTANCE`
+- During armed failsafe home retreat (`main.ts`): creeps already on `travelRoom -> homeRoom` take directed home-exit steering with hostile-avoid costs before generic flee.
 - Fail-safe danger marker (`room/remote/planning.ts`): armed-hostile only, with non-combat retreat/spawn blocking when patrol coverage is zero.
+- Controller attack fallback (`creep/jobRunner.ts`): CLAIM creeps auto-attack controllers only for NPC Invader owner/reservation states.
 
 ## Types and Memory
 

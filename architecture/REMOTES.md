@@ -30,7 +30,9 @@ Local spawn planner chooses requests in strategic priority, then remote requests
 At `RCL >= 6`, patrol sizing is:
 
 - `baseline = ceil(enabledRemoteRooms / 2)` (all enabled modes)
-- `target = baseline + visibleArmedHostiles` (home + enabled remotes)
+- `hostileRooms = (homeArmedHostiles > 0 ? 1 : 0) + enabledRemotesWithVisibleArmedHostiles`
+- `cap = 2 + 2 * enabledRemoteRooms`
+- `target = min(baseline + hostileRooms, cap)`
 
 Remote economy requests continue to use source-work/haul/maintenance deficits.
 
@@ -55,9 +57,12 @@ On transition, the system logs and sends `Game.notify` (cooldown throttled per r
 While the armed failsafe is active for a remote:
 
 - assigned non-combat remote creeps retreat to home room.
+- if already executing `travelRoom` toward home, retreat steering is directed to the home exit with hostile-avoid costs.
 - non-combat remote spawn requests for that remote are skipped.
 
 Non-creep threats (`invader core`, hostile controller owner/reservation) are tracked in telemetry and do not trigger this retreat/block gate by themselves.
+
+CLAIM creeps only auto-attack controllers in NPC Invader states (`owner/reservation.username === 'Invader'`).
 
 ## Remote Miner Lifecycle
 

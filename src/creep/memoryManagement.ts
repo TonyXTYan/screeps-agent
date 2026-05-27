@@ -1,8 +1,6 @@
 import { ensureArchetype } from './capabilities';
 
 export function run(): void {
-    migrateLegacyDefenseMemoryEntries();
-
     const spawningNames = creepsCurrentlySpawning();
     for (const name in Memory.creeps) {
         if (!Game.creeps[name] && !spawningNames[name]) {
@@ -54,34 +52,6 @@ function restoreRemoteAssignmentIfSafe(creep: Creep, archetype: CreepArchetype):
     const remoteMode = remotes[soleEnabledRemote].mode;
     creep.memory.remoteMode = archetype === 'claimer' && remoteMode === 'harvest' ? 'reserve' : remoteMode;
     console.log('creep.MemoryManagement: restored remote assignment for ' + creep.name + ' -> ' + soleEnabledRemote);
-}
-
-function migrateLegacyDefenseMemoryEntries(): void {
-    if (Memory.legacyDefenseMigrationDone) { return; }
-    let changed = 0;
-    for (const name in Memory.creeps) {
-        const memory = Memory.creeps[name];
-        if (!memory) { continue; }
-
-        if (memory.role === 'defender' || memory.archetype === 'defender') {
-            memory.role = 'patrol';
-            memory.archetype = 'patrol';
-            memory.attacking = undefined;
-            memory.rallySpawnId = undefined;
-            changed++;
-            continue;
-        }
-
-        if (memory.role === 'doctor' || memory.archetype === 'doctor') {
-            memory.role = 'builder';
-            memory.archetype = 'worker';
-            changed++;
-        }
-    }
-    Memory.legacyDefenseMigrationDone = true;
-    if (changed > 0) {
-        console.log(`[memoryManagement] Migrated legacy defense memory entries: ${changed}`);
-    }
 }
 
 function isRemoteArchetype(archetype: CreepArchetype): boolean {

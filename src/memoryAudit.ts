@@ -40,7 +40,7 @@ function migrateLegacyDefenseRoles(): number {
         const memory = Memory.creeps[name];
         if (!memory) { continue; }
 
-        if (memory.role === 'defender' || memory.archetype === 'defender') {
+        if (memory.role === 'defender' || (memory.archetype as string) === 'defender') {
             memory.role = 'patrol';
             memory.archetype = 'patrol';
             memory.attacking = undefined;

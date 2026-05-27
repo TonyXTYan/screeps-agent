@@ -99,7 +99,6 @@ export function getBodyCapabilities(body: BodyPartConstant[]): CreepCapabilities
 export function inferArchetype(creep: Creep): CreepArchetype {
     if (creep.memory.archetype) { return creep.memory.archetype; }
     if (creep.memory.role === 'patrol') { return 'patrol'; }
-    if (creep.memory.role === 'defender') { return 'patrol'; }
 
     const capabilities = getCreepCapabilities(creep);
     if (capabilities.claim > 0) { return 'claimer'; }

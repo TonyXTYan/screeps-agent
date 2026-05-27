@@ -22,7 +22,6 @@ type CreepArchetype =
     'patrol' |
     'doctor' |
     'claimer' |
-    'defender' |
     'remoteMiner' |
     'remoteHauler' |
     'remoteMaintainer' |

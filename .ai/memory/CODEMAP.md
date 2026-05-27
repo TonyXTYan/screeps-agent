@@ -23,9 +23,6 @@ src/
     jobRunner.ts           Strategic job execution
     movement.ts            Shared movement helpers
     traffic.ts             Yield priorities (patrol gets top priority)
-    roleBalance.ts         Legacy body planner kept for compatibility
-    populationControl.ts   Legacy emergency defender module (retired from loop)
-
   role/
     patrol.ts              Patrol behavior (expel mode, rotate + converge + renew)
     doctor.ts              Shared repair-cap helpers + legacy fallback role
@@ -33,7 +30,6 @@ src/
     harvester.ts           Legacy fallback
     upgrader.ts            Legacy fallback
     manual.ts              Manual stub
-    defender.ts            Legacy defender role (retired from loop)
 
   room/
     controller.ts          Economic assignment + remote assignment
@@ -80,7 +76,7 @@ src/
 
 ## Types and Memory
 
-- Archetype union includes `patrol` plus legacy compatibility values (`doctor`, `defender`).
+- Archetype union includes `patrol` and `doctor` (active HEAL-body archetype). `defender` has been removed.
 - Remote plan tracks `dangerUntil`, `skipReason`, `lastPatrolDangerNotifyAt`, plus non-creep threat telemetry (`lastSeenInvaderCoreAt`, `lastSeenHostileControllerAt`).
 
 ## Repair Utilities
@@ -94,5 +90,4 @@ These are still consumed by tower/job/room repair logic.
 
 ## Notes
 
-- `populationControl.ts` and `role/defender.ts` are retained as legacy code but are no longer called from the main loop.
-- Legacy memory migration (`defender -> patrol`, `doctor -> worker`) is one-time guarded in `memoryManagement.ts` and reinforced in `memoryAudit.ts`.
+- Legacy memory migration for `defender -> patrol` and `doctor -> builder` runs unconditionally in `memoryAudit.ts:migrateLegacyDefenseRoles()` on each deploy.

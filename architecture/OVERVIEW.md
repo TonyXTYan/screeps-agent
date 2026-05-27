@@ -22,9 +22,6 @@ src/
     movement.ts            Pathing helpers
     traffic.ts             Yield negotiation/priorities
     harvest.ts             Legacy harvest helper
-    roleBalance.ts         Legacy body planner (retained for compatibility)
-    populationControl.ts   Legacy defender module (retired from runtime loop)
-
   role/
     patrol.ts              Patrol defense behavior (expel mode)
     doctor.ts              Shared repair-cap helpers + legacy fallback
@@ -32,7 +29,6 @@ src/
     harvester.ts           Legacy fallback role
     upgrader.ts            Legacy fallback role
     manual.ts              Manual stub
-    defender.ts            Legacy defender role (retired from runtime loop)
 
   room/
     controller.ts          Context build + assignment + remote assignment
@@ -65,7 +61,7 @@ src/
 
 ## Key Type Unions
 
-`CreepArchetype` now includes `patrol` and keeps `doctor`/`defender` as compatibility values for migrated legacy memories.
+`CreepArchetype` includes `patrol` and retains `doctor` as the active HEAL-body archetype. The `defender` archetype has been removed; `memoryAudit.ts` migrates any surviving `defender` memory entries to `patrol` on each deploy.
 
 `CreepJobType` remains the strategic job union used by `jobRunner`.
 
@@ -75,7 +71,6 @@ src/
 - Patrol creeps are strategic expel units (RCL6+ baseline plus hostile surge), with low-RCL home-only emergency fallback.
 - Non-patrol creeps evade nearby armed hostiles.
 - Armed-hostile remotes with zero patrol coverage trigger a temporary non-combat retreat/spawn block failsafe.
-- Emergency defender spawn override is retired.
 
 ## Build
 

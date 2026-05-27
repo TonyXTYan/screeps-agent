@@ -603,7 +603,7 @@ function reportPassiveInfrastructure(context: RoomControllerContext): void {
 function assignJobs(context: RoomControllerContext): void {
     const reservations = createReservations(context);
     const creeps = context.creeps
-        .filter((creep) => !creep.spawning && creep.memory.role !== 'patrol' && creep.memory.role !== 'defender')
+        .filter((creep) => !creep.spawning && creep.memory.role !== 'patrol')
         .filter((creep) => !isDedicatedRemoteCreep(creep, context.room.name))
         .sort((a, b) => assignmentPriority(ensureArchetype(a)) - assignmentPriority(ensureArchetype(b)));
 

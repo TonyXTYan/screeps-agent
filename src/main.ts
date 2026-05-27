@@ -50,8 +50,7 @@ const ROLE_PATH_COLORS: { [role: string]: string } = {
     builder: '#22c55e',
     harvester: '#eab308',
     upgrader: '#60a5fa',
-    manual: '#f97316',
-    defender: '#ef4444'
+    manual: '#f97316'
 };
 type RemoteMiningConsoleApi = {
     activate: (homeRoom: string, remoteRoom: string, options?: RemoteMiningOptions) => string;

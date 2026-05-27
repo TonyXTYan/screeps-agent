@@ -72,7 +72,7 @@ Memory
 │       upgrading?: boolean
 │       attacking?: boolean
 │       stationaryWorking?: boolean
-│       rallySpawnId?: string         — Legacy defender rally point (migration compatibility)
+│       rallySpawnId?: string         — Unused; retained in interface for schema compatibility
 │       patrolRoom?: string           — Current patrol destination room
 │       patrolRotateAt?: number       — Tick to rotate patrol target
 │       patrolRouteIndex?: number     — Deterministic patrol route slot
@@ -133,7 +133,6 @@ enumerates all 19 job types. Type union `CreepArchetype` includes strategic arch
 
 `ensureArchetype(creep)` in `creep/capabilities.ts` infers from role/body parts:
 - Has role `patrol` → `patrol`
-- Has role `defender` → `patrol` (migration compatibility)
 - Has CLAIM → `claimer`
 - Has HEAL → `doctor`
 - Has WORK + CARRY + manual role → `remoteMaintainer`
@@ -169,7 +168,7 @@ Runs on first tick after deploy (build commit hash changed). Auto-fixes:
 
 | Issue | Fix |
 |-------|-----|
-| Legacy defense migration | Convert `defender -> patrol`, `doctor -> worker/builder` memory roles, set one-time migration guard |
+| Legacy defense migration | Convert any surviving `defender -> patrol`, `doctor -> worker/builder` memory roles; runs unconditionally on each deploy |
 | Orphaned room memory | Delete `Memory.rooms` entries not owned and not referenced |
 | Stale remote plans | Clear expired `dangerUntil`, stale `skipReason`, old hostile/core/controller seen markers, deleted source IDs |
 | Duplicate source assignments | Keep miner with most WORK (then best TTL), unassign others |

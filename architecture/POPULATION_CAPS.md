@@ -25,8 +25,7 @@ Quick reference for hard and soft limits on creep counts by archetype and RCL.
 
 ## Defense Policy
 
-- Emergency defender spawn override is retired.
-- Patrol is now the strategic defense archetype.
+- Patrol is the strategic defense archetype.
 - Low-RCL patrol is event-driven only: below RCL 6 there is no baseline patrol population and no remote combat dispatch.
 - Low-RCL home-defense patrols use full room energy capacity and wait for the planned emergency body, avoiding the 50% budget fallback that would produce an RCL3 no-HEAL patrol.
 - Patrol is not counted as worker/hauler/miner capacity.

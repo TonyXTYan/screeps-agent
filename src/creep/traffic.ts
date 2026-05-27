@@ -99,7 +99,7 @@ function isStationaryMinerOnContainer(creep: Creep): boolean {
 function trafficPriority(creep: Creep): number {
     const archetype = creep.memory.archetype;
     const job = creep.memory.jobType;
-    if (archetype === 'patrol' || archetype === 'defender' || job === 'heal') { return 100; }
+    if (archetype === 'patrol' || job === 'heal') { return 100; }
     if (archetype === 'remoteHauler' || archetype === 'hauler') { return 80; }
     if (job === 'travelRoom') { return 60; }
     if (job === 'idle') { return 10; }

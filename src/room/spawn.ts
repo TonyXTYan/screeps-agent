@@ -152,7 +152,7 @@ export function measureCapabilities(creeps: Creep[]): {
         else if (archetype === 'remoteMiner') { remoteMinerWork += capabilities.harvest; }
         else if (archetype === 'remoteHauler') { remoteHaulerCapacity += capabilities.haul; }
         else if (archetype === 'remoteMaintainer' || archetype === 'remoteScout') { /* tracked separately */ }
-        else if (archetype === 'doctor' || archetype === 'claimer' || archetype === 'defender' || archetype === 'patrol') { /* tracked separately */ }
+        else if (archetype === 'doctor' || archetype === 'claimer' || archetype === 'patrol') { /* tracked separately */ }
         else { workerWork += capabilities.work; }
 
         heal += capabilities.heal;

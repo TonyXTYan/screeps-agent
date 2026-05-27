@@ -25,17 +25,15 @@ This is a Screeps bot written in TypeScript, bundled by Rollup into a single `di
 
 **Memory consistency:** After each non-trivial code/documentation job, check `.ai/memory/CODEMAP.md`, `.ai/memory/KNOWN_ISSUES.md`, `.ai/memory/ROADMAP.md`, `.ai/memory/MEMORY.md`, and relevant docs under `architecture/` for consistency with the change. Update them when behavior, file ownership, architecture, deferred work, or known issues have changed.
 
-**Entry point:** `src/main.ts` exports `loop()` — the function Screeps calls every game tick. It drives all systems in order: memory cleanup → memory audit (on build change) → emergency defender population control → room controller → tower behavior → assigned job runner → legacy role fallback.
+**Entry point:** `src/main.ts` exports `loop()` — the function Screeps calls every game tick. It drives all systems in order: memory cleanup → memory audit (on build change) → room controller → tower behavior → assigned job runner → legacy role fallback.
 
 **Module groups:**
 
 - `src/creep/` — shared systems that run once per tick across all creeps:
   - `creep/capabilities.ts` — derives capabilities from body parts, infers archetypes, plans bodies per archetype
   - `creep/jobRunner.ts` — executes assigned jobs (`harvestSource`, `withdrawEnergy`, `build`, `repair`, `upgrade`, remotes, minerals, idle, etc.)
-  - `creep/populationControl.ts` — emergency defender spawning when hostiles are present
   - `creep/memoryManagement.ts` — clears dead creep memory; assigns fallback roles to unassigned creeps
   - `creep/harvest.ts` — shared harvest logic used by all roles when they need energy; handles source selection, container fallback, and source load balancing
-  - `creep/roleBalance.ts` — legacy role body balancing utilities, still used for defender bodies
   - `creep/movement.ts` — path following, stuck detection, exit navigation, room-edge nudging
   - `creep/traffic.ts` — traffic yield system: request, honour, assign yield positions, compute priorities
 
@@ -44,7 +42,6 @@ This is a Screeps bot written in TypeScript, bundled by Rollup into a single `di
 
 - `src/role/` — per-creep state machines, each with a `run(creep)` export:
   - `harvester`, `builder`, `upgrader`, `doctor` — legacy fallback behavior after the job runner
-  - `defender` — emergency hostile response creep behavior
   - `manual` — stub for manually controlled creeps
 
 - `src/room/` — room-level control:
@@ -84,7 +81,6 @@ This is a Screeps bot written in TypeScript, bundled by Rollup into a single `di
   - `repairJob(creep)` — called by `role/builder.ts` and `role/harvester.ts` as legacy fallback behavior
 - `creep/harvest.ts` is imported by every role that needs to collect energy.
 - `creep/capabilities.ts:planBodyForArchetype(archetype, energy, opts)` is the current strategic body planner.
-- `creep/roleBalance.ts:balanceSpec(spec, energy)` is a legacy body scaler still used by emergency defenders.
 - Clearing a creep's memory is done via `delete Memory.creeps[creep.name]` (not `creep.memory = undefined`).
 
 **Custom types** are in `src/types.d.ts`: extends `CreepMemory`, `RoomMemory`, `SpawnMemory` with bot-specific fields, declares `console`, and defines the `EnergyStructure` union type.

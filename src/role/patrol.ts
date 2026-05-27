@@ -58,12 +58,24 @@ function runThreatResponse(creep: Creep, threats: VisibleThreat[]): void {
 
     const target = selectCombatTarget(creep, targetRoom.hostiles);
     if (target) {
+        const range = creep.pos.getRangeTo(target);
+        if (range <= 3 && creep.getActiveBodyparts(RANGED_ATTACK) > 0) {
+            const nearbyHostiles = targetRoom.hostiles.filter((hostile) => creep.pos.getRangeTo(hostile) <= 3).length;
+            if (nearbyHostiles >= 2) {
+                creep.rangedMassAttack();
+            } else {
+                creep.rangedAttack(target);
+            }
+        }
         if (creep.attack(target) === ERR_NOT_IN_RANGE) {
             creep.moveTo(target, { reusePath: 1, visualizePathStyle: { stroke: '#ef4444' } });
         }
         return;
     }
     if (!targetRoom.invaderCore) { return; }
+    if (creep.pos.getRangeTo(targetRoom.invaderCore) <= 3 && creep.getActiveBodyparts(RANGED_ATTACK) > 0) {
+        creep.rangedAttack(targetRoom.invaderCore);
+    }
     if (creep.attack(targetRoom.invaderCore) === ERR_NOT_IN_RANGE) {
         creep.moveTo(targetRoom.invaderCore, { reusePath: 1, visualizePathStyle: { stroke: '#ef4444' } });
     }

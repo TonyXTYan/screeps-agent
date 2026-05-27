@@ -49,11 +49,13 @@ At `RCL >= 6`, patrol target per home room is:
 - `cap = 2 + 2 * enabledRemoteRooms`
 - `target = min(baseline + hostileRooms, cap)`
 
-At `RCL < 6`, patrol is only used as an emergency home-defense fallback:
+At `RCL < 6`, patrol **spawning** is limited to an emergency home-defense fallback:
 
 - `target = 1` when any armed hostile is visible in home room (hostile-room count model)
-- no remote combat dispatch below RCL 6
+- no remote baseline patrol is spawned below RCL 6
 - the emergency patrol request uses full room energy capacity rather than the normal 50% body-budget cap, and waits for that body instead of scaling down
+
+The patrol **behavior** (`role/patrol.ts`) is not RCL-gated. An existing patrol — including one spawned as RCL < 6 home defense — runs `visibleRemoteThreats` every tick and will respond to remote threats just like an RCL 6+ patrol.
 
 `enabledRemoteRooms` counts all enabled remote modes (`harvest`, `reserve`, `claim`).
 
@@ -79,7 +81,7 @@ The full-capacity exception mainly matters at RCL 3: the global 50% cap would pl
 - If no active threat is visible, patrols rotate through enabled remotes.
 - Rotation cadence is provided by `getPatrolRotationTicks()` (currently returns `50`).
 - During threat-free rotation, patrols loiter around the remote controller (about range 5) with short jitter for one cadence window, then rotate to the next remote.
-- Patrols start renew at `TTL <= 300`; while armed threats are **visible in the creep's current room** they continue renewing only until `TTL > 500`, then re-engage; without armed threats they renew until `TTL >= 1400`. A renewing patrol is in the home room and cannot see remote threats (remote room not in `Game.rooms`). If a remote threat appears while the sole patrol for that remote is renewing, the fail-safe danger marker fires and the remote shuts down; no extra patrol is spawned (the threat is invisible so `hostileRooms` does not spike). The patrol resumes normal rotation after renewal and responds on the next visit, or the fail-safe clears via `dangerUntil` expiry.
+- Patrols start renew at `TTL <= 300`; while armed threats are **visible in any enabled remote or home room** (`visibleRemoteThreats` scans all rooms in `Game.rooms`) they continue renewing only until `TTL > 500`, then re-engage; without armed threats they renew until `TTL >= 1400`. A renewing patrol is in the home room — remote rooms that no other patrol is covering become invisible, so those threats typically won't be seen during the renew window. If a remote threat appears while the sole patrol for that remote is renewing, the fail-safe danger marker fires and the remote shuts down; no extra patrol is spawned (the threat is invisible so `hostileRooms` does not spike). The patrol resumes normal rotation after renewal and responds on the next visit, or the fail-safe clears via `dangerUntil` expiry.
 
 ## Layer 3: Non-Combat Evade (`main.ts`)
 

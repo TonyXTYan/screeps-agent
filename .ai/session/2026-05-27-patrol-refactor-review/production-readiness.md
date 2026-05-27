@@ -1,15 +1,24 @@
 # Patrol Feature — Production Readiness Audit
 
-**Date:** 2026-05-27  
+**Date:** 2026-05-28  
 **Branch:** `RCL7/dev1`  
-**Patch window audited:** patches 9–12 (current HEAD: `6bf7c45c` "patrol patch 11" + patch 12 planning fix)  
+**Patch window audited:** patches 9–13 (current HEAD: `88c5275` "patrol patch 13")  
 **Method:** Full static analysis of all key files; codegraph structural lookups; runtime cost calculations  
 
 ---
 
 ## Executive Summary
 
-The patrol feature is **production-ready with caveats**. The end-to-end integration is complete and correctly wired: spawn planning requests patrols at the right priority, the tick loop routes patrol creeps exclusively through `role/patrol.ts`, memory cleanup is automatic on death, and the fail-safe danger markers (patch 12) now correctly cover all enabled remote modes including `reserve` and `claim`. The critical bug from review-11 (danger markers only updating for `harvest` remotes) is confirmed fixed. No blockers were found. There are two warnings worth tracking and two policy-grade notes.
+The patrol feature is **production-ready with caution**. The end-to-end integration is complete and correctly wired: spawn planning requests patrols at the right strategic priority, the tick loop routes patrol creeps exclusively through `role/patrol.ts`, memory cleanup is automatic on death, and the armed-hostile fail-safe danger markers now correctly cover all enabled remote modes including `reserve` and `claim`.
+
+Across patches 10–13, the system also addressed the major follow-ups from earlier reviews:
+
+- Patrol renew FSM + CPU caches + loiter routing (patch 10)
+- Patrol combat now actively uses ranged parts (patch 11)
+- Mode-agnostic danger marker maintenance + dead branch cleanup (patch 12)
+- Defender role cleanup/migration hardening (patch 13)
+
+No code-level blockers were found. Remaining risk is primarily **validation depth** (no automated scenario tests) and **policy tradeoffs** (conservative fail-safe gating; patrol spawn minimums).
 
 ---
 
@@ -37,23 +46,29 @@ Net effect: one hostile appearing in the remote room during the patrol's renew w
 
 ---
 
-### 🟠 W2 — RCL ≥ 6 patrol has no `minimumBodyCost` guard
+### 🟠 W2 — Patrol bodies are now enforced to be full-capacity (spawn delay tradeoff)
 
-**File:** `src/room/remote/spawn.ts:521-527`
+**File:** `src/room/remote/spawn.ts:472-528`
 
-The `patrolSpawnRequest` at RCL ≥ 6 returns a request with no `minimumBodyCost` or `useFullEnergyCapacity` set. The spawn planner then uses `defaultBudget = max(300, floor(energyCapacityAvailable * 0.5))`. If energy is temporarily low (e.g., during recovery), the scaled-down path in `runSpawnPlanner` (`src/room/remote/spawn.ts:119-183`) can produce the cheapest patrol template at 140 energy (`TOUGH, ATTACK, MOVE`). `meetsMinimumBody` for `patrol` has no archetype-specific check (falls through to `return true`), so this tiny body passes.
+Patch 12 updated patrol spawn requests to:
 
-A 140-energy patrol is functional (has `ATTACK`) but provides minimal combat value. The RCL < 6 emergency path correctly uses `useFullEnergyCapacity: true` + `minimumBodyCost`; the RCL ≥ 6 path does not.
+- `useFullEnergyCapacity: true`
+- `minimumBodyCost: bodyCost(planBodyForArchetype('patrol', energyCapacityAvailable))`
 
-**Recommendation:** Add a `minimumBodyCost` to the RCL ≥ 6 patrol request equal to the best template affordable at `energyCapacityAvailable`, same as the RCL < 6 emergency path. Or add a `patrol` case to `meetsMinimumBody` requiring at least TOUGH+ATTACK+RANGED_ATTACK+MOVE×3+HEAL (template 3, 440 energy) for non-trivial combat value.
+This ensures patrols are **never** spawned as the 140/320 “budget” bodies during partial-energy windows. This improves combat reliability but introduces an availability tradeoff:
+
+- Under low `energyAvailable`, patrol spawns may wait longer for full refill.
+- In multi-room threat spikes, patrol spawn pressure can increase and compete with economy replacements.
+
+**Recommendation:** Treat as an operational knob. If patrol availability becomes too slow in practice, consider relaxing the minimum (e.g., allow 770+ only when `hostileRooms > 0`, allow 440 in peacetime), but keep an explicit minimum to avoid “paper patrols.”
 
 ---
 
 ## Notes 🟡
 
-### 🟡 N1 — `ATTACK`-only movement in threat response is brittle against future template changes
+### 🟡 N1 — Threat-response movement still assumes melee closure
 
-**File:** `src/role/patrol.ts:70` — `runThreatResponse()`
+**File:** `src/role/patrol.ts:59-82` — `runThreatResponse()`
 
 Movement toward a hostile target is driven exclusively by:
 ```typescript
@@ -106,11 +121,13 @@ Patrol body templates in `src/creep/capabilities.ts:22-30` (7 templates, costs: 
 
 All 7 templates include at least one `ATTACK` part.
 
-**5. Spawn demand sizing — correct**
+**5. Spawn demand sizing — correct (and defender cleanup completed)**
 
 At RCL ≥ 6: `baseline = ceil(enabledRemotes / 2)`, `target = min(baseline + hostileRooms, 2 + 2*enabledRemotes)`. For 1 remote: 1 patrol. For 3 remotes: 2 patrols. Formula documented in `architecture/DEFENSE.md` and matches `spawn.ts:512-516`.
 
 At RCL < 6: 1 patrol spawned only when home has armed hostiles. Demand is correctly capped at 1.
+
+Patch 13 fully removes the legacy `defender` role implementation (dead modules deleted) and keeps only deploy-time memory migration (`src/memoryAudit.ts:migrateLegacyDefenseRoles()`) so old server memory cannot strand creeps. This reduces operational ambiguity and avoids archetype/dispatch drift.
 
 **6. Edge cases in patrol.ts — all safe**
 
@@ -129,10 +146,24 @@ Patrol's `shouldRenewPatrolNow` / `tryRenewPatrol` exclusively handle renew stat
 - `patrolCacheTick` in `patrol.ts:14` and `patrolCoverageCacheTick` in `planning.ts:32` are module-level and correctly reset via `refreshPatrolCachesForTick()` / `refreshPatrolCoverageCacheForTick()` at the start of each tick's first call.
 - Cache keys are per-homeRoom for coverage, and `homeRoom + '|' + threatSignature(threats)` for threat assignment — no cross-home contamination.
 
-**9. Architecture alignment — docs and code in sync after patch 12**
+**9. Architecture alignment — docs and code in sync after patch 13**
 
-`architecture/DEFENSE.md` and `architecture/REMOTES.md` describe the danger fail-safe as mode-agnostic. Code now matches. All other documented behaviors (renew TTL thresholds, coverage formula, baseline patrol math, threat priority scoring, hybrid combat actions) verified to match `patrol.ts` and `spawn.ts` implementations.
+`architecture/DEFENSE.md` and `architecture/REMOTES.md` describe the danger fail-safe as mode-agnostic. Code matches. All other documented behaviors (renew TTL thresholds, coverage formula, baseline patrol math, threat priority scoring, hybrid combat actions) verified to match `patrol.ts` and `spawn.ts` implementations.
 
 **10. Known issues registry — no unresolved patrol blockers**
 
 `.ai/memory/KNOWN_ISSUES.md` lists patrol combat as expel-mode only (war-defense/offense deferred) — this is a feature gap, not a bug. No other open patrol issues are listed. The legacy-role memory deletion risk exists but does not apply to patrol (patrol does not use legacy role fallbacks that call `delete Memory.creeps[creep.name]`).
+
+---
+
+## Recommended manual smoke checks (post-upload)
+
+There is no automated scenario test suite; do these short in-game checks after upload:
+
+1. **Claim/reserve remote danger**
+   - Configure a `reserve` or `claim` remote and ensure armed hostiles appear while the room is visible.
+   - Confirm: remote creeps retreat/idle; remote spawns for that remote are skipped; danger clears after hostiles are gone (+ hold window).
+2. **Renew-under-threat**
+   - Put a patrol near TTL ~250 and trigger a visible armed threat; confirm it renews briefly and re-engages after TTL > 500.
+3. **Ranged combat**
+   - Confirm `rangedMassAttack` triggers with 2+ hostiles in range 3 and `rangedAttack` with 1 hostile in range 3 (while still closing to melee).

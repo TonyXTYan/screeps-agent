@@ -59,6 +59,7 @@ While the armed failsafe is active for a remote:
 - assigned non-combat remote creeps retreat to home room.
 - if already executing `travelRoom` toward home, retreat steering is directed to the home exit with hostile-avoid costs.
 - non-combat remote spawn requests for that remote are skipped.
+- once armed hostiles are no longer visible, the danger marker is held until `dangerUntil` expires before clearing.
 
 Coverage for this gate is threat-room-local: only non-renewing patrols from the same home that are physically in the threatened remote room count as active coverage.
 

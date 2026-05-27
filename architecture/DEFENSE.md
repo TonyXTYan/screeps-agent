@@ -97,6 +97,7 @@ When that happens, the bot logs and sends `Game.notify` (cooldown throttled per 
 
 - non-combat remote creeps assigned to that remote retreat to home room.
 - non-combat remote spawns for that remote are blocked until danger clears or patrol coverage returns.
+- danger clear is delayed until `dangerUntil` expires after armed hostiles are no longer visible.
 
 Reviewer note: this fail-safe gate is intentionally armed-hostile-only; invader cores and hostile controller states remain telemetry-only and do not trigger retreat/spawn blocking by themselves.
 

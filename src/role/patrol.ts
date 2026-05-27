@@ -1,5 +1,6 @@
 import { findHostiles } from '../hostileUtils';
 import { acquireRenewSpawn, nearestSpawn } from '../spawn/renewal';
+import { ensureArchetype } from '../creep/capabilities';
 
 const PATROL_HOLD_RANGE = 8;
 const PATROL_RENEW_START_TTL = 650;
@@ -36,7 +37,8 @@ export function run(creep: Creep): void {
 }
 
 function runThreatResponse(creep: Creep, threats: VisibleThreat[]): void {
-    const targetRoom = selectThreatRoom(creep, threats);
+    const homeRoom = creep.memory.homeRoom ?? creep.room.name;
+    const targetRoom = selectThreatRoomForPatrol(creep, threats, homeRoom);
     if (!targetRoom) { return; }
 
     healFriendly(creep);
@@ -131,18 +133,93 @@ function visibleRemoteThreats(homeRoom: string, remoteRooms: string[]): VisibleT
     return threats;
 }
 
-function selectThreatRoom(creep: Creep, threats: VisibleThreat[]): VisibleThreat | null {
+function selectThreatRoomForPatrol(
+    creep: Creep,
+    threats: VisibleThreat[],
+    homeRoom: string
+): VisibleThreat | null {
     if (threats.length === 0) { return null; }
-    let best = threats[0];
-    let bestPriority = threatPriority(best, creep);
-    for (const threat of threats) {
-        const priority = threatPriority(threat, creep);
-        if (priority > bestPriority) {
-            best = threat;
-            bestPriority = priority;
-        }
+
+    const assignments = assignPatrolThreatRooms(homeRoom, threats);
+    const assignedRoom = assignments[creep.name];
+    if (assignedRoom) {
+        const assignedThreat = threats.find((threat) => threat.roomName === assignedRoom);
+        if (assignedThreat) { return assignedThreat; }
     }
-    return best;
+
+    return selectThreatRoomFallback(homeRoom, threats);
+}
+
+function selectThreatRoomFallback(homeRoom: string, threats: VisibleThreat[]): VisibleThreat | null {
+    if (threats.length === 0) { return null; }
+    const scored = scoreThreats(homeRoom, threats);
+    return scored[0]?.threat ?? null;
+}
+
+function assignPatrolThreatRooms(homeRoom: string, threats: VisibleThreat[]): { [creepName: string]: string } {
+    const assignments: { [creepName: string]: string } = {};
+    if (threats.length === 0) { return assignments; }
+
+    const patrolNames = activeHomePatrolNames(homeRoom);
+    if (patrolNames.length === 0) { return assignments; }
+
+    const scoredThreats = scoreThreats(homeRoom, threats);
+    const armedThreats = scoredThreats.filter((entry) => entry.threat.hostiles.length > 0);
+    const targetThreats = armedThreats.length > 0 ? armedThreats : scoredThreats;
+    if (targetThreats.length === 0) { return assignments; }
+
+    const slots = allocateThreatSlots(targetThreats, patrolNames.length);
+    for (let i = 0; i < patrolNames.length; i++) {
+        assignments[patrolNames[i]] = slots[i];
+    }
+
+    return assignments;
+}
+
+function activeHomePatrolNames(homeRoom: string): string[] {
+    const names: string[] = [];
+    for (const name in Game.creeps) {
+        const creep = Game.creeps[name];
+        if (creep.spawning) { continue; }
+        if ((creep.memory.homeRoom ?? creep.room.name) !== homeRoom) { continue; }
+        if (creep.memory.renewing) { continue; }
+        if (ensureArchetype(creep) !== 'patrol') { continue; }
+        names.push(name);
+    }
+    names.sort();
+    return names;
+}
+
+type ThreatScore = {
+    threat: VisibleThreat;
+    score: number;
+};
+
+function scoreThreats(homeRoom: string, threats: VisibleThreat[]): ThreatScore[] {
+    const scored = threats.map((threat) => ({
+        threat,
+        score: threatPriority(threat, homeRoom)
+    }));
+    scored.sort((a, b) => b.score - a.score || a.threat.roomName.localeCompare(b.threat.roomName));
+    return scored;
+}
+
+function allocateThreatSlots(scoredThreats: ThreatScore[], patrolCount: number): string[] {
+    const slots: string[] = [];
+    if (scoredThreats.length === 0 || patrolCount <= 0) { return slots; }
+
+    for (const entry of scoredThreats) {
+        if (slots.length >= patrolCount) { break; }
+        slots.push(entry.threat.roomName);
+    }
+
+    let index = 0;
+    while (slots.length < patrolCount) {
+        slots.push(scoredThreats[index % scoredThreats.length].threat.roomName);
+        index++;
+    }
+
+    return slots;
 }
 
 function selectCombatTarget(creep: Creep, hostiles: Creep[]): Creep | null {
@@ -199,11 +276,11 @@ function findHostileInvaderCore(room: Room): StructureInvaderCore | null {
     return cores[0] ?? null;
 }
 
-function threatPriority(threat: VisibleThreat, creep: Creep): number {
+function threatPriority(threat: VisibleThreat, originRoomName: string): number {
     const homeBoost = threat.isHomeThreat && threat.hostiles.length > 0 ? 10000 : 0;
     const armedBoost = threat.hostiles.length > 0 ? 1000 : 0;
     const coreBoost = threat.invaderCore ? 100 : 0;
-    const distancePenalty = Game.map.getRoomLinearDistance(creep.room.name, threat.roomName);
+    const distancePenalty = Game.map.getRoomLinearDistance(originRoomName, threat.roomName);
     return homeBoost + armedBoost + coreBoost - distancePenalty;
 }
 
@@ -213,7 +290,7 @@ function shouldRenewPatrolNow(creep: Creep, threats: VisibleThreat[], homeRoomNa
     const hasArmedHomeThreat = threats.some((threat) => threat.isHomeThreat && threat.hostiles.length > 0);
     if (threats.length === 0) { return true; }
     if (creep.memory.renewing) { return !hasArmedHomeThreat; }
-    if (ttl <= PATROL_RENEW_CRITICAL_TTL) { return true; }
+    if (ttl <= PATROL_RENEW_CRITICAL_TTL && !hasArmedHomeThreat) { return true; }
     if (creep.room.name !== homeRoomName) { return false; }
     if (ttl > PATROL_RENEW_START_TTL) { return false; }
 

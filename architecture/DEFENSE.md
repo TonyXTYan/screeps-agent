@@ -58,7 +58,9 @@ At `RCL < 6`, patrol is only used as an emergency home-defense fallback:
 
 ### Patrol behavior (expel mode)
 
-- Patrols converge on visible armed hostiles in home room and enabled remotes.
+- Patrols use coordinated room allocation under simultaneous threats:
+  - first pass assigns one patrol per armed-threat room when available,
+  - remaining patrols are assigned by threat score priority.
 - Hostile target priority: `HEAL` parts first, then `RANGED_ATTACK`, then `ATTACK`.
 - When no armed hostile is visible in the chosen room, patrols can clear visible invader cores.
 - If no active threat is visible, patrols rotate through enabled remotes.
@@ -89,11 +91,13 @@ Evade radius is controlled by:
 A remote is marked danger only when:
 
 - armed hostiles are visible, and
-- patrol coverage for the home room is zero.
+- no non-renewing patrol from the same home room is physically deployed in that threatened remote room.
 
 When that happens, the bot logs and sends `Game.notify` (cooldown throttled per remote), and:
 
 - non-combat remote creeps assigned to that remote retreat to home room.
 - non-combat remote spawns for that remote are blocked until danger clears or patrol coverage returns.
+
+Reviewer note: this fail-safe gate is intentionally armed-hostile-only; invader cores and hostile controller states remain telemetry-only and do not trigger retreat/spawn blocking by themselves.
 
 Controller attack fallback for CLAIM creeps is restricted to NPC Invader controller states only (`owner/reservation.username === 'Invader'`).

@@ -34,7 +34,7 @@ import {
 import {
     remoteSourceRouteDegraded,
     initialiseRoomPlan, updateRemoteRoomPlans, rememberPlans,
-    rememberRcl, updatePlanAssignments, rememberLoad, patrolCoverageForHome, remoteArmedFailsafeActive,
+    rememberRcl, updatePlanAssignments, rememberLoad, remoteArmedFailsafeActive,
 } from './remote/planning';
 import {
     creepsForHomeRoom,
@@ -157,8 +157,7 @@ export function assignRemoteCreep(creep: Creep): boolean {
         setJob(creep, 'idle', creep.room.storage ?? creep.room.find(FIND_MY_SPAWNS)[0]);
         return true;
     }
-    const patrolCoverage = patrolCoverageForHome(homeRoom);
-    if (remoteArmedFailsafeActive(homeRoom, remoteRoom, configuredRemotePlan, patrolCoverage)) {
+    if (remoteArmedFailsafeActive(homeRoom, remoteRoom, configuredRemotePlan)) {
         clearJob(creep);
         if (creep.room.name !== homeRoom) {
             setTravelJob(creep, homeRoom);

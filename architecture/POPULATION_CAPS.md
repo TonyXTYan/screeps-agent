@@ -33,4 +33,4 @@ Quick reference for hard and soft limits on creep counts by archetype and RCL.
 
 - Local pending spawn pressure still gates remote expansion.
 - `dangerUntil` does not block normal remote assignment/spawn flow by default.
-- Armed-hostile fail-safe applies when patrol coverage is zero: assigned non-combat remote creeps retreat home and non-combat remote spawns for that remote are blocked.
+- Armed-hostile fail-safe applies when the threatened remote room has zero deployed non-renewing patrol coverage from that home: assigned non-combat remote creeps retreat home and non-combat remote spawns for that remote are blocked.

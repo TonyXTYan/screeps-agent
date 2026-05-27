@@ -71,7 +71,6 @@ export function initialiseRoomPlan(room: Room): void {
 export function updateRemoteRoomPlans(homeRoom: Room): void {
     const remotes = homeRoom.memory.plan?.remoteRooms ?? {};
     const myUsername = homeRoom.controller?.owner?.username;
-    const patrolCoverage = patrolCoverageForHome(homeRoom.name);
     for (const remoteName in remotes) {
         const remote = remotes[remoteName];
         if (!remote.enabled) { continue; }
@@ -115,7 +114,8 @@ export function updateRemoteRoomPlans(homeRoom: Room): void {
             remote.lastSeenHostileControllerAt = undefined;
         }
 
-        if (hasArmedHostiles && patrolCoverage === 0) {
+        const threatCoverage = patrolCoverageForRemoteRoom(homeRoom.name, remoteName);
+        if (hasArmedHostiles && threatCoverage === 0) {
             const wasAlreadyDanger = remote.skipReason === 'danger';
             remote.dangerUntil = Math.max(remote.dangerUntil ?? 0, Game.time + REMOTE_DANGER_TICKS);
             remote.skipReason = 'danger';
@@ -283,7 +283,22 @@ export function patrolCoverageForHome(homeRoomName: string): number {
         const creep = Game.creeps[name];
         if (creep.spawning) { continue; }
         if ((creep.memory.homeRoom ?? creep.room.name) !== homeRoomName) { continue; }
+        if (creep.memory.renewing) { continue; }
         if (ensureArchetype(creep) !== 'patrol') { continue; }
+        coverage++;
+    }
+    return coverage;
+}
+
+export function patrolCoverageForRemoteRoom(homeRoomName: string, remoteRoomName: string): number {
+    let coverage = 0;
+    for (const name in Game.creeps) {
+        const creep = Game.creeps[name];
+        if (creep.spawning) { continue; }
+        if ((creep.memory.homeRoom ?? creep.room.name) !== homeRoomName) { continue; }
+        if (creep.memory.renewing) { continue; }
+        if (ensureArchetype(creep) !== 'patrol') { continue; }
+        if (creep.room.name !== remoteRoomName) { continue; }
         coverage++;
     }
     return coverage;
@@ -293,7 +308,7 @@ export function remoteArmedFailsafeActive(
     homeRoomName: string,
     remoteRoomName: string,
     remotePlan: RemoteRoomPlan | undefined,
-    patrolCoverage: number = patrolCoverageForHome(homeRoomName)
+    patrolCoverage: number = patrolCoverageForRemoteRoom(homeRoomName, remoteRoomName)
 ): boolean {
     if (!remotePlan || remotePlan.skipReason !== 'danger') { return false; }
     if (!remotePlan.dangerUntil || remotePlan.dangerUntil <= Game.time) { return false; }

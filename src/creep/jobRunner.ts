@@ -65,6 +65,7 @@ const REMOTE_MINER_SOURCE_FALLBACK_TICKS = 14;
 const REMOTE_CONTAINER_REPAIR_INTERVAL = 5;
 const REMOTE_CONTAINER_REPAIR_THRESHOLD = 0.5;
 const NPC_INVADER_USERNAME = 'Invader';
+const CONTROLLER_ATTACK_FALLBACK_ACTIVE = ERR_TIRED;
 
 export function clearJob(creep: Creep): void {
     creep.memory.jobType = undefined;
@@ -324,13 +325,16 @@ function reserveController(creep: Creep): number {
     const controller = getTarget<StructureController>(creep) ?? creep.room.controller;
     if (!controller) { return ERR_INVALID_TARGET; }
 
+    let usedAttackFallback = false;
     let code = creep.reserveController(controller);
     if (code === ERR_INVALID_TARGET && shouldAttackController(creep, controller)) {
         code = creep.attackController(controller);
+        usedAttackFallback = code === OK;
     }
     if (code === ERR_NOT_IN_RANGE || code === ERR_INVALID_TARGET) {
         moveToJobTarget(creep, controller, '#ffffff');
     }
+    if (usedAttackFallback) { return CONTROLLER_ATTACK_FALLBACK_ACTIVE; }
     return code;
 }
 
@@ -338,13 +342,16 @@ function claimController(creep: Creep): number {
     const controller = getTarget<StructureController>(creep) ?? creep.room.controller;
     if (!controller) { return ERR_INVALID_TARGET; }
 
+    let usedAttackFallback = false;
     let code = creep.claimController(controller);
     if (code === ERR_INVALID_TARGET && shouldAttackController(creep, controller)) {
         code = creep.attackController(controller);
+        usedAttackFallback = code === OK;
     }
     if (code === ERR_NOT_IN_RANGE || code === ERR_INVALID_TARGET) {
         moveToJobTarget(creep, controller, '#ffffff');
     }
+    if (usedAttackFallback) { return CONTROLLER_ATTACK_FALLBACK_ACTIVE; }
     return code;
 }
 

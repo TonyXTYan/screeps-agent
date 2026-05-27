@@ -20,7 +20,7 @@ import {
     remoteSourceHasContainerStation, remoteSourceReplacementHorizon, countFleetForArchetype,
 } from './fleet';
 import { findHostiles } from '../../hostileUtils';
-import { patrolCoverageForHome, remoteArmedFailsafeActive, remoteNeedsRouteHealthMaintainer } from './planning';
+import { remoteArmedFailsafeActive, remoteNeedsRouteHealthMaintainer } from './planning';
 import { desiredRemoteMaintainerCount } from './maintenance';
 import { sourceSpawnDeficit, stationaryTargetIdForSource, stationaryTargetIdForMineral, activeMinerCount } from '../source';
 import { mineralReadyToMine } from '../work';
@@ -287,13 +287,12 @@ function remoteSpawnRequest(
     if (pending.some(r => !r.remoteRoom)) { return null; }
 
     const homeFleet = creepsForHomeRoom(context.room.name);
-    const patrolCoverage = patrolCoverageForHome(context.room.name);
     const remoteRooms = context.room.memory.plan?.remoteRooms ?? {};
     for (const roomName in remoteRooms) {
         const remote = remoteRooms[roomName];
         if (!remote.enabled) { continue; }
         if (remote.manualPauseUntil && remote.manualPauseUntil > Game.time) { continue; }
-        if (remoteArmedFailsafeActive(context.room.name, roomName, remote, patrolCoverage)) { continue; }
+        if (remoteArmedFailsafeActive(context.room.name, roomName, remote)) { continue; }
         if (remote.mode === 'harvest' && (!remote.sources || Object.keys(remote.sources).length === 0)) {
             if (countRemoteScouts(context.room.name, roomName) === 0 &&
                 !pending.some(r => r.archetype === 'remoteScout' && r.remoteRoom === roomName) &&

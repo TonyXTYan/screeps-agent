@@ -174,6 +174,115 @@ The migration function runs unconditionally in `run()` (called every tick). Afte
 
 ---
 
+---
+
+## Follow-up Review: Last 5 Commits (patrol-system + patches 1–4)
+
+**Scope:** commits `3953ac4`, `684ad24`, `2c96946`, `54910b0`, `269b3b9`  
+**Date:** 2026-05-27 (continued session)  
+**Method:** 3-angle (line-by-line, removed-behavior, cross-file tracer) + verify  
+**Result:** 9 findings (3 confirmed, 4 plausible, 2 plausible-low)
+
+---
+
+### 🔴 F1 — `shouldRenewPatrolNow` critical-TTL branch ignores armed home threat
+
+**File:** `src/role/patrol.ts:216`
+
+```typescript
+if (ttl <= PATROL_RENEW_CRITICAL_TTL) { return true; }  // ← no hasArmedHomeThreat check
+```
+
+A patrol with TTL ≤ 300 abandons an active home-room defense fight to go renew. `hasArmedHomeThreat` is computed 3 lines above but never checked here.
+
+**Fix:** `if (ttl <= PATROL_RENEW_CRITICAL_TTL && !hasArmedHomeThreat) { return true; }`
+
+---
+
+### 🔴 F2 — Renewing patrol counted as active coverage, silences remote danger
+
+**File:** `src/room/remote/planning.ts:280` (`patrolCoverageForHome`)
+
+`patrolCoverageForHome` counts any non-spawning patrol creep, including those with `memory.renewing=true`. A renewing patrol at the home spawn will never enter `runThreatResponse` (its `shouldRenewPatrolNow` returns `!hasArmedHomeThreat` = true for remote-only threats). Result: `patrolCoverage > 0` → `skipReason='danger'` never set → remote miners dispatched into live armed hostiles.
+
+**Fix:** Exclude `creep.memory.renewing === true` from the count in `patrolCoverageForHome`.
+
+---
+
+### 🔴 F3 — Freshly-spawned patrol counted as coverage before it can reach remote threat
+
+**File:** `src/room/remote/planning.ts:280` (same function)
+
+The tick a patrol exits the spawn (no longer `creep.spawning`), it counts as coverage=1. The patrol is still in the home room and may be 10+ rooms from the hostile remote room. `skipReason='danger'` is suppressed and remote miners are re-dispatched while the threat is live.
+
+**Fix:** Same as F2 (exclude renewing), or additionally exclude creeps that are in the home room with `ticksToLive > MIN_DEPLOY_TTL_THRESHOLD` as a proxy for "just spawned."
+
+---
+
+### 🟠 F4 — RCL3 patrol body has no HEAL (budget 320–439 selects T5)
+
+**File:** `src/creep/capabilities.ts:22` (`PATROL_BODY_TEMPLATES`)
+
+- T4 = `[TOUGH,ATTACK,MOVE×2,HEAL]` costs **440**
+- T5 = `[TOUGH,ATTACK×2,MOVE×3]` costs **320** — **no HEAL**
+- At RCL3 (`energyCapacity=800`): budget = `max(300, 400) = 400` → T4 doesn't fit → T5 selected
+
+A patrol spawned for home defense at RCL3 cannot self-heal. It dies quickly under any sustained damage.
+
+**Fix:** Lower T4's cost to ≤ 400 (e.g. remove one ATTACK → `[TOUGH,ATTACK,MOVE×2,HEAL]` = 390), closing the gap.
+
+---
+
+### 🟠 F5 — `attackController` returning `OK` clears `reserveController` job every tick
+
+**File:** `src/creep/jobRunner.ts:644`
+
+`shouldClearJob('reserveController', OK)` returns `true`. When the controller is Invader-owned, `reserveController` → `ERR_INVALID_TARGET` → `attackController()` → `OK` → job cleared every tick. Next tick: `assignRemoteCreep` re-assigns `reserveController`. The attack fires correctly each tick but job memory is written and cleared on every single tick.
+
+**Fix:** When `attackController` was used, return `ERR_BUSY` instead of the `OK` result so `shouldClearJob` does not clear the job; or add a dedicated `'attackController'` job type.
+
+---
+
+### 🟡 F6 — No hold-off when visible room clears danger; workers re-enter immediately
+
+**File:** `src/room/remote/planning.ts:132`
+
+When `hasArmedHostiles=false` and `skipReason='danger'`, both `skipReason` and `dangerUntil` are cleared in the same tick. Workers are dispatched on the very next tick. If hostiles have only briefly retreated, workers re-enter before the patrol has confirmed the room clear.
+
+**Fix:** On clear, keep `dangerUntil` intact; only clear `skipReason`. Let `remoteArmedFailsafeActive` expire the timer naturally via the `dangerUntil > Game.time` check.
+
+---
+
+### 🟡 F7 — Invader core without guards never triggers `skipReason='danger'`
+
+**File:** `src/room/remote/planning.ts:118`
+
+Only `hasArmedHostiles` sets danger. An invader core that has spawned but not yet produced guards (`hasArmedHostiles=false`) doesn't block remote dispatch. Workers enter the room and are in melee range when guards first appear.
+
+**Fix:** Add `|| (hostileCore !== null && patrolCoverage === 0)` to the danger-set condition.
+
+---
+
+### 🔵 F8 — Remote creep with cleared `remoteRoom` bypasses directed retreat
+
+**File:** `src/main.ts:333` (`directedRetreatToHomeStep`)
+
+`assignRemoteCreep` is guarded by `if (creep.memory.remoteRoom)` (line 124). A creep whose `remoteRoom` was cleared by memoryAudit is never sent to `travelRoom`, so `directedRetreatToHomeStep` checks `jobType==='travelRoom'` → fails → falls back to `maxRooms:1` flee which may oscillate in the hostile room.
+
+**Fix:** In `fleeFromHostiles`, defensively set `travelRoom` to `homeRoom` when `memory.homeRoom` is set and the creep is in a foreign room, regardless of `remoteRoom`.
+
+---
+
+### 🔵 F9 — First-tick crash leaves `legacyDefenseMigrationDone=true` with defender creeps un-migrated
+
+**File:** `src/creep/memoryManagement.ts:81`
+
+`migrateLegacyDefenseMemoryEntries` writes `Memory.legacyDefenseMigrationDone=true` unconditionally on the first post-deploy tick. If the tick crashes after writing the flag (before `memoryAudit` runs), the per-tick migration is permanently skipped and any surviving `defender`-role creep is never migrated — it falls through to economic job dispatch with an attack-capable body.
+
+**Fix:** Write the flag only after successfully iterating all creeps (not before), or remove the per-tick migration entirely and rely solely on `memoryAudit.migrateLegacyDefenseRoles`.
+
+---
+
 ## Files Changed (scope reference)
 
 | File | Key change |

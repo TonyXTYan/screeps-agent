@@ -67,14 +67,15 @@ src/
   - `target = min(baseline + hostileRooms, cap)`
   - `RCL < 6`: emergency home-defense-only spawning capped at 1 patrol for any armed home threat
 - Patrol behavior (`role/patrol.ts`):
-  - converge on visible armed hostiles (home + remotes)
+  - coordinated multi-threat room assignment: min-1 per armed threat room, then remaining patrols by threat score
   - target HEAL > RANGED_ATTACK > ATTACK
   - clear visible invader cores when no armed target is present in threat room
   - rotate remotes every `getPatrolRotationTicks()` (currently 100)
   - renew logic allows home-room top-up during remote-only threats and critical-TTL sustain during long incursions
 - Evade radius (`room/constants.ts`): `REMOTE_HOSTILE_EVADE_DISTANCE`
 - During armed failsafe home retreat (`main.ts`): creeps already on `travelRoom -> homeRoom` take directed home-exit steering with hostile-avoid costs before generic flee.
-- Fail-safe danger marker (`room/remote/planning.ts`): armed-hostile only, with non-combat retreat/spawn blocking when patrol coverage is zero.
+- Fail-safe danger marker (`room/remote/planning.ts`): armed-hostile only, with non-combat retreat/spawn blocking when the threatened remote room has zero deployed non-renewing patrol coverage from that home.
+- Non-creep threats (invader core / hostile controller) are intentionally telemetry-only and should not trigger fail-safe retreat/spawn blocking.
 - Controller attack fallback (`creep/jobRunner.ts`): CLAIM creeps auto-attack controllers only for NPC Invader owner/reservation states.
 
 ## Types and Memory

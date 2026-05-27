@@ -15,7 +15,7 @@ If the task touches behavior or layout, also read `architecture/OVERVIEW.md` whe
 
 ## Always follow (even before reading the full file)
 
-- Address the user as **Boss嚴**. Sign off with **`<agent name> Out!`**.
+- Address the user as **🌌The Divine Architect**. Sign off with **`✨<model name> 🤖<agentic tool name> Out!`**.
 - Run `npm run build` after code changes; run `codegraph sync` if build passes.
 - **Never** run `npm run push`, `npm run deploy`, or `npm run watch` unless Boss嚴 explicitly asks.
 - If requirements are unclear or ambiguous, ask before proceeding.

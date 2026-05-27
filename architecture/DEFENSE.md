@@ -78,7 +78,7 @@ The full-capacity exception mainly matters at RCL 3: the global 50% cap would pl
 - When no armed hostile is visible in the chosen room, patrols can clear visible invader cores.
 - If no active threat is visible, patrols rotate through enabled remotes.
 - Rotation cadence is provided by `getPatrolRotationTicks()` (currently returns `100`).
-- Patrols renew in home room when idle, and may also renew during remote-only threats if already home or critically low TTL.
+- Patrols renew in home room when idle; critical renew is blocked while any armed hostile threat is visible.
 
 ## Layer 3: Non-Combat Evade (`main.ts`)
 
@@ -109,8 +109,8 @@ A remote is marked danger only when:
 When that happens, the bot logs and sends `Game.notify` (cooldown throttled per remote), and:
 
 - non-combat remote creeps assigned to that remote retreat to home room.
-- non-combat remote spawns for that remote are blocked until danger clears or patrol coverage returns.
-- when the room is visible and armed hostiles are gone, `dangerUntil/skipReason` clears immediately and retreat/spawn blocking stops.
+- non-combat remote spawns for that remote are blocked until danger clears.
+- when the room is visible and armed hostiles are gone, danger hold applies for 50 ticks before `dangerUntil/skipReason` clears and retreat/spawn blocking stops.
 - if the room is not visible, the fail-safe can remain active until `dangerUntil` expires.
 
 Reviewer note: this fail-safe gate is intentionally armed-hostile-only; invader cores and hostile controller states remain telemetry-only and do not trigger retreat/spawn blocking by themselves.

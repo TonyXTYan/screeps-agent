@@ -288,9 +288,10 @@ function shouldRenewPatrolNow(creep: Creep, threats: VisibleThreat[], homeRoomNa
     const ttl = creep.ticksToLive ?? 0;
     if (ttl <= 0) { return false; }
     const hasArmedHomeThreat = threats.some((threat) => threat.isHomeThreat && threat.hostiles.length > 0);
+    const hasAnyArmedThreat = threats.some((threat) => threat.hostiles.length > 0);
     if (threats.length === 0) { return true; }
     if (creep.memory.renewing) { return !hasArmedHomeThreat; }
-    if (ttl <= PATROL_RENEW_CRITICAL_TTL && !hasArmedHomeThreat) { return true; }
+    if (ttl <= PATROL_RENEW_CRITICAL_TTL && !hasAnyArmedThreat) { return true; }
     if (creep.room.name !== homeRoomName) { return false; }
     if (ttl > PATROL_RENEW_START_TTL) { return false; }
 

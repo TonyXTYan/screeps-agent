@@ -40,7 +40,7 @@ Remote economy requests continue to use source-work/haul/maintenance deficits.
 
 - Remote creeps no longer auto-retreat to home room when hostiles appear by default.
 - Non-patrol creeps evade nearby armed hostiles using `REMOTE_HOSTILE_EVADE_DISTANCE`.
-- `dangerUntil` is not a normal gate, except armed-hostile fail-safe when threatened-room deployed patrol coverage is zero.
+- `dangerUntil` is not a normal gate, except armed-hostile fail-safe triggered when threatened-room deployed patrol coverage is zero.
 - Manual operator pause is still supported through `manualPauseUntil`.
 
 ## Fail-Safe Danger Marker
@@ -59,10 +59,9 @@ While the armed failsafe is active for a remote:
 - assigned non-combat remote creeps retreat to home room.
 - if already executing `travelRoom` toward home, retreat steering is directed to the home exit with hostile-avoid costs.
 - non-combat remote spawn requests for that remote are skipped.
-- when the room is visible and armed hostiles are gone, `dangerUntil/skipReason` clears immediately and retreat/spawn blocking stops.
+- once triggered, fail-safe remains active until armed hostiles are gone and the danger timer clears.
+- when the room is visible and armed hostiles are gone, a 50-tick danger hold is applied before `dangerUntil/skipReason` clears and retreat/spawn blocking stops.
 - if the room is not visible, the fail-safe can stay active until `dangerUntil` expires.
-
-Coverage for this gate is threat-room-local: only non-renewing patrols from the same home that are physically in the threatened remote room count as active coverage.
 
 Non-creep threats (`invader core`, hostile controller owner/reservation) are tracked in telemetry and intentionally do not trigger this retreat/block gate by themselves.
 

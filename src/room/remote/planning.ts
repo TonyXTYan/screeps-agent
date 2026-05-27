@@ -20,7 +20,7 @@ import {
     snapshotRemoteMaintainerCount,
 } from './maintenance';
 import {
-    REMOTE_DANGER_TICKS, REMOTE_CONTAINER_REROUTE_FREEZE_TICKS,
+    REMOTE_DANGER_TICKS, REMOTE_DANGER_CLEAR_HOLD_TICKS, REMOTE_CONTAINER_REROUTE_FREEZE_TICKS,
     REMOTE_PATH_REFRESH_INTERVAL, REMOTE_INACCESSIBLE_RETRY_TICKS, REMOTE_PATH_INCOMPLETE_RETRY_TICKS,
     REMOTE_PLANNING_LOG_INTERVAL, REMOTE_CONTAINER_BUILD_DISTANCE,
     REMOTE_ROAD_SITES_PER_TICK, REMOTE_MAX_UNFINISHED_ROAD_SITES, REMOTE_DEGRADED_MAX_UNFINISHED_ROAD_SITES,
@@ -131,6 +131,14 @@ export function updateRemoteRoomPlans(homeRoom: Room): void {
 
         if (remote.skipReason === 'danger' || remote.skipReason === 'transit-danger') {
             if (!hasArmedHostiles) {
+                const holdUntil = Game.time + REMOTE_DANGER_CLEAR_HOLD_TICKS;
+                if (!remote.dangerUntil || remote.dangerUntil > holdUntil) {
+                    remote.dangerUntil = holdUntil;
+                }
+                if (remote.dangerUntil > Game.time) {
+                    remote.skipReason = 'danger';
+                    continue;
+                }
                 remote.skipReason = undefined;
                 remote.dangerUntil = undefined;
                 console.log(`[REMOTE-DANGER] t=${Game.time} ${remoteName}: cleared`);
@@ -277,19 +285,6 @@ export function updateRemoteRoomPlans(homeRoom: Room): void {
     }
 }
 
-export function patrolCoverageForHome(homeRoomName: string): number {
-    let coverage = 0;
-    for (const name in Game.creeps) {
-        const creep = Game.creeps[name];
-        if (creep.spawning) { continue; }
-        if ((creep.memory.homeRoom ?? creep.room.name) !== homeRoomName) { continue; }
-        if (creep.memory.renewing) { continue; }
-        if (ensureArchetype(creep) !== 'patrol') { continue; }
-        coverage++;
-    }
-    return coverage;
-}
-
 export function patrolCoverageForRemoteRoom(homeRoomName: string, remoteRoomName: string): number {
     let coverage = 0;
     for (const name in Game.creeps) {
@@ -305,17 +300,16 @@ export function patrolCoverageForRemoteRoom(homeRoomName: string, remoteRoomName
 }
 
 export function remoteArmedFailsafeActive(
-    homeRoomName: string,
+    _homeRoomName: string,
     remoteRoomName: string,
-    remotePlan: RemoteRoomPlan | undefined,
-    patrolCoverage: number = patrolCoverageForRemoteRoom(homeRoomName, remoteRoomName)
+    remotePlan: RemoteRoomPlan | undefined
 ): boolean {
     if (!remotePlan || remotePlan.skipReason !== 'danger') { return false; }
     if (!remotePlan.dangerUntil || remotePlan.dangerUntil <= Game.time) { return false; }
-    if (patrolCoverage > 0) { return false; }
     const room = Game.rooms[remoteRoomName];
     if (!room) { return true; }
-    return findHostiles(room).length > 0;
+    if (findHostiles(room).length > 0) { return true; }
+    return remotePlan.dangerUntil > Game.time;
 }
 
 function findHostileInvaderCore(room: Room): StructureInvaderCore | null {

@@ -131,9 +131,6 @@ export function updateRemoteRoomPlans(homeRoom: Room): void {
 
         if (remote.skipReason === 'danger' || remote.skipReason === 'transit-danger') {
             if (!hasArmedHostiles) {
-                if ((remote.dangerUntil ?? 0) > Game.time) {
-                    continue;
-                }
                 remote.skipReason = undefined;
                 remote.dangerUntil = undefined;
                 console.log(`[REMOTE-DANGER] t=${Game.time} ${remoteName}: cleared`);

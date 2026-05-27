@@ -1,7 +1,7 @@
 # Code Review: Patrol Refactor (RCL7/dev1 uncommitted changes)
 
-**Date:** 2026-05-27  
-**Branch:** RCL7/dev1  
+**Date:** 2026-05-27
+**Branch:** RCL7/dev1
 **Scope:** Uncommitted working-tree changes — defender→patrol rename, danger mechanism rewrite, patrol role introduction
 
 ---
@@ -18,7 +18,7 @@ The PR replaces the `defender` role with a new `patrol` archetype that actively 
 
 ### 🔴 1 — `dangerUntil`/`skipReason` set but never checked as dispatch or spawn gate
 
-**File:** `src/room/remote/planning.ts:103`  
+**File:** `src/room/remote/planning.ts:103`
 **Also affects:** `src/room/controller.ts:151`, `src/room/remote/spawn.ts:294`
 
 `planning.ts` sets `remote.skipReason='danger'` and `remote.dangerUntil=Game.time+1500` when hostiles are detected with no patrol coverage. But:
@@ -178,9 +178,9 @@ The migration function runs unconditionally in `run()` (called every tick). Afte
 
 ## Follow-up Review: Last 5 Commits (patrol-system + patches 1–4)
 
-**Scope:** commits `3953ac4`, `684ad24`, `2c96946`, `54910b0`, `269b3b9`  
-**Date:** 2026-05-27 (continued session)  
-**Method:** 3-angle (line-by-line, removed-behavior, cross-file tracer) + verify  
+**Scope:** commits `3953ac4`, `684ad24`, `2c96946`, `54910b0`, `269b3b9`
+**Date:** 2026-05-27 (continued session)
+**Method:** 3-angle (line-by-line, removed-behavior, cross-file tracer) + verify
 **Result:** 9 findings (3 confirmed, 4 plausible, 2 plausible-low)
 
 ---

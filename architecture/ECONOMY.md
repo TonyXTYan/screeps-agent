@@ -43,7 +43,11 @@ runSpawnPlanner()   → spawn creeps to fill measured deficits
 Body planning lives in `planBodyForArchetype()` in `creep/capabilities.ts`. Legacy body planning
 (`balanceSpec()` in `creep/roleBalance.ts`) is retained for legacy compatibility modules.
 
-**Body budget cap:** All archetypes are planned against `max(BODY_MIN_BUDGET, floor(energyCapacityAvailable × BODY_BUDGET_RATIO))` rather than the raw `energyCapacityAvailable`. With `BODY_BUDGET_RATIO = 0.5` and `BODY_MIN_BUDGET = 300`, bodies target at most 50% of room energy capacity, so creeps can spawn with partial extension fill. Demand calculations (`desiredHaulerCapacity`, `desiredWorkerWork`) use the same capped budget so population counts stay consistent with actual body sizes. At RCL 8 the 50-part body limit typically binds first, so those bodies are unaffected.
+**Body budget cap:** Most archetypes are planned against `max(BODY_MIN_BUDGET, floor(energyCapacityAvailable × BODY_BUDGET_RATIO))` rather than the raw `energyCapacityAvailable`. With `BODY_BUDGET_RATIO = 0.5` and `BODY_MIN_BUDGET = 300`, bodies target at most 50% of room energy capacity, so creeps can spawn with partial extension fill. Demand calculations (`desiredHaulerCapacity`, `desiredWorkerWork`) use the same capped budget so population counts stay consistent with actual body sizes. At RCL 8 the 50-part body limit typically binds first, so those bodies are unaffected.
+
+Exceptions:
+- Reserve-mode `claimer` requests can use full room energy capacity to reach the requested CLAIM-part count.
+- Low-RCL emergency home-defense `patrol` requests (`RCL < 6`, armed hostile visible in home) use full room energy capacity and wait for that planned body instead of falling back to the normal 50% capped body.
 
 **Carry capacity cap:** Dynamic body builders (`hauler`, `remoteHauler`, `worker`) are hard-capped at `MAX_CARRY_CAPACITY = 1000` units (20 CARRY parts). This applies regardless of energy budget or room RCL. Fixed-template archetypes (miners, remoteMaintainer, patrol, etc.) are unaffected as their CARRY counts are already low.
 
@@ -55,7 +59,7 @@ Body planning lives in `planBodyForArchetype()` in `creep/capabilities.ts`. Lega
 1. Emergency worker          → if no creeps exist (recovery)
 2. Local source miner        → per uncovered source
 3. Standby local miner       → 1 per room (renewable substitute)
-4. Patrol                    → `RCL >= 6`, `target = min(ceil(enabledRemotes / 2) + hostileRooms, 2 + 2*enabledRemotes)`
+4. Patrol                    → `RCL >= 6`, `target = min(ceil(enabledRemotes / 2) + hostileRooms, 2 + 2*enabledRemotes)`; `RCL < 6`, up to 1 only when home has armed hostiles
 5. Hauler                    → minimum 2 at RCL4+ with storage
 6. Hauler capacity           → capacity deficit
 7. Worker work capacity      → work deficit

@@ -33,6 +33,8 @@ export interface SpawnRequest {
     minClaimParts?: number;
     maxClaimParts?: number;
     remoteStandby?: boolean;
+    useFullEnergyCapacity?: boolean;
+    minimumBodyCost?: number;
 }
 
 export interface PendingSpawnRequest extends SpawnRequest {

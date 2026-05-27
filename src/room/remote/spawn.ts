@@ -83,7 +83,7 @@ export function runSpawnPlanner(context: RoomControllerContext): void {
             }
 
             const defaultBudget = Math.max(BODY_MIN_BUDGET, Math.floor(context.room.energyCapacityAvailable * BODY_BUDGET_RATIO));
-            const maxBudget = request.archetype === 'claimer' && request.remoteMode === 'reserve'
+            const maxBudget = request.useFullEnergyCapacity || (request.archetype === 'claimer' && request.remoteMode === 'reserve')
                 ? context.room.energyCapacityAvailable
                 : defaultBudget;
             const body = planBodyForArchetype(request.archetype, maxBudget, {
@@ -103,6 +103,11 @@ export function runSpawnPlanner(context: RoomControllerContext): void {
             }
 
             const cost = bodyCost(body);
+            if (request.minimumBodyCost && cost < request.minimumBodyCost) {
+                logRemoteSpawnSkip(context, request, 'body below request minimum need=' + request.minimumBodyCost + ' planned=' + cost);
+                pending.push(pendingSpawnRequest(request));
+                continue;
+            }
             const remoteMinimumCost = remoteSpawnMinimumCost(context, request, cost);
             if (remoteMinimumCost > 0 && cost < remoteMinimumCost) {
                 logRemoteSpawnSkip(context, request, 'body below minimum need=' + remoteMinimumCost + ' planned=' + cost);
@@ -122,6 +127,11 @@ export function runSpawnPlanner(context: RoomControllerContext): void {
                     const affordableCost = bodyCost(affordableBody);
                     const fleetCount = countFleetForArchetype(context.creeps, request.archetype) +
                         pendingArchetypeCount(pending, request.archetype);
+                    if (request.minimumBodyCost && affordableCost < request.minimumBodyCost) {
+                        logRemoteSpawnSkip(context, request, 'body below request minimum need=' + request.minimumBodyCost + ' have=' + affordableCost + ' planned=' + cost);
+                        pending.push(pendingSpawnRequest(request));
+                        continue;
+                    }
                     if (remoteMinimumCost > 0 && affordableCost < remoteMinimumCost) {
                         logRemoteSpawnSkip(context, request, 'body below minimum need=' + remoteMinimumCost + ' have=' + affordableCost + ' planned=' + cost);
                         pending.push(pendingSpawnRequest(request));
@@ -475,7 +485,9 @@ function patrolSpawnRequest(
         return {
             archetype: 'patrol',
             reason: 'home defense target ' + patrolCount + '/' + targetPatrol +
-                ' hostileRooms=' + hostileRooms + ' armedHostiles=' + homeArmedHostiles
+                ' hostileRooms=' + hostileRooms + ' armedHostiles=' + homeArmedHostiles,
+            useFullEnergyCapacity: true,
+            minimumBodyCost: bodyCost(planBodyForArchetype('patrol', context.room.energyCapacityAvailable))
         };
     }
 

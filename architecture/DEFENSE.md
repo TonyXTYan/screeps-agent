@@ -53,8 +53,21 @@ At `RCL < 6`, patrol is only used as an emergency home-defense fallback:
 
 - `target = 1` when any armed hostile is visible in home room (hostile-room count model)
 - no remote combat dispatch below RCL 6
+- the emergency patrol request uses full room energy capacity rather than the normal 50% body-budget cap, and waits for that body instead of scaling down
 
 `enabledRemoteRooms` counts all enabled remote modes (`harvest`, `reserve`, `claim`).
+
+Patrol body costs, checked against spawn + extension capacity:
+
+| RCL | Room energy capacity | Best emergency patrol body |
+|-----|----------------------|----------------------------|
+| 1 | 300 | 140 energy: `TOUGH, ATTACK, MOVE` |
+| 2 | 550 | 440 energy: `TOUGH, ATTACK, MOVE, MOVE, HEAL` |
+| 3 | 800 | 700 energy: `TOUGH, ATTACK, ATTACK, ATTACK, MOVE, MOVE, MOVE, MOVE, HEAL` |
+| 4 | 1300 | 1100 energy: `TOUGH, TOUGH, ATTACK x6, MOVE x7, HEAL` |
+| 5 | 1800 | 1100 energy: same as RCL 4 |
+
+The full-capacity exception mainly matters at RCL 3: the global 50% cap would plan against 400 energy and select a 320-energy no-HEAL patrol, even though the room can support a 700-energy self-healing patrol once extensions are filled.
 
 ### Patrol behavior (expel mode)
 

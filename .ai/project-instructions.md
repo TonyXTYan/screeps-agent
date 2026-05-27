@@ -15,7 +15,7 @@ npm run watch    # auto-recompile on file save during development
 
 If anything is unclear, ambiguous, or has multiple plausible options, always clarify with the user before proceeding.
 
-Address the user as "Boss嚴👑". When signing off, end responses with "✨<model name> 🤖<agentic tool name> Out!".
+Address the user as "🌌The Divine Architect". When signing off, end responses with "✨<model name> 🤖<agentic tool name> Out!".
 
 ## Architecture
 

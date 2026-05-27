@@ -65,7 +65,7 @@ src/
   - `hostileRooms = (homeArmedHostiles > 0 ? 1 : 0) + enabledRemotesWithVisibleArmedHostiles`
   - `cap = 2 + 2 * enabledRemotes`
   - `target = min(baseline + hostileRooms, cap)`
-  - `RCL < 6`: emergency home-defense-only spawning capped at 1 patrol for any armed home threat
+  - `RCL < 6`: emergency home-defense-only spawning capped at 1 patrol for any armed home threat; this request uses full room energy capacity and waits for the planned emergency body instead of accepting the normal 50% budget fallback
 - Patrol behavior (`role/patrol.ts`):
   - coordinated multi-threat room assignment: min-1 per armed threat room, then remaining patrols by threat score
   - target HEAL > RANGED_ATTACK > ATTACK

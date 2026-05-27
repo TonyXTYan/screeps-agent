@@ -1,6 +1,6 @@
 # Reading Screeps console logs (agent note)
 
-**Log location:** `screeps_console/logs/screeps_console_YYYY-MM-DD.json`  
+**Log location:** `screeps_console/logs/screeps_console_YYYY-MM-DD.json`
 **Format:** NDJSON — one JSON object per line (`ts`, `direction`, `shard`, `line`, `type`)
 
 Verified on this machine (May 2026) while tuning Cursor shell allowlists.

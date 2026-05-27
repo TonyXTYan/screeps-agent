@@ -1,8 +1,8 @@
 # Implementation plan: CPU — findInRange cache + movement reuse
 
-**Date:** 2026-05-27  
-**Branch:** RCL7/dev1  
-**Related:** `notes.md` (profiler baseline), `console/PROFILING_CONSOLE.md`  
+**Date:** 2026-05-27
+**Branch:** RCL7/dev1
+**Related:** `notes.md` (profiler baseline), `console/PROFILING_CONSOLE.md`
 **Baseline:** `Game.profiler.profile(100)` — Avg **20.25** CPU/tick; top costs: `findInRange` (290.8), `moveTo` (253.4), `Room.find` (234.4)
 
 ---

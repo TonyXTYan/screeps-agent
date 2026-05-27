@@ -1,8 +1,8 @@
 # CPU profiling: move reuse vs findInRange caching
 
-**Date:** 2026-05-27  
-**Branch:** RCL7/dev1  
-**Log source:** `screeps_console/logs/screeps_console_2026-05-27.json`  
+**Date:** 2026-05-27
+**Branch:** RCL7/dev1
+**Log source:** `screeps_console/logs/screeps_console_2026-05-27.json`
 **Profiler:** `Game.profiler.profile(100)` on shard1 (screeps-profiler, `PROFILER_ENABLED = true` in build at time of run)
 
 ---

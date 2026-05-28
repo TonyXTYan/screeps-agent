@@ -19,6 +19,8 @@ export const TERMINAL_RESERVE_RCL8 = 50000;
 export const MINERAL_WORK_DEMAND = 5;
 // Minimum stored energy before workers prioritise repair over construction.
 export const WORKER_REPAIR_STORAGE_THRESHOLD = 5000;
+// Workers only bootstrap new walls/ramparts up to this hit level; towers handle the rest.
+export const WORKER_DEFENSE_BOOTSTRAP_HITS = 5_000;
 export const LINK_TRANSFER_THRESHOLD = 200;
 export const BUILD_RESERVATION_TICKS = 10;
 export const REPAIR_RESERVATION_TICKS = 5;

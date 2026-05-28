@@ -57,6 +57,7 @@ import {
     REMOTE_MINER_NO_PROGRESS_REPLAN_TICKS,
     REMOTE_CONTAINER_CRITICAL_REPAIR_THRESHOLD,
     REMOTE_MINER_REPAIR_THRESHOLD, REMOTE_MINER_REPAIR_RANGE,
+    WORKER_DEFENSE_BOOTSTRAP_HITS,
 } from './constants';
 
 export function run(room: Room): void {
@@ -814,7 +815,11 @@ function assignWorkerPartialEnergyWork(
     if (capabilities.repair > 0 &&
         context.repairTargets.length > 0 &&
         shouldRepairWithCreeps(context)) {
-        const repairTarget = repairTargetFor(creep, context.repairTargets, reservations, capabilities.repair);
+        const workerRepairTargets = context.repairTargets.filter(
+            t => t.structureType !== STRUCTURE_WALL && t.structureType !== STRUCTURE_RAMPART ||
+            t.hits < WORKER_DEFENSE_BOOTSTRAP_HITS
+        );
+        const repairTarget = repairTargetFor(creep, workerRepairTargets, reservations, capabilities.repair);
         if (repairTarget) {
             reserveRepairProgress(reservations, repairTarget, capabilities.repair);
             rememberPrimaryJob(creep, 'repair', repairTarget);
@@ -920,7 +925,11 @@ function assignEnergySpendingJob(
     }
 
     if (capabilities.repair > 0 && context.repairTargets.length > 0 && shouldRepairWithCreeps(context)) {
-        const repairTarget = repairTargetFor(creep, context.repairTargets, reservations, capabilities.repair);
+        const workerRepairTargets = context.repairTargets.filter(
+            t => t.structureType !== STRUCTURE_WALL && t.structureType !== STRUCTURE_RAMPART ||
+            t.hits < WORKER_DEFENSE_BOOTSTRAP_HITS
+        );
+        const repairTarget = repairTargetFor(creep, workerRepairTargets, reservations, capabilities.repair);
         if (repairTarget) {
             reserveRepairProgress(reservations, repairTarget, capabilities.repair);
             rememberPrimaryJob(creep, 'repair', repairTarget);

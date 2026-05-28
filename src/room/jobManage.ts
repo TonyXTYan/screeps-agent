@@ -21,7 +21,7 @@ import {
     haulerMiningSiteMinPickup, isMiningSiteEnergyTarget,
 } from './work';
 import { RoomControllerContext, JobReservations } from './types';
-import { TOWER_REFILL_SPAWN_YIELD_RATIO } from './constants';
+import { TOWER_REFILL_SPAWN_YIELD_RATIO, WORKER_DEFENSE_BOOTSTRAP_HITS } from './constants';
 
 export function keepCurrentJob(
     context: RoomControllerContext,
@@ -71,6 +71,17 @@ export function keepCurrentJob(
         if (creep.memory.jobTargetId !== priorityHealTarget.id && (priorityIsEmergency || !currentIsEmergency)) {
             clearJob(creep);
             creep.memory.interruptReason = 'heal-priority';
+            return false;
+        }
+    }
+
+    if (archetype === 'worker' && jobType === 'repair') {
+        const repairTarget = jobTarget<AnyStructure>(creep);
+        if (repairTarget && (
+            repairTarget.structureType === STRUCTURE_WALL ||
+            repairTarget.structureType === STRUCTURE_RAMPART
+        ) && repairTarget.hits >= WORKER_DEFENSE_BOOTSTRAP_HITS) {
+            clearJob(creep);
             return false;
         }
     }

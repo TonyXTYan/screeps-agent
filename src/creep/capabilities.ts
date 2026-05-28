@@ -98,6 +98,16 @@ export function getBodyCapabilities(body: BodyPartConstant[]): CreepCapabilities
 
 export function inferArchetype(creep: Creep): CreepArchetype {
     if (creep.memory.archetype) { return creep.memory.archetype; }
+
+    // Naming convention: {archetype}-{spawnName}-{gameTime}. Use the prefix as a
+    // stable fallback when memory has been wiped (archetype key is gone).
+    const VALID_ARCHETYPES: readonly string[] = [
+        'worker', 'miner', 'hauler', 'patrol', 'doctor', 'claimer',
+        'remoteMiner', 'remoteHauler', 'remoteMaintainer', 'remoteScout', 'mineralMiner'
+    ];
+    const namePrefix = creep.name.split('-')[0];
+    if (VALID_ARCHETYPES.includes(namePrefix)) { return namePrefix as CreepArchetype; }
+
     if (creep.memory.role === 'patrol') { return 'patrol'; }
 
     const capabilities = getCreepCapabilities(creep);

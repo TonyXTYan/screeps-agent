@@ -32,6 +32,14 @@ export function clearTravelStuckMemory(creep: Creep): void {
 }
 
 export function updateTravelStuckMemory(creep: Creep): void {
+    if (creep.fatigue > 0) {
+        // Creep can't move while fatigued — not stuck, just slow on swamp/non-road terrain.
+        // Keep position memory current so the comparison is correct once fatigue clears.
+        creep.memory.travelLastX = creep.pos.x;
+        creep.memory.travelLastY = creep.pos.y;
+        creep.memory.travelLastRoom = creep.room.name;
+        return;
+    }
     const sameTile = creep.memory.travelLastX === creep.pos.x &&
         creep.memory.travelLastY === creep.pos.y &&
         creep.memory.travelLastRoom === creep.room.name;

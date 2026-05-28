@@ -5,6 +5,7 @@ import { remoteTargetAccessSlots } from './fleet';
 import {
     REMOTE_HAULER_ASSIGNED_SOURCE_MIN_ENERGY, REMOTE_HAULER_CROSS_SOURCE_MIN_ENERGY,
     REMOTE_TARGET_MAX_HAULER_CLAIMS, REMOTE_HAULER_RETARGET_STUCK_TICKS,
+    REMOTE_CONTAINER_BUILD_DISTANCE,
 } from '../constants';
 
 type RemoteEnergySourceTarget = {
@@ -178,12 +179,34 @@ export function remoteEnergyTargetsForSource(
     if (!cfg) { return []; }
 
     const targets: RemoteEnergySourceTarget[] = [];
+    const seenIds = new Set<string>();
+
     if (cfg.containerId) {
         const container = Game.getObjectById(cfg.containerId as Id<StructureContainer>);
         if (container &&
             remoteEnergyAvailableAfterClaims(creep, container) > 0 &&
             isRemoteEnergyTargetReachable(creep, container)) {
             targets.push({ jobType: 'withdrawEnergy', target: container, fromDropped: false });
+            seenIds.add(cfg.containerId);
+        }
+    }
+
+    // Extra containers near the source (user-placed second containers not tracked by containerId).
+    if (creep.room.name === remotePlan.roomName) {
+        const source = Game.getObjectById(sourceId as Id<Source>);
+        if (source) {
+            const extra = creep.room.find(FIND_STRUCTURES, {
+                filter: (s) =>
+                    s.structureType === STRUCTURE_CONTAINER &&
+                    !seenIds.has(s.id) &&
+                    s.pos.getRangeTo(source) <= REMOTE_CONTAINER_BUILD_DISTANCE,
+            }) as StructureContainer[];
+            for (const container of extra) {
+                if (remoteEnergyAvailableAfterClaims(creep, container) > 0 &&
+                    isRemoteEnergyTargetReachable(creep, container)) {
+                    targets.push({ jobType: 'withdrawEnergy', target: container, fromDropped: false });
+                }
+            }
         }
     }
 

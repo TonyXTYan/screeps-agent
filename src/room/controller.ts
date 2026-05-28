@@ -455,6 +455,23 @@ export function assignRemoteCreep(creep: Creep): boolean {
                 return true;
             }
 
+            // findRemoteEnergySource respects hauler claim reservations; if all containers
+            // are fully claimed but still hold actual energy, use the closest one anyway —
+            // the maintainer's small withdrawal won't materially affect hauler throughput.
+            const fallbackContainers = creep.room.find(FIND_STRUCTURES, {
+                filter: (s) =>
+                    s.structureType === STRUCTURE_CONTAINER &&
+                    (s as StructureContainer).store.getUsedCapacity(RESOURCE_ENERGY) > 0
+            }) as StructureContainer[];
+            const closestContainer = (
+                creep.pos.findClosestByPath(fallbackContainers, { ignoreCreeps: false }) ??
+                creep.pos.findClosestByPath(fallbackContainers, { ignoreCreeps: true })
+            ) as StructureContainer | null;
+            if (closestContainer) {
+                setJob(creep, 'withdrawEnergy', closestContainer);
+                return true;
+            }
+
             // Avoid a source we're currently stuck on (mirrors hauler retarget logic).
             // Use path-based selection so terrain-blocked sources are never picked.
             const stuckOnSourceId = (creep.memory.travelStuckTicks ?? 0) >= REMOTE_HAULER_RETARGET_STUCK_TICKS

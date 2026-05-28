@@ -144,6 +144,12 @@ function currentJobStillValid(
             archetype === 'mineralMiner';
         if (isDedicatedMiner) { return true; }
 
+        // remoteMaintainer has no storage to top up from in a remote room; let it fill
+        // completely before switching to repair/build so it doesn't make a wasted trip with 4 energy.
+        if (archetype === 'remoteMaintainer') {
+            return creep.store.getFreeCapacity(RESOURCE_ENERGY) > 0;
+        }
+
         // Fallback harvest for non-miners should be temporary: once any energy is
         // loaded, re-run assignment so the creep spends or tops up via structured sources.
         if (creep.store.getUsedCapacity(RESOURCE_ENERGY) > 0) { return false; }

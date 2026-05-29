@@ -177,8 +177,7 @@ function manageRemoteHaulerRenewal(creep: Creep, homeRoomName: string, forceRene
 
 function shouldDeferRemoteHaulerRenewal(homeRoom: Room, ttl: number): boolean {
     if (ttl <= REMOTE_HAULER_RENEW_CRITICAL_TTL) { return false; }
-    if (homeRoom.memory.energyRecoveryActive === true) { return true; }
-    return homeRoom.energyAvailable < homeRoom.energyCapacityAvailable;
+    return homeRoom.memory.energyRecoveryActive === true;
 }
 
 function assignRemoteHaulerHomeIdle(creep: Creep, homeRoomName: string): boolean {

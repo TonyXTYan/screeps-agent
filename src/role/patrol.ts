@@ -93,7 +93,7 @@ function runPatrolRotation(creep: Creep, enabledRemotes: string[], homeRoom: str
     const currentTarget = creep.memory.patrolRoom;
     const currentStillValid = currentTarget ? enabledRemotes.includes(currentTarget) : false;
     if (!currentStillValid) {
-        rotatePatrolTarget(creep, enabledRemotes, true);
+        rotatePatrolTarget(creep, enabledRemotes, homeRoom);
     }
 
     const patrolRoom = creep.memory.patrolRoom ?? enabledRemotes[0];
@@ -140,13 +140,21 @@ function enabledRemoteRooms(homeRoom: string): string[] {
     return rooms;
 }
 
-function rotatePatrolTarget(creep: Creep, enabledRemotes: string[], seedOnly: boolean = false): void {
+function rotatePatrolTarget(creep: Creep, enabledRemotes: string[], homeRoom?: string): void {
     if (enabledRemotes.length === 0) { return; }
     const currentTarget = creep.memory.patrolRoom;
     const currentIndex = currentTarget ? enabledRemotes.indexOf(currentTarget) : -1;
-    const nextIndex = seedOnly || currentIndex < 0
-        ? Math.abs(hashString(creep.name)) % enabledRemotes.length
-        : (currentIndex + 1) % enabledRemotes.length;
+    let nextIndex: number;
+    if (homeRoom !== undefined || currentIndex < 0) {
+        // Seed: spread patrols by rank in the sorted active-patrol list so each starts at a different room.
+        const patrolNames = homeRoom ? activeHomePatrolNames(homeRoom) : [];
+        const rank = patrolNames.indexOf(creep.name);
+        nextIndex = rank >= 0
+            ? rank % enabledRemotes.length
+            : Math.abs(hashString(creep.name)) % enabledRemotes.length;
+    } else {
+        nextIndex = (currentIndex + 1) % enabledRemotes.length;
+    }
     creep.memory.patrolRouteIndex = nextIndex;
     creep.memory.patrolRoom = enabledRemotes[nextIndex];
     creep.memory.patrolRotateAt = Game.time + getPatrolRotationTicks();

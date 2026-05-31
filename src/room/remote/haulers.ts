@@ -17,6 +17,30 @@ import {
     TOWER_RECOVERY_RATIO,
 } from '../constants';
 
+// After this many stuck ticks while approaching a spawn to renew, abort the renew cycle.
+// Prevents a creep from draining its TTL when all spawn-adjacent tiles are occupied.
+const RENEW_APPROACH_STUCK_ABORT_TICKS = 8;
+
+// Per-tick cache: count of creeps actively renewing per home room.
+// Updated whenever a new creep enters the renewing state so subsequent creeps in the
+// same tick see the correct count.
+let activeRenewersTick = -1;
+const activeRenewersCache: { [roomName: string]: number } = {};
+
+function activeRenewersForRoom(roomName: string): number {
+    if (activeRenewersTick !== Game.time) {
+        activeRenewersTick = Game.time;
+        for (const k in activeRenewersCache) { delete activeRenewersCache[k]; }
+        for (const name in Game.creeps) {
+            const c = Game.creeps[name];
+            if (c.spawning || !c.memory.remoteRenewing) { continue; }
+            const home = c.memory.homeRoom ?? c.room.name;
+            activeRenewersCache[home] = (activeRenewersCache[home] ?? 0) + 1;
+        }
+    }
+    return activeRenewersCache[roomName] ?? 0;
+}
+
 export function assignRemoteHaulerCycle(
     creep: Creep,
     homeRoom: string,
@@ -126,7 +150,19 @@ function manageRemoteHaulerRenewal(creep: Creep, homeRoomName: string, forceRene
     }
 
     if (!creep.memory.remoteRenewing && (forceRenew || ttl <= REMOTE_HAULER_RENEW_START_TTL)) {
+        // Limit concurrent renewers to 1 per spawn to prevent spawn-adjacency congestion
+        // and spawn energy exhaustion. Critical-TTL creeps bypass the cap.
+        if (ttl > REMOTE_HAULER_RENEW_CRITICAL_TTL) {
+            const spawnCap = homeRoom ? homeRoom.find(FIND_MY_SPAWNS).length : 1;
+            if (activeRenewersForRoom(homeRoomName) >= spawnCap) {
+                return false;
+            }
+        }
         creep.memory.remoteRenewing = true;
+        // Ensure cache is current-tick before incrementing (critical-TTL path skips the
+        // cap check that would have triggered the refresh).
+        activeRenewersForRoom(homeRoomName);
+        activeRenewersCache[homeRoomName] = (activeRenewersCache[homeRoomName] ?? 0) + 1;
     }
     if (creep.memory.remoteRenewing && ttl > REMOTE_HAULER_RENEW_STOP_TTL) {
         creep.memory.remoteRenewing = false;
@@ -160,9 +196,25 @@ function manageRemoteHaulerRenewal(creep: Creep, homeRoomName: string, forceRene
     }
 
     if (!creep.pos.isNearTo(spawn)) {
+        // Abort if stuck approaching the spawn: all adjacent tiles are likely occupied by
+        // other renewing creeps. Freeing the route lets the creep resume hauling.
+        if (ttl > REMOTE_HAULER_RENEW_CRITICAL_TTL &&
+            (creep.memory.travelStuckTicks ?? 0) >= RENEW_APPROACH_STUCK_ABORT_TICKS) {
+            creep.memory.remoteRenewing = false;
+            creep.memory.remoteHaulerRenewAfterTrip = undefined;
+            return false;
+        }
         creep.moveTo(spawn, { visualizePathStyle: { stroke: '#f5f57a' } });
         setJob(creep, 'idle', spawn);
         return true;
+    }
+
+    // Abort if spawn is empty and TTL is not critical: send the creep to haul energy so
+    // it can refill the spawn on the next delivery trip.
+    if (spawn.store[RESOURCE_ENERGY] === 0 && ttl > REMOTE_HAULER_RENEW_CRITICAL_TTL) {
+        creep.memory.remoteRenewing = false;
+        creep.memory.remoteHaulerRenewAfterTrip = undefined;
+        return false;
     }
 
     const code = spawn.renewCreep(creep);

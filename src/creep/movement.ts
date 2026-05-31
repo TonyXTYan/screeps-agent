@@ -3,6 +3,67 @@
 import { requestTrafficYieldForPath } from './traffic';
 import { mirrorExitPositionIntoRoom } from '../room/remote/routing';
 
+// Cached per room pair (terrain is static, so this never needs eviction within a shard run).
+// Key: "fromRoom=>toRoom". Value: valid exit coordinates (y for LEFT/RIGHT exits, x for TOP/BOTTOM),
+// or null if every exit failed the PathFinder check (shouldn't happen; means complete wall).
+const _validExitCoordCache = new Map<string, number[] | null>();
+
+function cachedValidExitCoords(
+    fromRoom: Room,
+    toRoomName: string,
+    exitDir: ExitConstant
+): number[] | null {
+    const key = `${fromRoom.name}=>${toRoomName}`;
+    if (_validExitCoordCache.has(key)) { return _validExitCoordCache.get(key)!; }
+
+    const toRoom = Game.rooms[toRoomName];
+    if (!toRoom) { return null; } // not visible yet — don't cache, retry next time
+
+    const spawns = toRoom.find(FIND_MY_SPAWNS);
+    const center = toRoom.storage?.pos ?? (spawns.length > 0 ? spawns[0].pos : undefined);
+    if (!center) { return null; } // no interior target known — don't cache
+
+    // Block all room-edge tiles in the PathFinder. nudgeFromRoomEdge always pushes creeps away
+    // from x/y=0/49, so any path that relies on travelling along the room edge is not actually
+    // usable — the creep would be bounced back every tick. Blocking the edges here means a pocket
+    // reachable only via the edge wall (e.g. x=47 is a wall line, only x=48/49 open) correctly
+    // fails the check.
+    const blockEdgeTiles = (roomName: string) => {
+        if (roomName !== toRoomName) { return false as unknown as CostMatrix; }
+        const cm = new PathFinder.CostMatrix();
+        for (let i = 0; i <= 49; i++) {
+            cm.set(0, i, 255); cm.set(49, i, 255);
+            cm.set(i, 0, 255); cm.set(i, 49, 255);
+        }
+        return cm;
+    };
+
+    const allExits = fromRoom.find(exitDir) as RoomPosition[];
+    const useY = exitDir === LEFT || exitDir === RIGHT;
+    const validCoords: number[] = [];
+
+    for (const exit of allExits) {
+        const mirrored = mirrorExitPositionIntoRoom(exit, toRoomName);
+        if (!mirrored) { continue; }
+        // Step one tile inward from the room edge so PathFinder starts inside the room.
+        const innerX = mirrored.x === 49 ? 48 : (mirrored.x === 0 ? 1 : mirrored.x);
+        const innerY = mirrored.y === 49 ? 48 : (mirrored.y === 0 ? 1 : mirrored.y);
+        const innerPos = new RoomPosition(innerX, innerY, toRoomName);
+        const pfResult = PathFinder.search(
+            innerPos, { pos: center, range: 1 },
+            { maxRooms: 1, roomCallback: blockEdgeTiles }
+        );
+        if (!pfResult.incomplete) {
+            validCoords.push(useY ? exit.y : exit.x);
+        }
+    }
+
+    const result = validCoords.length > 0 ? validCoords : null;
+    _validExitCoordCache.set(key, result);
+    console.log(`[EXIT-CACHE] ${fromRoom.name}=>${toRoomName}: ${validCoords.length}/${allExits.length} accessible entry positions cached`);
+    return result;
+}
+
 const MOVE_STUCK_REPATH_TICKS = 2;
 const MOVE_STUCK_RESET_PATH_TICKS = 4;
 
@@ -151,6 +212,26 @@ export function nearestExitTileToRoom(creep: Creep, roomName: string): RoomPosit
 
     const stationExit = exitTileClosestToRemoteStation(creep, roomName, exitDir as ExitConstant);
     if (stationExit) { return stationExit; }
+
+    // Prefer exit tiles whose mirrored entry positions in roomName have a navigable path to the
+    // room interior. This prevents routing creeps into terrain pockets at the room edge (e.g. a
+    // wall cluster directly behind an exit tile that would trap them on entry). The valid-coord
+    // set is computed once per room pair via PathFinder and cached for the shard run.
+    const validCoords = cachedValidExitCoords(creep.room, roomName, exitDir as ExitConstant);
+    if (validCoords) {
+        const useY = exitDir === LEFT || exitDir === RIGHT;
+        const allExits = creep.room.find(exitDir as ExitConstant) as RoomPosition[];
+        const filtered = allExits.filter(e => validCoords.includes(useY ? e.y : e.x));
+        if (filtered.length > 0) {
+            let best: RoomPosition | null = null;
+            let bestDist = Infinity;
+            for (const exit of filtered) {
+                const dist = creep.pos.getRangeTo(exit);
+                if (dist < bestDist) { bestDist = dist; best = exit; }
+            }
+            if (best) { return best; }
+        }
+    }
 
     const byPath = creep.pos.findClosestByPath(exitDir as ExitConstant, {
         ignoreCreeps: false

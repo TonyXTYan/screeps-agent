@@ -461,6 +461,7 @@ function opportunisticRemoteHaulerWork(creep: Creep, jobType: CreepJobType): voi
     const rcl = creep.room.controller?.level ?? 0;
     const repairs = creep.pos.findInRange(FIND_STRUCTURES, 3, {
         filter: (structure) => {
+            if (isMaintenanceDisabled(structure as AnyStructure)) { return false; }
             const isDefense = structure.structureType === STRUCTURE_WALL || structure.structureType === STRUCTURE_RAMPART;
             const cap = isDefense ? Math.min(wallRampartRepairCap(rcl), structure.hitsMax) : structure.hitsMax;
             return structure.hits < cap;

@@ -386,7 +386,7 @@ export function assignRemoteCreep(creep: Creep): boolean {
                 if (site && site.progress < site.progressTotal) { return true; }
             } else {
                 const structure = Game.getObjectById(currentTargetId as Id<AnyStructure>);
-                if (structure && structure.hits < structure.hitsMax) { return true; }
+                if (structure && structure.hits < structure.hitsMax && !isMaintenanceDisabled(structure)) { return true; }
             }
         }
 

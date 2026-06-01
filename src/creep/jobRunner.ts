@@ -376,7 +376,11 @@ function travelRoom(creep: Creep): number {
     if (!exitTarget) { return ERR_NO_PATH; }
 
     if (stuckTicks >= MOVE_STUCK_REPATH_TICKS) {
-        requestTrafficYieldForPath(creep, exitTarget, 0);
+        const swapStep = requestTrafficYieldForPath(creep, exitTarget, 0);
+        if (swapStep && creep.fatigue === 0) {
+            creep.move(creep.pos.getDirectionTo(swapStep));
+            return ERR_NOT_IN_RANGE;
+        }
         (creep.memory as CreepMemory & { _move?: unknown })._move = undefined;
     }
 

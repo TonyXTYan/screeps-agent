@@ -20,7 +20,7 @@ src/
     jobRunner.ts           Strategic job execution
     memoryManagement.ts    Dead-memory cleanup + legacy-role migration
     movement.ts            Pathing helpers
-    traffic.ts             Yield negotiation/priorities
+    traffic.ts             Yield negotiation/priorities + head-on swap
     harvest.ts             Legacy harvest helper
   role/
     patrol.ts              Patrol defense behavior (expel mode)

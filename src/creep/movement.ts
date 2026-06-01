@@ -335,7 +335,13 @@ export function moveToJobTarget(
     const targetRange = extra.range ?? 1;
 
     if (needsDynamicTraffic) {
-        requestTrafficYieldForPath(creep, targetPos, targetRange);
+        const swapStep = requestTrafficYieldForPath(creep, targetPos, targetRange);
+        if (swapStep && creep.fatigue === 0) {
+            // Blocker directly ahead with no side tile: step into it so the engine resolves
+            // the mutual move as a swap (the blocker honours the swap on its own turn).
+            creep.move(creep.pos.getDirectionTo(swapStep));
+            return OK;
+        }
     }
 
     const moveOpts: MoveToOpts = {

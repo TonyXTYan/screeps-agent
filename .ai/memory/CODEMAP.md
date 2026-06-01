@@ -22,7 +22,7 @@ src/
     memoryManagement.ts    Dead-memory cleanup + legacy role remap
     jobRunner.ts           Strategic job execution
     movement.ts            Shared movement helpers
-    traffic.ts             Yield priorities (patrol gets top priority)
+    traffic.ts             Yield priorities + head-on swap (patrol gets top priority)
   role/
     patrol.ts              Patrol behavior (expel mode, rotate + converge + renew)
     doctor.ts              Shared repair-cap helpers + legacy fallback role

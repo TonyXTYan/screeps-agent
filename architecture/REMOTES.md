@@ -34,7 +34,14 @@ At `RCL >= 6`, patrol sizing is:
 - `cap = 2 + 2 * enabledRemoteRooms`
 - `target = min(baseline + hostileRooms, cap)`
 
-Remote economy requests continue to use source-work/haul/maintenance deficits.
+Remote economy requests continue to use source-work/haul/maintenance deficits. Within
+`remoteSpawnRequest()`, rooms are evaluated **least-recently-mined first** (sorted by each
+room's oldest source `lastHarvestedAt`) so a fixed key order cannot permanently starve rooms
+at the tail of the list when home spawn throughput is the bottleneck. Before the per-room
+pass, a cross-room **emergency pre-pass** spawns a miner for any zero-coverage source (no
+live miner, no projected work, no standby/pending replacement) ahead of proactive
+standby/handoff top-offs of already-covered sources. Both honour the armed-hostile fail-safe
+and run after `patrolSpawnRequest()`, so defense still preempts remote mining.
 
 ## Remote Assignment and Safety
 

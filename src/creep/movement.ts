@@ -2,6 +2,7 @@
 
 import { requestTrafficYieldForPath } from './traffic';
 import { mirrorExitPositionIntoRoom } from '../room/remote/routing';
+import { MOVE_IGNORE_CREEPS_DEFAULT, MOVE_REUSE_PATH_TICKS } from '../room/constants';
 
 // Cached per room pair (terrain is static, so this never needs eviction within a shard run).
 // Key: "fromRoom=>toRoom". Value: valid exit coordinates (y for LEFT/RIGHT exits, x for TOP/BOTTOM),
@@ -79,6 +80,14 @@ export function wanderRandomAdjacent(creep: Creep): boolean {
         if (nx < 1 || nx > 48 || ny < 1 || ny > 48) { continue; }
         const room = Game.rooms[creep.room.name];
         if (room && room.getTerrain().get(nx, ny) === TERRAIN_MASK_WALL) { continue; }
+        // Skip tiles occupied by another creep or a blocking structure — otherwise the escape
+        // move silently fails and the creep stays wedged (e.g. packed at a room-exit funnel).
+        const tile = new RoomPosition(nx, ny, creep.room.name);
+        if (tile.lookFor(LOOK_CREEPS).some((other) => other.id !== creep.id)) { continue; }
+        if (tile.lookFor(LOOK_STRUCTURES).some((structure) =>
+            structure.structureType !== STRUCTURE_ROAD &&
+            structure.structureType !== STRUCTURE_CONTAINER &&
+            structure.structureType !== STRUCTURE_RAMPART)) { continue; }
         creep.move(dir);
         return true;
     }
@@ -328,8 +337,12 @@ export function moveToJobTarget(
 ): number {
     updateTravelStuckMemory(creep);
     const stuckTicks = creep.memory.travelStuckTicks ?? 0;
+    // Inverted strategy: normal travel IGNORES creeps (cheap, stable terrain-only cache).
+    // Only once genuinely blocked do we (a) negotiate a swap/yield with the blocker, then
+    // (b) recompute a creep-AVOIDING path to route around it, and finally (c) hard-reset and
+    // escape. This keeps the path cache alive on busy highways instead of repathing every tick.
     const needsDynamicTraffic = stuckTicks >= MOVE_STUCK_REPATH_TICKS;
-    const needsCreepBypass = stuckTicks >= MOVE_STUCK_RESET_PATH_TICKS;
+    const avoidCreeps = stuckTicks >= MOVE_STUCK_REPATH_TICKS;
     const needsPathReset = stuckTicks >= MOVE_STUCK_RESET_PATH_TICKS;
     const targetPos = target instanceof RoomPosition ? target : target.pos;
     const targetRange = extra.range ?? 1;
@@ -346,15 +359,16 @@ export function moveToJobTarget(
 
     const moveOpts: MoveToOpts = {
         ...extra,
-        reusePath: needsPathReset ? 0 : (extra.reusePath ?? 10),
-        ignoreCreeps: needsCreepBypass ? true : (extra.ignoreCreeps ?? false),
+        // Fresh creep-avoiding path while stuck; long creep-agnostic cache otherwise.
+        reusePath: avoidCreeps ? 0 : (extra.reusePath ?? MOVE_REUSE_PATH_TICKS),
+        ignoreCreeps: avoidCreeps ? false : (extra.ignoreCreeps ?? MOVE_IGNORE_CREEPS_DEFAULT),
         visualizePathStyle: {
             ...(extra.visualizePathStyle ?? {}),
             stroke
         }
     };
 
-    if (needsPathReset || extra.reusePath === 0) {
+    if (avoidCreeps || extra.reusePath === 0) {
         (creep.memory as CreepMemory & { _move?: unknown })._move = undefined;
     }
 

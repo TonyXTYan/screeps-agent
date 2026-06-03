@@ -1,5 +1,6 @@
 import { wallRampartRepairCap } from '../role/doctor';
 import { isMaintenanceDisabled } from '../room/flags';
+import { MOVE_IGNORE_CREEPS_DEFAULT, MOVE_REUSE_PATH_TICKS } from '../room/constants';
 import { honorTrafficYieldRequest, requestTrafficYieldForPath } from './traffic';
 import {
     moveToJobTarget, moveToWithdrawTarget, forceStepTowardsRoomExit,
@@ -394,10 +395,13 @@ function travelRoom(creep: Creep): number {
         if (nudged) { return ERR_NOT_IN_RANGE; }
     }
 
+    // Inverted strategy (see movement.ts): ignore creeps on the normal long-reuse path so the
+    // exit route stays cached; only route around creeps once stuck, after the swap/yield above.
+    const avoidCreeps = stuckTicks >= MOVE_STUCK_REPATH_TICKS;
     const moveCode = creep.moveTo(exitTarget, {
         visualizePathStyle: { stroke: '#ffffff' },
-        reusePath: stuckTicks >= MOVE_STUCK_REPATH_TICKS ? 0 : 8,
-        ignoreCreeps: stuckTicks >= MOVE_STUCK_RESET_PATH_TICKS,
+        reusePath: avoidCreeps ? 0 : MOVE_REUSE_PATH_TICKS,
+        ignoreCreeps: avoidCreeps ? false : MOVE_IGNORE_CREEPS_DEFAULT,
         maxRooms: 1,
         range: 0
     });

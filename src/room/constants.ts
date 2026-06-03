@@ -1,6 +1,17 @@
 // Shared constants for room controller modules.
 // All values are exported so each extracted module can import only what it needs.
 
+// --- Movement strategy ---
+// Default travel ignores creeps so the cached path depends only on (static) terrain and
+// structures, letting moveTo reuse `_move` for many ticks instead of repathing every time
+// a creep sits on the next tile. Collisions are resolved reactively by stuck detection +
+// the traffic swap/yield layer rather than by constantly recomputing a creep-avoiding path.
+// Flip MOVE_IGNORE_CREEPS_DEFAULT back to false to A/B against the old avoid-creeps behavior.
+export const MOVE_IGNORE_CREEPS_DEFAULT = true;
+// How long a creep-agnostic path may be reused before moveTo recomputes it. Terrain is static,
+// so this can be long; lower it if reaction lag to new construction sites becomes noticeable.
+export const MOVE_REUSE_PATH_TICKS = 20;
+
 export const TOWER_RESERVE_RATIO = 0.7;
 export const TOWER_RECOVERY_RATIO = 0.55;
 export const TOWER_HAULER_DEPOSIT_RATIO = 0.9;

@@ -2,6 +2,7 @@ import { findHostiles } from '../hostileUtils';
 import { acquireRenewSpawn, nearestSpawn } from '../spawn/renewal';
 import { ensureArchetype } from '../creep/capabilities';
 import { mirrorExitPositionIntoRoom } from '../room/remote/routing';
+import { nudgeFromRoomEdge } from '../creep/movement';
 
 const PATROL_HOLD_RANGE = 8;
 const PATROL_RENEW_START_TTL = 300;
@@ -67,8 +68,13 @@ function runThreatResponse(creep: Creep, threats: VisibleThreat[]): void {
                 creep.rangedAttack(target);
             }
         }
-        if (creep.attack(target) === ERR_NOT_IN_RANGE) {
-            creep.moveTo(target, { reusePath: 1, visualizePathStyle: { stroke: '#ef4444' } });
+        const attackCode = creep.attack(target);
+        // Stay inside the threat room: a hostile hugging the room edge must not pull
+        // us across the border. Crossing drops vision of the room and reverts us to
+        // rotation, producing the W<->W boundary bounce. Step inward instead.
+        if (nudgeFromRoomEdge(creep)) { return; }
+        if (attackCode === ERR_NOT_IN_RANGE) {
+            moveToCombatTarget(creep, target, '#ef4444');
         }
         return;
     }
@@ -76,9 +82,34 @@ function runThreatResponse(creep: Creep, threats: VisibleThreat[]): void {
     if (creep.pos.getRangeTo(targetRoom.invaderCore) <= 3 && creep.getActiveBodyparts(RANGED_ATTACK) > 0) {
         creep.rangedAttack(targetRoom.invaderCore);
     }
-    if (creep.attack(targetRoom.invaderCore) === ERR_NOT_IN_RANGE) {
-        creep.moveTo(targetRoom.invaderCore, { reusePath: 1, visualizePathStyle: { stroke: '#ef4444' } });
+    const coreAttackCode = creep.attack(targetRoom.invaderCore);
+    if (nudgeFromRoomEdge(creep)) { return; }
+    if (coreAttackCode === ERR_NOT_IN_RANGE) {
+        moveToCombatTarget(creep, targetRoom.invaderCore, '#ef4444');
     }
+}
+
+// Pursue a combat target without leaving the current room: clamp pathing to this
+// room (maxRooms) and treat the room's exit tiles as impassable so a step never
+// lands the patrol on an edge (which would auto-transfer it to the adjacent room
+// next tick). Together with the nudge-off-edge guard this keeps threat response
+// committed to the danger room instead of ping-ponging across the boundary.
+function moveToCombatTarget(creep: Creep, target: Creep | StructureInvaderCore, stroke: string): void {
+    creep.moveTo(target, {
+        reusePath: 1,
+        maxRooms: 1,
+        visualizePathStyle: { stroke },
+        costCallback: (roomName, matrix) => {
+            if (roomName !== creep.room.name) { return undefined; }
+            for (let i = 0; i < 50; i++) {
+                matrix.set(0, i, 0xff);
+                matrix.set(49, i, 0xff);
+                matrix.set(i, 0, 0xff);
+                matrix.set(i, 49, 0xff);
+            }
+            return matrix;
+        }
+    });
 }
 
 function runPatrolRotation(creep: Creep, enabledRemotes: string[], homeRoom: string): void {

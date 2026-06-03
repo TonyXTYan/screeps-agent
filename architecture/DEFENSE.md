@@ -77,6 +77,7 @@ The full-capacity exception mainly matters at RCL 3: the global 50% cap would pl
   - first pass assigns one patrol per armed-threat room when available,
   - remaining patrols are assigned by threat score priority.
 - Hostile target priority: `HEAL` parts first, then `RANGED_ATTACK`, then `ATTACK`.
+- Combat pursuit is **clamped to the threat room**: `moveToCombatTarget` paths with `maxRooms: 1` and treats the room's exit tiles as impassable, and the threat loop nudges the patrol off any edge tile before moving. This prevents a border-hugging hostile from dragging the patrol across the room boundary (crossing would drop room vision and revert the patrol to rotation, producing a cross-boundary ping-pong). A hostile that leaves the remote is treated as expelled rather than chased out of the room.
 - When no armed hostile is visible in the chosen room, patrols can clear visible invader cores.
 - If no active threat is visible, patrols rotate through enabled remotes.
 - Rotation cadence is provided by `getPatrolRotationTicks()` (currently returns `50`).

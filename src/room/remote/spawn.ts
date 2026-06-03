@@ -298,7 +298,19 @@ function remoteSpawnRequest(
 
     const homeFleet = creepsForHomeRoom(context.room.name);
     const remoteRooms = context.room.memory.plan?.remoteRooms ?? {};
-    for (const roomName in remoteRooms) {
+    // Serve the most starved remotes first. A fixed key-order pass lets rooms at the
+    // tail of the list starve indefinitely when home spawn throughput is the bottleneck
+    // (see the W5N9/W4N9 over-subscription investigation). Sorting by least-recently
+    // mined makes the rotation fair without a per-room aging counter.
+    const orderedRoomNames = orderedRemoteRoomNames(remoteRooms);
+
+    // Emergency pass: a source with zero live coverage anywhere outranks proactive
+    // standby/handoff top-offs of already-covered sources, regardless of room order, so
+    // a single danger event can no longer leave a remote dark while incumbents cycle.
+    const emergencyRequest = emergencyRemoteMinerRequest(context, homeFleet, remoteRooms, orderedRoomNames, pending);
+    if (emergencyRequest) { return emergencyRequest; }
+
+    for (const roomName of orderedRoomNames) {
         const remote = remoteRooms[roomName];
         if (!remote.enabled) { continue; }
         if (remote.manualPauseUntil && remote.manualPauseUntil > Game.time) { continue; }
@@ -466,6 +478,71 @@ function remoteSpawnRequest(
         }
     }
 
+    return null;
+}
+
+// Lowest = most starved. Harvest rooms are keyed by their least-recently-mined source
+// so a room with a dark source sorts ahead of a fully-covered one. Rooms with no source
+// plan yet (need scouting) are treated as fully starved; non-harvest rooms (reserve/claim)
+// don't compete for miners and sort to the back at the current tick.
+function remoteRoomMiningStaleness(remote: RemoteRoomPlan): number {
+    if (remote.mode !== 'harvest') { return Game.time; }
+    const sources = remote.sources;
+    if (!sources) { return 0; }
+    const sourceIds = Object.keys(sources);
+    if (sourceIds.length === 0) { return 0; }
+    let oldest = Infinity;
+    for (const sourceId of sourceIds) {
+        const lastHarvested = sources[sourceId].lastHarvestedAt ?? 0;
+        if (lastHarvested < oldest) { oldest = lastHarvested; }
+    }
+    return oldest === Infinity ? 0 : oldest;
+}
+
+function orderedRemoteRoomNames(remoteRooms: { [roomName: string]: RemoteRoomPlan }): string[] {
+    return Object.keys(remoteRooms).sort((a, b) =>
+        remoteRoomMiningStaleness(remoteRooms[a]) - remoteRoomMiningStaleness(remoteRooms[b]));
+}
+
+// Cross-room scan for sources with zero live miner coverage (and no standby/pending
+// replacement). Returns the first spawnable emergency miner in starvation order so it
+// preempts the proactive standby/handoff spawns handled by the main pass.
+function emergencyRemoteMinerRequest(
+    context: RoomControllerContext,
+    homeFleet: Creep[],
+    remoteRooms: { [roomName: string]: RemoteRoomPlan },
+    orderedRoomNames: string[],
+    pending: PendingSpawnRequest[]
+): SpawnRequest | null {
+    for (const roomName of orderedRoomNames) {
+        const remote = remoteRooms[roomName];
+        if (!remote.enabled) { continue; }
+        if (remote.mode !== 'harvest' || !remote.sources) { continue; }
+        if (remote.manualPauseUntil && remote.manualPauseUntil > Game.time) { continue; }
+        if (remoteArmedFailsafeActive(context.room.name, roomName, remote)) { continue; }
+        for (const sourceId in remote.sources) {
+            const sourcePlan = remote.sources[sourceId];
+            if (sourcePlan.routeAccessible === false) { continue; }
+            if (hasRemoteStandbyMinerForSource(homeFleet, roomName, sourceId)) { continue; }
+            if (pending.some(r =>
+                r.archetype === 'remoteMiner' && r.remoteRoom === roomName && r.sourceId === sourceId)) {
+                continue;
+            }
+            const request: SpawnRequest = {
+                archetype: 'remoteMiner',
+                reason: 'remote emergency miner ' + roomName + ':' + sourceId,
+                remoteRoom: roomName,
+                remoteMode: remote.mode,
+                sourceId,
+                staticMining: true,
+                hasContainer: remoteSourceHasContainerStation(sourcePlan)
+            };
+            if (!isEmergencyRemoteRequest(homeFleet, request)) { continue; }
+            const blockReason = remoteRequestBlockReason(context, homeFleet, remoteRooms, roomName, request);
+            if (!blockReason) { return request; }
+            logRemoteSpawnSkip(context, request, blockReason);
+        }
+    }
     return null;
 }
 

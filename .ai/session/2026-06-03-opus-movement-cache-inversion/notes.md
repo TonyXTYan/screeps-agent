@@ -37,11 +37,21 @@ on the next tile blocks the step ⇒ stuck detection ⇒ repath. Not separately 
   final-approach moves alone — avoiding creeps there is fine and keeps measurement clean.
 - Home-hauler job flapping (deposit↔refill emergency-refill interrupt) — separate; deferred.
 
-## Measurement gate (user asked: measure first)
-1. Deploy with `MOVE_IGNORE_CREEPS_DEFAULT=false` for a baseline window, read CPU per
-   `console/PROFILING_CONSOLE.md` (`moveTo` / `move` / `moveByPath` / `Room.findPath`).
-2. Flip to `true`, same window, compare. Expect fewer `findPath` calls / lower move CPU and
-   stable path visuals. Watch for new deadlocks at funnels (should be caught by stuck+swap).
-3. If win confirmed and no regressions, proceed to Stage 2.
+## Measurement gate (user asked: measure first) — RESULT: WIN
+Deployed build c7426159 (~tick 71407175). Before vs after (remote dump `stuck=` samples):
+- peak stuck: **1190 → 35** (the old [48,22] wedge eliminated; 35 was transient, resolved to 0)
+- mean stuck: **260.5 → 5.3**
+- `stuck≥30` events: **42 → 4** (all cleared)
+- errors: **0**; CPU bucket still maxing to 10k → pixel mint (headroom intact)
 
-Toggle = single constant, fully reversible.
+## Stage 2 — EVALUATED, DECLINED
+Remaining raw `creep.moveTo` sites don't warrant conversion:
+- `remote/miners.ts:265` already `ignoreCreeps:true` (intentional aggressive station repath).
+- `remote/miners.ts:319/329`, `remote/haulers.ts:188/207/255`, `fleet.ts:553` = short positional
+  approaches (wait targets, spawn renew, scout wander) — avoiding creeps on the final step is
+  correct; long-reuse caching offers ~nothing near the destination.
+- `creep/harvest.ts` = legacy harvester role; its `ERR_NO_PATH`→`findOtherOption` (switch source)
+  congestion branch would stop firing under `ignoreCreeps:true` (creeps become walkable). Risk > gain.
+Central movers (`moveToJobTarget`, `travelRoom`) captured the win. Work complete.
+
+Toggle = single constant (`MOVE_IGNORE_CREEPS_DEFAULT`), fully reversible.

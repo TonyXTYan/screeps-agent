@@ -60,6 +60,9 @@ Memory
 │       travelLastX?: number
 │       travelLastY?: number
 │       travelLastRoom?: string
+│       travelPrevX?: number — position two ticks ago (oscillation detection)
+│       travelPrevY?: number
+│       travelPrevRoom?: string
 │       travelStuckTicks?: number
 │       remoteStationStuckSourceId?: string — Source whose station progress is being watched
 │       remoteStationLastRange?: number     — Last range to remote source while stalled

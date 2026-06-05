@@ -1,6 +1,6 @@
 import { wallRampartRepairCap } from '../role/doctor';
 import { isMaintenanceDisabled } from '../room/flags';
-import { MOVE_IGNORE_CREEPS_DEFAULT, MOVE_REUSE_PATH_TICKS } from '../room/constants';
+import { MOVE_IGNORE_CREEPS_DEFAULT, MOVE_REUSE_PATH_TICKS, MOVE_STUCK_REPATH_REUSE_TICKS } from '../room/constants';
 import { honorTrafficYieldRequest, requestTrafficYieldForPath } from './traffic';
 import {
     moveToJobTarget, moveToWithdrawTarget, forceStepTowardsRoomExit,
@@ -382,7 +382,12 @@ function travelRoom(creep: Creep): number {
             creep.move(creep.pos.getDirectionTo(swapStep));
             return ERR_NOT_IN_RANGE;
         }
-        (creep.memory as CreepMemory & { _move?: unknown })._move = undefined;
+        // Only on the FIRST stuck tick do we discard the stale terrain-only cache (it points
+        // into the blocker). Later stuck ticks REUSE the creep-avoiding detour (persisted below)
+        // so the creep commits to routing around instead of repathing every tick.
+        if (stuckTicks === MOVE_STUCK_REPATH_TICKS) {
+            (creep.memory as CreepMemory & { _move?: unknown })._move = undefined;
+        }
     }
 
     if (stuckTicks >= 2 && (creep.pos.x === 0 || creep.pos.x === 49 || creep.pos.y === 0 || creep.pos.y === 49)) {
@@ -400,7 +405,7 @@ function travelRoom(creep: Creep): number {
     const avoidCreeps = stuckTicks >= MOVE_STUCK_REPATH_TICKS;
     const moveCode = creep.moveTo(exitTarget, {
         visualizePathStyle: { stroke: '#ffffff' },
-        reusePath: avoidCreeps ? 0 : MOVE_REUSE_PATH_TICKS,
+        reusePath: avoidCreeps ? MOVE_STUCK_REPATH_REUSE_TICKS : MOVE_REUSE_PATH_TICKS,
         ignoreCreeps: avoidCreeps ? false : MOVE_IGNORE_CREEPS_DEFAULT,
         maxRooms: 1,
         range: 0

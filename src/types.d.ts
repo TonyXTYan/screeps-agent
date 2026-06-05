@@ -268,6 +268,11 @@ interface CreepMemory {
     travelLastX?: number;
     travelLastY?: number;
     travelLastRoom?: string;
+    // Position two ticks ago — used to detect oscillation (a creep that returns to a
+    // tile it just left is looping around a blocker, not making progress).
+    travelPrevX?: number;
+    travelPrevY?: number;
+    travelPrevRoom?: string;
     travelStuckTicks?: number;
     remoteStationStuckSourceId?: string;
     remoteStationPrevX?: number;

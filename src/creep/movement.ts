@@ -2,7 +2,7 @@
 
 import { requestTrafficYieldForPath } from './traffic';
 import { mirrorExitPositionIntoRoom } from '../room/remote/routing';
-import { MOVE_IGNORE_CREEPS_DEFAULT, MOVE_REUSE_PATH_TICKS } from '../room/constants';
+import { MOVE_IGNORE_CREEPS_DEFAULT, MOVE_REUSE_PATH_TICKS, MOVE_STUCK_REPATH_REUSE_TICKS } from '../room/constants';
 
 // Cached per room pair (terrain is static, so this never needs eviction within a shard run).
 // Key: "fromRoom=>toRoom". Value: valid exit coordinates (y for LEFT/RIGHT exits, x for TOP/BOTTOM),
@@ -98,29 +98,48 @@ export function clearTravelStuckMemory(creep: Creep): void {
     creep.memory.travelLastX = undefined;
     creep.memory.travelLastY = undefined;
     creep.memory.travelLastRoom = undefined;
+    creep.memory.travelPrevX = undefined;
+    creep.memory.travelPrevY = undefined;
+    creep.memory.travelPrevRoom = undefined;
     creep.memory.travelStuckTicks = undefined;
+}
+
+function shiftTravelHistory(creep: Creep): void {
+    // prev <- last <- current. prev is the position two ticks ago, used for oscillation detection.
+    creep.memory.travelPrevX = creep.memory.travelLastX;
+    creep.memory.travelPrevY = creep.memory.travelLastY;
+    creep.memory.travelPrevRoom = creep.memory.travelLastRoom;
+    creep.memory.travelLastX = creep.pos.x;
+    creep.memory.travelLastY = creep.pos.y;
+    creep.memory.travelLastRoom = creep.room.name;
 }
 
 export function updateTravelStuckMemory(creep: Creep): void {
     if (creep.fatigue > 0) {
-        // Creep can't move while fatigued — not stuck, just slow on swamp/non-road terrain.
-        // Keep position memory current so the comparison is correct once fatigue clears.
-        creep.memory.travelLastX = creep.pos.x;
-        creep.memory.travelLastY = creep.pos.y;
-        creep.memory.travelLastRoom = creep.room.name;
+        // Creep can't move while fatigued — not stuck, just slow (few MOVE parts on swamp/non-road
+        // terrain). Don't count these ticks; just keep position history current so the comparison
+        // is correct once fatigue clears.
+        shiftTravelHistory(creep);
         return;
     }
     const sameTile = creep.memory.travelLastX === creep.pos.x &&
         creep.memory.travelLastY === creep.pos.y &&
         creep.memory.travelLastRoom === creep.room.name;
-    if (sameTile) {
+    // Oscillation: the creep returned to the tile it occupied two ticks ago. That's the
+    // detour→relapse loop (sidestep a blocker, then the terrain-only path pulls it straight
+    // back) or a plain A↔B ping-pong. A monotonic path — even one winding away from the goal
+    // around a wall — never revisits a recent tile, so this won't false-positive on long
+    // corridors. Treating it as "still stuck" keeps the counter climbing toward repath/escape
+    // instead of being reset by the deceptive lateral move.
+    const oscillating = creep.memory.travelPrevX === creep.pos.x &&
+        creep.memory.travelPrevY === creep.pos.y &&
+        creep.memory.travelPrevRoom === creep.room.name;
+    if (sameTile || oscillating) {
         creep.memory.travelStuckTicks = (creep.memory.travelStuckTicks ?? 0) + 1;
     } else {
-        clearTravelStuckMemory(creep);
+        creep.memory.travelStuckTicks = undefined;
     }
-    creep.memory.travelLastX = creep.pos.x;
-    creep.memory.travelLastY = creep.pos.y;
-    creep.memory.travelLastRoom = creep.room.name;
+    shiftTravelHistory(creep);
 }
 
 export function nudgeFromRoomEdge(creep: Creep): boolean {
@@ -357,10 +376,15 @@ export function moveToJobTarget(
         }
     }
 
+    // On the FIRST stuck tick we discard the stale terrain-only cache (it points into the
+    // blocker) and compute a fresh creep-avoiding detour; on subsequent stuck ticks we let
+    // moveTo REUSE that detour (it's persisted via MOVE_STUCK_REPATH_REUSE_TICKS) so the creep
+    // commits to routing around rather than relapsing onto the blocked shortest path.
+    const enteringAvoid = avoidCreeps && stuckTicks === MOVE_STUCK_REPATH_TICKS;
     const moveOpts: MoveToOpts = {
         ...extra,
-        // Fresh creep-avoiding path while stuck; long creep-agnostic cache otherwise.
-        reusePath: avoidCreeps ? 0 : (extra.reusePath ?? MOVE_REUSE_PATH_TICKS),
+        // Sticky creep-avoiding detour while stuck; long creep-agnostic cache otherwise.
+        reusePath: avoidCreeps ? MOVE_STUCK_REPATH_REUSE_TICKS : (extra.reusePath ?? MOVE_REUSE_PATH_TICKS),
         ignoreCreeps: avoidCreeps ? false : (extra.ignoreCreeps ?? MOVE_IGNORE_CREEPS_DEFAULT),
         visualizePathStyle: {
             ...(extra.visualizePathStyle ?? {}),
@@ -368,7 +392,7 @@ export function moveToJobTarget(
         }
     };
 
-    if (avoidCreeps || extra.reusePath === 0) {
+    if (enteringAvoid || extra.reusePath === 0) {
         (creep.memory as CreepMemory & { _move?: unknown })._move = undefined;
     }
 

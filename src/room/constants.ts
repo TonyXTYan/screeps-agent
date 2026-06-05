@@ -11,6 +11,11 @@ export const MOVE_IGNORE_CREEPS_DEFAULT = true;
 // How long a creep-agnostic path may be reused before moveTo recomputes it. Terrain is static,
 // so this can be long; lower it if reaction lag to new construction sites becomes noticeable.
 export const MOVE_REUSE_PATH_TICKS = 20;
+// When stuck, the creep-AVOIDING detour path is persisted for this many ticks instead of being
+// recomputed every tick. This commits the creep to routing around a stationary blocker rather
+// than relapsing onto the (blocked) terrain-only shortest path the moment it sidesteps once.
+// Short, because creep positions change quickly and a stale avoid-path should expire fast.
+export const MOVE_STUCK_REPATH_REUSE_TICKS = 5;
 
 export const TOWER_RESERVE_RATIO = 0.7;
 export const TOWER_RECOVERY_RATIO = 0.55;

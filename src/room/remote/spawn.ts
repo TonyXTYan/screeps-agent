@@ -18,6 +18,7 @@ import {
     countRemoteMinersForSource, remoteSourceActiveMinerLimit, hasRemoteStandbyMinerForSource,
     countRemoteHaulersForSource, hasIdleRemoteHauler, remoteNeedsMaintainer, countRemoteMaintainersForRoom,
     remoteSourceHasContainerStation, remoteSourceReplacementHorizon, countFleetForArchetype,
+    remoteReserverReplacementHorizon,
 } from './fleet';
 import { findHostiles } from '../../hostileUtils';
 import { remoteArmedFailsafeActive, remoteNeedsRouteHealthMaintainer } from './planning';
@@ -32,6 +33,8 @@ import {
     REMOTE_HAULER_MIN_DEMAND_RATIO, REMOTE_HAULER_ABSOLUTE_MIN_COST, REMOTE_HAULER_USEFUL_MIN_COST,
     REMOTE_MAINTAINER_MIN_COST, REMOTE_THROTTLE_STORED_ENERGY,
     REMOTE_HAULER_RETARGET_STUCK_TICKS, MAX_REMOTE_HAULERS_PER_SOURCE,
+    REMOTE_RESERVER_CLAIM_PARTS, REMOTE_RESERVER_PANIC_CLAIM_PARTS,
+    REMOTE_RESERVER_PANIC_TTL, REMOTE_RESERVE_REFRESH_TTL,
 } from '../constants';
 
 export function runSpawnPlanner(context: RoomControllerContext): void {
@@ -332,17 +335,18 @@ function remoteSpawnRequest(
         }
         if (remote.mode === 'harvest' && remote.reserve !== false) {
             const reservation = Game.rooms[roomName]?.controller?.reservation;
-            if ((!reservation || reservation.ticksToEnd < 4000) &&
+            const reserveHorizon = remoteReserverReplacementHorizon(context, remote, context.room.name, roomName);
+            if ((!reservation || reservation.ticksToEnd < REMOTE_RESERVE_REFRESH_TTL) &&
                 !pending.some(r => r.archetype === 'claimer' && r.remoteRoom === roomName) &&
-                remoteClaimerCount(homeFleet, roomName, 'reserve', 2) === 0) {
-                const maxClaimParts = (reservation && reservation.ticksToEnd < 500) ? 5 : 2;
+                remoteClaimerCount(homeFleet, roomName, 'reserve', 2, reserveHorizon) === 0) {
+                const panic = reservation && reservation.ticksToEnd < REMOTE_RESERVER_PANIC_TTL;
                 const request: SpawnRequest = {
                     archetype: 'claimer',
                     reason: 'remote reserve ' + roomName,
                     remoteRoom: roomName,
                     remoteMode: 'reserve',
-                    minClaimParts: 2,
-                    maxClaimParts
+                    minClaimParts: REMOTE_RESERVER_CLAIM_PARTS,
+                    maxClaimParts: panic ? REMOTE_RESERVER_PANIC_CLAIM_PARTS : REMOTE_RESERVER_CLAIM_PARTS
                 };
                 const blockReason = remoteRequestBlockReason(context, homeFleet, remoteRooms, roomName, request);
                 if (!blockReason) { return request; }
@@ -456,25 +460,34 @@ function remoteSpawnRequest(
                 logRemoteSpawnSkip(context, request, blockReason);
             }
         }
-        if ((remote.mode === 'reserve' || remote.mode === 'claim') &&
-            !pending.some(r => r.archetype === 'claimer' && r.remoteRoom === roomName) &&
-            remoteClaimerCount(homeFleet, roomName, remote.mode, remote.mode === 'reserve' ? 2 : 1) === 0) {
-            let maxClaimParts: number | undefined;
-            if (remote.mode === 'reserve') {
-                const reservation = Game.rooms[roomName]?.controller?.reservation;
-                maxClaimParts = (reservation && reservation.ticksToEnd < 500) ? 5 : 2;
+        if (remote.mode === 'reserve' || remote.mode === 'claim') {
+            // Overlap only applies to reserving (continuous coverage). Claiming is one-shot,
+            // so an in-progress claimer must never be pre-replaced (horizon 0 = count it).
+            const reserveHorizon = remote.mode === 'reserve'
+                ? remoteReserverReplacementHorizon(context, remote, context.room.name, roomName)
+                : 0;
+            if (!pending.some(r => r.archetype === 'claimer' && r.remoteRoom === roomName) &&
+                remoteClaimerCount(homeFleet, roomName, remote.mode, remote.mode === 'reserve' ? 2 : 1, reserveHorizon) === 0) {
+                let minClaimParts: number | undefined;
+                let maxClaimParts: number | undefined;
+                if (remote.mode === 'reserve') {
+                    const reservation = Game.rooms[roomName]?.controller?.reservation;
+                    const panic = reservation && reservation.ticksToEnd < REMOTE_RESERVER_PANIC_TTL;
+                    minClaimParts = REMOTE_RESERVER_CLAIM_PARTS;
+                    maxClaimParts = panic ? REMOTE_RESERVER_PANIC_CLAIM_PARTS : REMOTE_RESERVER_CLAIM_PARTS;
+                }
+                const request: SpawnRequest = {
+                    archetype: 'claimer',
+                    reason: 'configured remote ' + remote.mode + ' ' + roomName,
+                    remoteRoom: roomName,
+                    remoteMode: remote.mode,
+                    minClaimParts: remote.mode === 'reserve' ? minClaimParts : undefined,
+                    maxClaimParts
+                };
+                const blockReason = remoteRequestBlockReason(context, homeFleet, remoteRooms, roomName, request);
+                if (!blockReason) { return request; }
+                logRemoteSpawnSkip(context, request, blockReason);
             }
-            const request: SpawnRequest = {
-                archetype: 'claimer',
-                reason: 'configured remote ' + remote.mode + ' ' + roomName,
-                remoteRoom: roomName,
-                remoteMode: remote.mode,
-                minClaimParts: remote.mode === 'reserve' ? 2 : undefined,
-                maxClaimParts
-            };
-            const blockReason = remoteRequestBlockReason(context, homeFleet, remoteRooms, roomName, request);
-            if (!blockReason) { return request; }
-            logRemoteSpawnSkip(context, request, blockReason);
         }
     }
 

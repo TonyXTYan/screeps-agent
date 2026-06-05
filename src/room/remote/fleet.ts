@@ -7,7 +7,7 @@ import { clearJob } from '../../creep/jobRunner';
 import { RoomControllerContext } from '../types';
 import {
     REMOTE_STANDBY_TRIGGER_TTL, REMOTE_SCOUT_CROWD_THRESHOLD, REMOTE_SCOUT_WANDER_TICKS,
-    REMOTE_REPLACEMENT_BUFFER_TICKS,
+    REMOTE_REPLACEMENT_BUFFER_TICKS, REMOTE_RESERVER_CLAIM_PARTS,
 } from '../constants';
 
 // ── Home fleet helpers ────────────────────────────────────────────────────────
@@ -391,6 +391,38 @@ export function remoteSourceReplacementHorizon(
     return oneWayDistance + spawnTime + REMOTE_REPLACEMENT_BUFFER_TICKS;
 }
 
+// Ticks of coverage a reserver must still have to count as live, matching the miner/hauler
+// replacement-horizon idea: one-way travel to the remote + the successor's spawn time + buffer.
+// A reserver whose ttl falls under this can't be replaced before it dies, so a successor is
+// requested while it still lives (overlap), keeping the controller continuously reserved.
+export function remoteReserverReplacementHorizon(
+    context: RoomControllerContext,
+    remote: RemoteRoomPlan,
+    homeRoomName: string,
+    remoteRoomName: string
+): number {
+    let oneWayDistance = Infinity;
+    if (remote.sources) {
+        for (const sourceId in remote.sources) {
+            const pathDistance = remote.sources[sourceId]?.pathDistance;
+            if (pathDistance && pathDistance > 0) { oneWayDistance = Math.min(oneWayDistance, pathDistance); }
+        }
+    }
+    if (!isFinite(oneWayDistance)) {
+        try {
+            oneWayDistance = Math.max(25, Game.map.getRoomLinearDistance(homeRoomName, remoteRoomName) * 50);
+        } catch {
+            oneWayDistance = 25;
+        }
+    }
+    const claimBody = planBodyForArchetype('claimer', context.room.energyCapacityAvailable, {
+        minClaimParts: REMOTE_RESERVER_CLAIM_PARTS,
+        maxClaimParts: REMOTE_RESERVER_CLAIM_PARTS
+    });
+    const spawnTime = Math.max(1, claimBody.length * CREEP_SPAWN_TIME);
+    return oneWayDistance + spawnTime + REMOTE_REPLACEMENT_BUFFER_TICKS;
+}
+
 // ── Maintainer & claimer ──────────────────────────────────────────────────────
 
 export function hasRemoteMaintainer(creeps: Creep[], remoteRoom: string): boolean {
@@ -422,13 +454,23 @@ export function remoteNeedsMaintainer(remoteRoom: string): boolean {
     }).length > 0;
 }
 
-export function remoteClaimerCount(creeps: Creep[], remoteRoom: string, mode: RemoteRoomMode, minClaimParts: number = 1): number {
+export function remoteClaimerCount(
+    creeps: Creep[],
+    remoteRoom: string,
+    mode: RemoteRoomMode,
+    minClaimParts: number = 1,
+    minTicksToLive: number = 0
+): number {
     let count = 0;
     for (const creep of creeps) {
         if (ensureArchetype(creep) !== 'claimer') { continue; }
         if (creep.memory.remoteRoom !== remoteRoom) { continue; }
         if (creep.memory.remoteMode !== mode) { continue; }
         if (getCreepCapabilities(creep).claim < minClaimParts) { continue; }
+        // Pre-spawn overlap: an incumbent that will expire before a replacement could
+        // reach the room no longer counts as coverage, so a successor is requested early
+        // and arrives as the incumbent dies — eliminating the unreserved gap.
+        if (minTicksToLive > 0 && !creep.spawning && (creep.ticksToLive ?? 0) <= minTicksToLive) { continue; }
         count++;
     }
     return count;

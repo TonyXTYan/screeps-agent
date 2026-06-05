@@ -64,6 +64,13 @@ export const REMOTE_RENEW_MIN_TTL = 220;
 export const REMOTE_RENEW_BUFFER_TICKS = 80;
 export const REMOTE_RENEW_HYSTERESIS = 140;
 export const REMOTE_REPLACEMENT_BUFFER_TICKS = 60;
+// Remote reserver sizing & refresh. Controller reservation decays 1/tick unconditionally,
+// so an N-CLAIM reserver only nets +(N-1)/tick. A 2-CLAIM reserver (+1/tick) barely outruns
+// the recurring death→travel replacement gap; 3 CLAIM (+2/tick) gives real cushion.
+export const REMOTE_RESERVER_CLAIM_PARTS = 3;
+export const REMOTE_RESERVER_PANIC_CLAIM_PARTS = 5;
+export const REMOTE_RESERVER_PANIC_TTL = 500;
+export const REMOTE_RESERVE_REFRESH_TTL = 4500;
 export const REMOTE_STANDBY_TRIGGER_TTL = 200;
 export const REMOTE_STANDBY_PARK_RANGE_MIN = 4;
 export const REMOTE_STANDBY_PARK_RANGE_TARGET = 6;

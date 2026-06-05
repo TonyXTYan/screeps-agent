@@ -2,7 +2,7 @@ import { findHostiles } from '../hostileUtils';
 import { acquireRenewSpawn, nearestSpawn } from '../spawn/renewal';
 import { ensureArchetype } from '../creep/capabilities';
 import { mirrorExitPositionIntoRoom } from '../room/remote/routing';
-import { nudgeFromRoomEdge } from '../creep/movement';
+import { nudgeFromRoomEdge, moveToJobTarget } from '../creep/movement';
 
 const PATROL_HOLD_RANGE = 8;
 const PATROL_RENEW_START_TTL = 300;
@@ -53,7 +53,7 @@ function runThreatResponse(creep: Creep, threats: VisibleThreat[]): void {
     healFriendly(creep);
 
     if (creep.room.name !== targetRoom.roomName) {
-        movePatrolToRoom(creep, targetRoom.roomName, homeRoom, '#ef4444', 3);
+        movePatrolToRoom(creep, targetRoom.roomName, homeRoom, '#ef4444');
         return;
     }
 
@@ -116,7 +116,7 @@ function runPatrolRotation(creep: Creep, enabledRemotes: string[], homeRoom: str
     const cadence = getPatrolRotationTicks();
     if (enabledRemotes.length === 0) {
         if (creep.room.name !== homeRoom) {
-            creep.moveTo(new RoomPosition(25, 25, homeRoom), { reusePath: 5, visualizePathStyle: { stroke: '#f59e0b' } });
+            moveToJobTarget(creep, new RoomPosition(25, 25, homeRoom), '#f59e0b');
         }
         return;
     }
@@ -130,7 +130,7 @@ function runPatrolRotation(creep: Creep, enabledRemotes: string[], homeRoom: str
     const patrolRoom = creep.memory.patrolRoom ?? enabledRemotes[0];
     if (creep.room.name !== patrolRoom) {
         markPatrolTravelTarget(creep, patrolRoom);
-        movePatrolToRoom(creep, patrolRoom, homeRoom, '#f59e0b', 5);
+        movePatrolToRoom(creep, patrolRoom, homeRoom, '#f59e0b');
         return;
     }
 
@@ -145,7 +145,7 @@ function runPatrolRotation(creep: Creep, enabledRemotes: string[], homeRoom: str
             startPatrolLoiterWindow(creep, nextRoom, cadence);
         }
         if (nextRoom !== patrolRoom) {
-            movePatrolToRoom(creep, nextRoom, homeRoom, '#f59e0b', 5);
+            movePatrolToRoom(creep, nextRoom, homeRoom, '#f59e0b');
             return;
         }
     }
@@ -208,15 +208,15 @@ function movePatrolToRoom(
     creep: Creep,
     targetRoomName: string,
     homeRoomName: string,
-    stroke: string,
-    reusePath: number
+    stroke: string
 ): void {
+    // Pure travel: route through the shared stuck-aware mover so highway crossings use the
+    // ignoreCreeps:true terrain cache (no per-tick repath when a hauler sits on the path) and
+    // gain swap/yield + escape recovery in 1-wide edge pockets. The anchor (room controller /
+    // entry tile / centre) is fixed, so the long-reuse cache is safe. Combat pursuit and loiter
+    // keep their bespoke creep-avoiding logic.
     const anchor = patrolTravelAnchor(targetRoomName, homeRoomName);
-    creep.moveTo(anchor, {
-        reusePath,
-        ignoreCreeps: false,
-        visualizePathStyle: { stroke }
-    });
+    moveToJobTarget(creep, anchor, stroke);
 }
 
 function patrolTravelAnchor(targetRoomName: string, homeRoomName: string): RoomPosition {
@@ -502,7 +502,7 @@ function tryRenewPatrol(creep: Creep, homeRoomName: string): boolean {
     if (!creep.memory.renewing) { return false; }
 
     if (creep.room.name !== homeRoomName) {
-        creep.moveTo(new RoomPosition(25, 25, homeRoomName), { reusePath: 4, visualizePathStyle: { stroke: '#f5d142' } });
+        moveToJobTarget(creep, new RoomPosition(25, 25, homeRoomName), '#f5d142');
         return true;
     }
 

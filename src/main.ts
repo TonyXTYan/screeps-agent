@@ -27,6 +27,7 @@ const HOME_RENEW_MIN_BODY_COST = 1000;
 const HOME_RENEW_START_TTL = 250;
 const HOME_RENEW_STOP_TTL = 1300;
 const HOME_RENEW_CRITICAL_TTL = 120;
+const HOME_RENEW_RECOVERY_STOP_TTL = 350;
 const STANDBY_MINER_PARK_MIN_RANGE = 2;
 const STANDBY_MINER_PARK_MAX_RANGE = 4;
 const DEBUG_PATH_SCAN_INTERVAL = 25;
@@ -504,9 +505,10 @@ function tryRenewHomeCreep(creep: Creep): boolean {
     const renewBlockedByEconomy =
         room.memory.energyRecoveryActive === true ||
         room.energyAvailable < Math.floor(room.energyCapacityAvailable * 0.9);
+    const renewStopTtl = renewBlockedByEconomy ? HOME_RENEW_RECOVERY_STOP_TTL : HOME_RENEW_STOP_TTL;
 
-    // Only block *starting* a new renew cycle when economy is stressed.
-    // If already renewing, let the cycle complete to avoid spawn-bounce.
+    // During recovery, only critically low local creeps may start renewing;
+    // active recovery renews stop early so creeps return to emergency work.
     if (renewBlockedByEconomy && !creep.memory.renewing && ttl > HOME_RENEW_CRITICAL_TTL) {
         return false;
     }
@@ -514,7 +516,7 @@ function tryRenewHomeCreep(creep: Creep): boolean {
     if (!creep.memory.renewing && ttl <= HOME_RENEW_START_TTL) {
         creep.memory.renewing = true;
     }
-    if (creep.memory.renewing && ttl >= HOME_RENEW_STOP_TTL) {
+    if (creep.memory.renewing && ttl >= renewStopTtl) {
         creep.memory.renewing = false;
     }
     if (!creep.memory.renewing) { return false; }

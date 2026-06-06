@@ -86,7 +86,7 @@ CLAIM creeps only auto-attack controllers in NPC Invader states (`owner/reservat
 
 - Assigned-source-first pickup with guarded cross-source overflow.
 - Return-home deposit cycle.
-- Conditional post-trip renew windows, with anti-congestion guards: concurrent renewers are capped at one per home spawn (critical-TTL creeps bypass the cap), a creep aborts renew if the chosen spawn is out of energy, and aborts if it stays stuck while approaching the spawn — in all non-critical cases it returns to hauling instead of camping the spawn.
+- Conditional post-trip renew windows, with anti-congestion guards: concurrent renewers are capped at one per home spawn (one per room while home recovery is active; critical-TTL creeps bypass the cap), recovery-mode renew stops once TTL covers a safe round trip, and non-critical creeps abort renew if the chosen spawn is out of energy or the spawn approach is stuck.
 - Home idle/wander behavior when no pickup target is available.
 
 ## Maintenance Telemetry

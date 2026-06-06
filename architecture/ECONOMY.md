@@ -155,14 +155,16 @@ Each tick the runner:
 Target: 1 miner per source
           │
           ▼
-Miner assigned to source ──→ TTL < 500? ──→ Renew at spawn
+Miner assigned to source ──→ TTL < 250? ──→ Renew at spawn
           │                               │
           │                               ▼
     Stay on source                    Renew loop (TTL ≥ 1300 stop)
 ```
 
-The miner self-renews at spawn when TTL drops below 500 (`HOME_RENEW_START_TTL`) and stops renewing
-once TTL reaches 1300 (`HOME_RENEW_STOP_TTL`). The same miner stays assigned to its source throughout.
+The miner self-renews at spawn when TTL drops below 250 (`HOME_RENEW_START_TTL`) and stops renewing
+once TTL reaches 1300 (`HOME_RENEW_STOP_TTL`). During home recovery, local renew is blocked unless
+TTL is critical; active recovery renews stop at the short recovery ceiling of 350 TTL.
+The same miner stays assigned to its source throughout.
 
 ### Remote miners
 

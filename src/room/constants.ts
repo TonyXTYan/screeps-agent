@@ -83,6 +83,7 @@ export const REMOTE_HAULER_POST_TRIP_RENEW_START_TTL = 1000;
 // Prevents haulers from being sent to a remote when recovery deferral ate their renew window,
 // leaving too little TTL to complete the trip and return.
 export const REMOTE_HAULER_DISPATCH_TTL_BUFFER = 30;
+export const REMOTE_HAULER_RECOVERY_RENEW_BUFFER = 60;
 export const REMOTE_HAULER_RENEW_START_TTL = 500;
 export const REMOTE_HAULER_RENEW_STOP_TTL = 1400;
 export const REMOTE_HAULER_RENEW_CRITICAL_TTL = 80;

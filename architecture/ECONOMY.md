@@ -53,7 +53,7 @@ Exceptions:
 
 ## Spawn Planning Priority
 
-`chooseSpawnRequest()` in `room/controller.ts` selects the next creep to spawn:
+`chooseSpawnRequest()` in `room/remote/spawn.ts` selects the next creep to spawn:
 
 ```
 1. Emergency worker          → if no creeps exist (recovery)
@@ -66,7 +66,13 @@ Exceptions:
 8. Mineral miner             → if mineral ready (extractor exists, container exists, mineral.mineralAmount > 0)
 9. Claim target              → configured claimTargets
 10. Remote creeps            → via remoteSpawnRequest() (see REMOTES.md)
+11. Storage upgrade worker   → lowest-priority RCL < 8 surplus-energy target
 ```
+
+Storage-backed upgrade workers are spawned only after all higher-priority local
+and remote requests decline. At `RCL < 8`, storage energy `>200k`, `>300k`, and
+`>400k` targets total worker counts of 2, 3, and 4 respectively. RCL 8 excludes
+this path because upgrade throughput is capped.
 
 **Gates**:
 - If any local spawn request is pending (not enough energy), remote requests are skipped entirely.

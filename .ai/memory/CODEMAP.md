@@ -35,7 +35,7 @@ src/
     controller.ts          Economic assignment + remote assignment
     constants.ts           Shared tunables (including hostile evade distance)
     spawn.ts               Capability accounting helpers
-    remote/spawn.ts        Strategic spawn requests (includes patrol sizing)
+    remote/spawn.ts        Strategic spawn requests (includes patrol sizing and storage-backed upgrade workers)
     remote/planning.ts     Remote plan updates + fail-safe danger marker
     remote/*               Fleet, miner, hauler, maintenance, roads, routing
 

@@ -37,6 +37,8 @@ import {
     REMOTE_RESERVER_PANIC_TTL, REMOTE_RESERVE_REFRESH_TTL,
 } from '../constants';
 
+const CURRENTLY_SPAWNING_REASON = 'currently spawning';
+
 export function runSpawnPlanner(context: RoomControllerContext): void {
     const allFreeSpawns = context.structures.spawns.filter((s) => !s.spawning);
     if (allFreeSpawns.length === 0) { return; }
@@ -66,7 +68,7 @@ export function runSpawnPlanner(context: RoomControllerContext): void {
             remoteRoom: memory.remoteRoom,
             remoteMode: memory.remoteMode,
             remoteStandby: memory.remoteStandby,
-            reason: 'currently spawning'
+            reason: CURRENTLY_SPAWNING_REASON
         }, spawningCreep?.body.map((part) => part.type)));
     }
 
@@ -288,7 +290,40 @@ function chooseSpawnRequest(context: RoomControllerContext, pending: PendingSpaw
         return { archetype: 'claimer', reason: 'configured claim target ' + claimTargets[0], remoteRoom: claimTargets[0], remoteMode: 'claim', maxClaimParts: 5 };
     }
 
-    return remoteSpawnRequest(context, capacities, pending);
+    const remoteRequest = remoteSpawnRequest(context, capacities, pending);
+    if (remoteRequest) { return remoteRequest; }
+
+    const storageUpgradeWorkerTarget = storageUpgradeWorkerCountTarget(context);
+    if (storageUpgradeWorkerTarget > 0 && !hasDeferredSpawnRequest(pending) && !pending.some(r => r.archetype === 'worker')) {
+        const workerCreeps = context.creeps.filter(c => ensureArchetype(c) === 'worker' && !c.spawning).length +
+            pendingArchetypeCount(pending, 'worker');
+        if (workerCreeps < storageUpgradeWorkerTarget) {
+            const storageEnergy = context.structures.storage?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0;
+            return {
+                archetype: 'worker',
+                reason: 'storage upgrade worker ' + workerCreeps + '/' + storageUpgradeWorkerTarget +
+                    ' storage=' + storageEnergy,
+                workRatio: workerWorkRatio(context)
+            };
+        }
+    }
+
+    return null;
+}
+
+function storageUpgradeWorkerCountTarget(context: RoomControllerContext): number {
+    const rcl = context.room.controller?.level ?? 0;
+    if (rcl <= 0 || rcl >= 8 || !context.structures.storage) { return 0; }
+
+    const storageEnergy = context.structures.storage.store.getUsedCapacity(RESOURCE_ENERGY);
+    if (storageEnergy > 400000) { return 4; }
+    if (storageEnergy > 300000) { return 3; }
+    if (storageEnergy > 200000) { return 2; }
+    return 0;
+}
+
+function hasDeferredSpawnRequest(pending: PendingSpawnRequest[]): boolean {
+    return pending.some(r => r.reason !== CURRENTLY_SPAWNING_REASON);
 }
 
 function remoteSpawnRequest(

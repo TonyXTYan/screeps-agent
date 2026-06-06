@@ -43,9 +43,9 @@ Memory
 │       // Remote mining
 │       remoteRoom?: string          — Remote room this creep is assigned to
 │       remoteMode?: RemoteRoomMode  — harvest/reserve/claim
-│       remoteRenewing?: boolean     — Currently traveling to/from spawn for renewal
+│       remoteRenewing?: boolean     — Remote miner currently traveling to/from spawn for renewal
 │       remoteStandby?: boolean      — Remote standby miner flag
-│       remoteHaulerRenewAfterTrip?: boolean — Remote hauler must renew before next outbound trip
+│       remoteHaulerRenewAfterTrip?: boolean — Legacy remote-hauler renew flag, cleared by hauler cycle
 │       remoteHaulerIdleUntil?: number — Tick until next remote-hauler recheck after no-job idle
 │       remoteHaulerLastPickupWasDropped?: boolean — Last selected pickup target was dropped energy; next assignment prioritizes local top-up containers
 │       remoteHaulerWanderX?: number — Home-idle wander target X for remote hauler

@@ -13,7 +13,7 @@ import {
 } from '../spawn';
 import {
     creepsForHomeRoom, countRemoteScouts, hasAssignedNonScoutRemoteCreep, remoteClaimerCount,
-    countRemoteHaulersForRoom, countActiveRemoteMinersForRoom, countSourceLessRemoteStandbyMiners,
+    countActiveRemoteMinersForRoom, countSourceLessRemoteStandbyMiners,
     sourceNeedingStandbyReplacement, projectedRemoteMinerWork, projectedRemoteHaulerCapacity,
     countRemoteMinersForSource, remoteSourceActiveMinerLimit, hasRemoteStandbyMinerForSource,
     countRemoteHaulersForSource, hasIdleRemoteHauler, remoteNeedsMaintainer, countRemoteMaintainersForRoom,
@@ -390,8 +390,13 @@ function remoteSpawnRequest(
         }
         if (remote.mode === 'harvest' && remote.sources) {
             const numSources = Object.keys(remote.sources).length;
-            const totalRoomHaulers = countRemoteHaulersForRoom(homeFleet, roomName) +
-                pendingRemoteArchetypeCount(pending, 'remoteHauler', roomName);
+            const haulerCoverageHorizons: { [sourceId: string]: number } = {};
+            let totalRoomHaulers = pendingRemoteArchetypeCount(pending, 'remoteHauler', roomName);
+            for (const sourceId in remote.sources) {
+                const horizon = remoteSourceReplacementHorizon(context, remote.sources[sourceId], 'remoteHauler');
+                haulerCoverageHorizons[sourceId] = horizon;
+                totalRoomHaulers += countRemoteHaulersForSource(homeFleet, roomName, sourceId, horizon);
+            }
             const totalRoomMiners = countActiveRemoteMinersForRoom(homeFleet, roomName) +
                 pendingRemoteArchetypeCount(pending, 'remoteMiner', roomName, undefined, false);
             const sourceLessStandbyMiners = countSourceLessRemoteStandbyMiners(homeFleet, roomName);
@@ -454,12 +459,13 @@ function remoteSpawnRequest(
                 }
 
                 const targetHaulerCapacity = sourcePlan.haulerCapacityDemand ?? 150;
-                const haulerCoverageHorizon = remoteSourceReplacementHorizon(context, sourcePlan, 'remoteHauler');
+                const haulerCoverageHorizon = haulerCoverageHorizons[sourceId] ??
+                    remoteSourceReplacementHorizon(context, sourcePlan, 'remoteHauler');
                 const haulerProjectedCapacity = projectedRemoteHaulerCapacity(homeFleet, roomName, sourceId, haulerCoverageHorizon) +
                     pendingRemoteBodyCapability(pending, 'remoteHauler', roomName, sourceId, 'haul');
                 if (haulerProjectedCapacity < targetHaulerCapacity &&
                     totalRoomHaulers < 2 * numSources &&
-                    countRemoteHaulersForSource(homeFleet, roomName, sourceId) +
+                    countRemoteHaulersForSource(homeFleet, roomName, sourceId, haulerCoverageHorizon) +
                         pendingRemoteArchetypeCount(pending, 'remoteHauler', roomName, sourceId) < MAX_REMOTE_HAULERS_PER_SOURCE &&
                     !hasIdleRemoteHauler(homeFleet, roomName, sourceId) &&
                     !pending.some(r => r.archetype === 'remoteHauler' && r.remoteRoom === roomName && r.sourceId === sourceId)) {

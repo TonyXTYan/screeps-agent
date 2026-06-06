@@ -86,7 +86,8 @@ CLAIM creeps only auto-attack controllers in NPC Invader states (`owner/reservat
 
 - Assigned-source-first pickup with guarded cross-source overflow.
 - Return-home deposit cycle.
-- Conditional post-trip renew windows, with anti-congestion guards: concurrent renewers are capped at one per home spawn (one per room while home recovery is active; critical-TTL creeps bypass the cap), recovery-mode renew stops once TTL covers a safe round trip, and non-critical creeps abort renew if the chosen spawn is out of energy or the spawn approach is stuck.
+- No spawn renewal. Low-TTL haulers are excluded from projected capacity and cap accounting once they fall inside the source replacement horizon, so a fresh hauler can spawn before the incumbent dies.
+- Haulers that no longer have enough TTL for a round trip return home and idle until death.
 - Home idle/wander behavior when no pickup target is available.
 
 ## Maintenance Telemetry

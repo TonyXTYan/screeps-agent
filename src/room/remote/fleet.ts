@@ -191,12 +191,18 @@ export function sourceNeedingStandbyReplacement(
 
 // ── Remote hauler counts ──────────────────────────────────────────────────────
 
-export function countRemoteHaulersForSource(creeps: Creep[], remoteRoom: string, sourceId: string): number {
+export function countRemoteHaulersForSource(
+    creeps: Creep[],
+    remoteRoom: string,
+    sourceId: string,
+    minTicksToLive = 0
+): number {
     let count = 0;
     for (const creep of creeps) {
         if (ensureArchetype(creep) !== 'remoteHauler') { continue; }
         if (creep.memory.remoteRoom !== remoteRoom) { continue; }
         if ((creep.memory.assignedSourceId ?? creep.memory.sourceId) !== sourceId) { continue; }
+        if (minTicksToLive > 0 && !creep.spawning && (creep.ticksToLive ?? 0) <= minTicksToLive) { continue; }
         count++;
     }
     return count;
@@ -366,7 +372,7 @@ export function projectedRemoteHaulerCapacity(
         if (ensureArchetype(creep) !== 'remoteHauler') { continue; }
         if (creep.memory.remoteRoom !== remoteRoom) { continue; }
         if ((creep.memory.assignedSourceId ?? creep.memory.sourceId) !== sourceId) { continue; }
-        if (!creep.memory.remoteRenewing && !creep.spawning && (creep.ticksToLive ?? 0) <= horizonTicks) { continue; }
+        if (!creep.spawning && (creep.ticksToLive ?? 0) <= horizonTicks) { continue; }
         const caps = creep.spawning
             ? getBodyCapabilities(creep.body.map(p => p.type))
             : getCreepCapabilities(creep);

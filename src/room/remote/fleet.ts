@@ -208,16 +208,6 @@ export function countRemoteHaulersForSource(
     return count;
 }
 
-export function countRemoteHaulersForRoom(creeps: Creep[], remoteRoom: string): number {
-    let count = 0;
-    for (const creep of creeps) {
-        if (ensureArchetype(creep) !== 'remoteHauler') { continue; }
-        if (creep.memory.remoteRoom !== remoteRoom) { continue; }
-        count++;
-    }
-    return count;
-}
-
 export function hasIdleRemoteHauler(creeps: Creep[], remoteRoom: string, sourceId?: string): boolean {
     const room = Game.rooms[remoteRoom];
     let foundIdleHauler = false;

@@ -12,7 +12,7 @@ import {
     REMOTE_HAULER_FAR_PICKUP_PATH_LENGTH, REMOTE_HAULER_FAR_PICKUP_RETURN_LOAD_RATIO,
     REMOTE_HAULER_POST_TRIP_RENEW_START_TTL, REMOTE_HAULER_RENEW_STOP_TTL,
     REMOTE_HAULER_RENEW_START_TTL, REMOTE_HAULER_IDLE_RECHECK_TICKS,
-    REMOTE_HAULER_RENEW_CRITICAL_TTL,
+    REMOTE_HAULER_RENEW_CRITICAL_TTL, REMOTE_HAULER_DISPATCH_TTL_BUFFER,
     REMOTE_HAULER_WANDER_MIN_RANGE, REMOTE_HAULER_WANDER_MAX_RANGE, REMOTE_HAULER_WANDER_TICKS,
     TOWER_RECOVERY_RATIO,
 } from '../constants';
@@ -131,6 +131,22 @@ export function assignRemoteHaulerCycle(
     creep.memory.remoteHaulerIdleUntil = undefined;
     creep.memory.remoteHaulerLastPickupWasDropped = undefined;
     clearRemoteHaulerWanderMemory(creep);
+
+    // Don't dispatch if TTL won't cover a round trip. This fires when recovery mode
+    // deferred renewal and cleared remoteHaulerRenewAfterTrip without checking whether
+    // TTL is still adequate. Setting remoteRenewing=true here makes the next
+    // manageRemoteHaulerRenewal call see alreadyRenewing=true, bypassing the recovery
+    // deferral check so the hauler can renew rather than dying mid-route with a full load.
+    const sourceId = creep.memory.sourceId ?? creep.memory.assignedSourceId;
+    const dist = sourceId ? (remotePlan.sources?.[sourceId]?.pathDistance ?? 0) : 0;
+    if (dist > 0 && ttl < dist * 2 + REMOTE_HAULER_DISPATCH_TTL_BUFFER) {
+        creep.memory.remoteRenewing = true;
+        const renewing = manageRemoteHaulerRenewal(creep, homeRoom, true);
+        if (renewing) { return true; }
+        setTravelJob(creep, homeRoom);
+        return true;
+    }
+
     setTravelJob(creep, remoteRoom);
     return true;
 }

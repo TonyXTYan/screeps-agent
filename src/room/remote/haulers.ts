@@ -1,8 +1,7 @@
-// Remote hauler cycle management: pickup, delivery, renewal, idle wander.
+// Remote hauler cycle management: pickup, delivery, idle wander.
 
 import { findRemoteEnergySource, remoteEnergyTargetPathLength } from './energy';
 import { setJob, setTravelJob, setResourceJob } from '../jobMemory';
-import { acquireRenewSpawn, nearestSpawn } from '../../spawn/renewal';
 import { closest } from '../targeting';
 import { getRoomStructures } from '../structures';
 import { firstStoredResource } from '../work';
@@ -10,45 +9,10 @@ import { towerEnergyRatio } from '../energy';
 import { hashString } from './fleet';
 import {
     REMOTE_HAULER_FAR_PICKUP_PATH_LENGTH, REMOTE_HAULER_FAR_PICKUP_RETURN_LOAD_RATIO,
-    REMOTE_HAULER_POST_TRIP_RENEW_START_TTL, REMOTE_HAULER_RENEW_STOP_TTL,
-    REMOTE_HAULER_RENEW_START_TTL, REMOTE_HAULER_IDLE_RECHECK_TICKS,
-    REMOTE_HAULER_RENEW_CRITICAL_TTL, REMOTE_HAULER_DISPATCH_TTL_BUFFER,
-    REMOTE_HAULER_RECOVERY_RENEW_BUFFER,
+    REMOTE_HAULER_IDLE_RECHECK_TICKS, REMOTE_HAULER_DISPATCH_TTL_BUFFER,
     REMOTE_HAULER_WANDER_MIN_RANGE, REMOTE_HAULER_WANDER_MAX_RANGE, REMOTE_HAULER_WANDER_TICKS,
     TOWER_RECOVERY_RATIO,
 } from '../constants';
-
-// After this many stuck ticks while approaching a spawn to renew, abort the renew cycle.
-// Prevents a creep from draining its TTL when all spawn-adjacent tiles are occupied.
-const RENEW_APPROACH_STUCK_ABORT_TICKS = 8;
-
-// Per-tick cache: count of creeps actively renewing per home room.
-// Updated whenever a new creep enters the renewing state so subsequent creeps in the
-// same tick see the correct count.
-let activeRenewersTick = -1;
-const activeRenewersCache: { [roomName: string]: number } = {};
-
-function activeRenewersForRoom(roomName: string): number {
-    if (activeRenewersTick !== Game.time) {
-        activeRenewersTick = Game.time;
-        for (const k in activeRenewersCache) { delete activeRenewersCache[k]; }
-        for (const name in Game.creeps) {
-            const c = Game.creeps[name];
-            if (c.spawning || !c.memory.remoteRenewing) { continue; }
-            const home = c.memory.homeRoom ?? c.room.name;
-            activeRenewersCache[home] = (activeRenewersCache[home] ?? 0) + 1;
-        }
-    }
-    return activeRenewersCache[roomName] ?? 0;
-}
-
-function clearRemoteHaulerRenewal(creep: Creep, homeRoomName: string): void {
-    if (creep.memory.remoteRenewing && activeRenewersTick === Game.time) {
-        activeRenewersCache[homeRoomName] = Math.max(0, (activeRenewersCache[homeRoomName] ?? 0) - 1);
-    }
-    creep.memory.remoteRenewing = false;
-    creep.memory.remoteHaulerRenewAfterTrip = undefined;
-}
 
 export function assignRemoteHaulerCycle(
     creep: Creep,
@@ -90,7 +54,7 @@ export function assignRemoteHaulerCycle(
         creep.memory.remoteHaulerReturning = true;
         creep.memory.remoteHaulerLastPickupWasDropped = undefined;
         creep.memory.remoteRenewing = false;
-        creep.memory.remoteHaulerRenewAfterTrip = ttl < REMOTE_HAULER_POST_TRIP_RENEW_START_TTL ? true : undefined;
+        creep.memory.remoteHaulerRenewAfterTrip = undefined;
         creep.memory.remoteHaulerIdleUntil = undefined;
         clearRemoteHaulerWanderMemory(creep);
         assignRemoteHaulerDelivery(creep, homeRoom);
@@ -98,17 +62,10 @@ export function assignRemoteHaulerCycle(
     }
 
     creep.memory.remoteHaulerReturning = undefined;
-    if (creep.memory.remoteHaulerRenewAfterTrip) {
-        const renewing = manageRemoteHaulerRenewal(creep, homeRoom, remotePlan, true);
-        if ((creep.ticksToLive ?? 0) > REMOTE_HAULER_RENEW_STOP_TTL) {
-            creep.memory.remoteHaulerRenewAfterTrip = undefined;
-            creep.memory.remoteRenewing = false;
-        }
-        if (renewing) { return true; }
-        if (creep.memory.remoteHaulerRenewAfterTrip) {
-            setTravelJob(creep, homeRoom);
-            return true;
-        }
+    // Clear any stale renewal state from before this change.
+    if (creep.memory.remoteRenewing || creep.memory.remoteHaulerRenewAfterTrip) {
+        creep.memory.remoteRenewing = false;
+        creep.memory.remoteHaulerRenewAfterTrip = undefined;
     }
 
     if (creep.room.name === remoteRoom) {
@@ -127,152 +84,24 @@ export function assignRemoteHaulerCycle(
     }
 
     if (creep.memory.remoteHaulerIdleUntil && Game.time < creep.memory.remoteHaulerIdleUntil) {
-        const renewing = manageRemoteHaulerRenewal(creep, homeRoom, remotePlan, ttl <= REMOTE_HAULER_RENEW_START_TTL);
-        if (renewing) { return true; }
         return assignRemoteHaulerHomeIdle(creep, homeRoom);
-    }
-
-    if (creep.memory.remoteRenewing) {
-        const renewing = manageRemoteHaulerRenewal(creep, homeRoom, remotePlan, false);
-        if (renewing) { return true; }
     }
 
     creep.memory.remoteHaulerIdleUntil = undefined;
     creep.memory.remoteHaulerLastPickupWasDropped = undefined;
     clearRemoteHaulerWanderMemory(creep);
 
-    // Don't dispatch if TTL won't cover a round trip. Route through the normal renewal
-    // admission path so recovery deferral and renewer caps still apply.
+    // Don't dispatch if TTL won't cover a round trip — go home and wait to die gracefully.
+    // The replacement horizon in fleet.ts will have already spawned a fresh hauler.
     const sourceId = creep.memory.sourceId ?? creep.memory.assignedSourceId;
     const dist = sourceId ? (remotePlan.sources?.[sourceId]?.pathDistance ?? 0) : 0;
     if (dist > 0 && ttl < dist * 2 + REMOTE_HAULER_DISPATCH_TTL_BUFFER) {
-        const renewing = manageRemoteHaulerRenewal(creep, homeRoom, remotePlan, true);
-        if (renewing) { return true; }
         setTravelJob(creep, homeRoom);
         return true;
     }
 
     setTravelJob(creep, remoteRoom);
     return true;
-}
-
-function manageRemoteHaulerRenewal(
-    creep: Creep,
-    homeRoomName: string,
-    remotePlan: RemoteRoomPlan,
-    forceRenew: boolean
-): boolean {
-    const ttl = creep.ticksToLive;
-    if (!ttl) { return false; }
-    const alreadyRenewing = creep.memory.remoteRenewing === true;
-
-    const homeRoom = Game.rooms[homeRoomName];
-    const recoveryActive = homeRoom?.memory.energyRecoveryActive === true;
-    const renewDeferredByRecovery = recoveryActive && ttl > REMOTE_HAULER_RENEW_CRITICAL_TTL;
-    const renewStopTtl = recoveryActive
-        ? remoteHaulerRecoveryRenewStopTtl(creep, remotePlan)
-        : REMOTE_HAULER_RENEW_STOP_TTL;
-
-    if (recoveryActive && alreadyRenewing && ttl >= renewStopTtl) {
-        clearRemoteHaulerRenewal(creep, homeRoomName);
-        return false;
-    }
-
-    if (!alreadyRenewing && renewDeferredByRecovery && ttl >= renewStopTtl) {
-        // Home room still needs energy: defer starting a new renew cycle so haulers
-        // resume hauling/refill work once they have enough TTL for a useful trip.
-        creep.memory.remoteHaulerRenewAfterTrip = undefined;
-        return false;
-    }
-
-    if (!creep.memory.remoteRenewing && (forceRenew || ttl <= REMOTE_HAULER_RENEW_START_TTL)) {
-        // Limit concurrent renewers to 1 per spawn to prevent spawn-adjacency congestion
-        // and spawn energy exhaustion. Critical-TTL creeps bypass the cap.
-        if (ttl > REMOTE_HAULER_RENEW_CRITICAL_TTL) {
-            const spawnCap = recoveryActive ? 1 : (homeRoom ? homeRoom.find(FIND_MY_SPAWNS).length : 1);
-            if (activeRenewersForRoom(homeRoomName) >= spawnCap) {
-                return false;
-            }
-        }
-        creep.memory.remoteRenewing = true;
-        // Ensure cache is current-tick before incrementing (critical-TTL path skips the
-        // cap check that would have triggered the refresh).
-        activeRenewersForRoom(homeRoomName);
-        activeRenewersCache[homeRoomName] = (activeRenewersCache[homeRoomName] ?? 0) + 1;
-    }
-    if (creep.memory.remoteRenewing && ttl >= renewStopTtl) {
-        clearRemoteHaulerRenewal(creep, homeRoomName);
-        return false;
-    }
-    if (!creep.memory.remoteRenewing) { return false; }
-
-    if (creep.room.name !== homeRoomName) {
-        setTravelJob(creep, homeRoomName);
-        return true;
-    }
-
-    if (!homeRoom) {
-        setTravelJob(creep, homeRoomName);
-        return true;
-    }
-
-    const spawn = acquireRenewSpawn(creep, homeRoom);
-    if (!spawn) {
-        const waitTarget = nearestSpawn(creep, homeRoom);
-        if (waitTarget) {
-            if (!creep.pos.isNearTo(waitTarget)) {
-                creep.moveTo(waitTarget, { visualizePathStyle: { stroke: '#f5f57a' } });
-            }
-            setJob(creep, 'idle', waitTarget);
-            return true;
-        }
-        clearRemoteHaulerRenewal(creep, homeRoomName);
-        return false;
-    }
-
-    if (!creep.pos.isNearTo(spawn)) {
-        // Abort if stuck approaching the spawn: all adjacent tiles are likely occupied by
-        // other renewing creeps. Freeing the route lets the creep resume hauling.
-        if (ttl > REMOTE_HAULER_RENEW_CRITICAL_TTL &&
-            (creep.memory.travelStuckTicks ?? 0) >= RENEW_APPROACH_STUCK_ABORT_TICKS) {
-            clearRemoteHaulerRenewal(creep, homeRoomName);
-            return false;
-        }
-        creep.moveTo(spawn, { visualizePathStyle: { stroke: '#f5f57a' } });
-        setJob(creep, 'idle', spawn);
-        return true;
-    }
-
-    // Abort if spawn is empty and TTL is not critical: send the creep to haul energy so
-    // it can refill the spawn on the next delivery trip.
-    if (spawn.store[RESOURCE_ENERGY] === 0 && ttl > REMOTE_HAULER_RENEW_CRITICAL_TTL) {
-        clearRemoteHaulerRenewal(creep, homeRoomName);
-        return false;
-    }
-
-    const code = spawn.renewCreep(creep);
-    if (code === OK || code === ERR_BUSY || code === ERR_NOT_ENOUGH_ENERGY) {
-        setJob(creep, 'idle', spawn);
-        return true;
-    }
-
-    clearRemoteHaulerRenewal(creep, homeRoomName);
-    return false;
-}
-
-function remoteHaulerRecoveryRenewStopTtl(creep: Creep, remotePlan: RemoteRoomPlan): number {
-    const sourceId = creep.memory.sourceId ?? creep.memory.assignedSourceId;
-    let distance = sourceId ? (remotePlan.sources?.[sourceId]?.pathDistance ?? 0) : 0;
-    if (distance <= 0) {
-        for (const id in remotePlan.sources) {
-            const candidate = remotePlan.sources[id].pathDistance ?? 0;
-            if (candidate > 0 && (distance <= 0 || candidate < distance)) {
-                distance = candidate;
-            }
-        }
-    }
-    if (distance <= 0) { return REMOTE_HAULER_RENEW_START_TTL; }
-    return distance * 2 + REMOTE_HAULER_DISPATCH_TTL_BUFFER + REMOTE_HAULER_RECOVERY_RENEW_BUFFER;
 }
 
 function assignRemoteHaulerHomeIdle(creep: Creep, homeRoomName: string): boolean {

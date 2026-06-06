@@ -30,8 +30,8 @@ runSpawnPlanner()   → spawn creeps to fill measured deficits
 | Archetype | Body Strategy |
 |-----------|--------------|
 | `miner` | WORK-heavy, static (5W1C1M) or mobile (5W1C3M), scales down with energy |
-| `hauler` | CARRY+MOVE triples (2C1M per 150 energy), optional trailing WORK when budget allows; capped at 20 CARRY (1000 carry capacity) |
-| `worker` | WORK×workRatio + CARRY + MOVE×ceil((workRatio+1)/2) per unit; MOVE count gives full road speed. workRatio 1→[W,C,M], 2→[W,W,C,M,M], 3→[W,W,W,C,M,M]; capped at 20 CARRY (1000 carry capacity) |
+| `hauler` | CARRY+MOVE triples (2C1M per 150 energy), optional trailing WORK when budget allows; capped at 30 CARRY (1500 carry capacity) |
+| `worker` | WORK×workRatio + CARRY + MOVE×ceil((workRatio+1)/2) per unit; MOVE count gives full road speed. workRatio 1→[W,C,M], 2→[W,W,C,M,M], 3→[W,W,W,C,M,M]; capped at 30 CARRY (1500 carry capacity) |
 | `patrol` | Combat interceptor template (`2 TOUGH, 6 ATTACK, 7 MOVE, 1 HEAL`) with scaled fallbacks |
 | `mineralMiner` | Same body as static miner, assigned to mineral |
 | `remoteMiner` | Static (container) or mobile variant, WORK-heavy |
@@ -49,7 +49,7 @@ Exceptions:
 - Reserve-mode `claimer` requests can use full room energy capacity to reach the requested CLAIM-part count.
 - Low-RCL emergency home-defense `patrol` requests (`RCL < 6`, armed hostile visible in home) use full room energy capacity and wait for that planned body instead of falling back to the normal 50% capped body.
 
-**Carry capacity cap:** Dynamic body builders (`hauler`, `remoteHauler`, `worker`) are hard-capped at `MAX_CARRY_CAPACITY = 1000` units (20 CARRY parts). This applies regardless of energy budget or room RCL. Fixed-template archetypes (miners, remoteMaintainer, patrol, etc.) are unaffected as their CARRY counts are already low.
+**Carry capacity cap:** Dynamic body builders (`hauler`, `remoteHauler`, `worker`) are hard-capped at `MAX_CARRY_CAPACITY = 1500` units (30 CARRY parts). This applies regardless of energy budget or room RCL. Fixed-template archetypes (miners, remoteMaintainer, patrol, etc.) are unaffected as their CARRY counts are already low.
 
 ## Spawn Planning Priority
 

@@ -155,16 +155,15 @@ Each tick the runner:
 Target: 1 miner per source
           │
           ▼
-Miner assigned to source ──→ TTL < 250? ──→ Renew at spawn
-          │                               │
-          │                               ▼
-    Stay on source                    Renew loop (TTL ≥ 1300 stop)
+Miner assigned to source ──→ Stay on source until death ──→ Respawn fresh
 ```
 
-The miner self-renews at spawn when TTL drops below 250 (`HOME_RENEW_START_TTL`) and stops renewing
-once TTL reaches 1300 (`HOME_RENEW_STOP_TTL`). During home recovery, local renew is blocked unless
-TTL is critical; active recovery renews stop at the short recovery ceiling of 350 TTL.
-The same miner stays assigned to its source throughout.
+Local static miners (`miner`/`mineralMiner`) **do not renew at the home spawn**. Renewing would pull a
+miner off its container, idling the source and tying up the spawn for the duration; a fresh replacement
+only walks out once and then mines for a full lifetime, so replacement is strictly better. Home renewal
+(`tryRenewHomeCreep`) is restricted to an explicit allow-list (`HOME_RENEWABLE_ARCHETYPES` = `worker`,
+`hauler`) — see [Home creep renewal](#home-creep-renewal). The same miner stays assigned to its source
+until it dies, then the population planner respawns one.
 
 ### Remote miners
 
@@ -174,6 +173,30 @@ Remote miners do not renew at the home spawn. Instead, handoff replacement uses 
 - Source-less standby miners are reassigned to uncovered accessible remote sources instead of idling indefinitely.
 - The standby travels to the remote room and pre-positions near the mining site (kept within range 4-10).
 - When the incumbent miner dies, the standby is promoted and takes over harvesting that source.
+
+## Home Creep Renewal
+
+`tryRenewHomeCreep` (`main.ts`) decides whether a home creep walks to a spawn to renew instead of
+dying and being respawned. Renew is energy-neutral per unit of life and occupies the spawn while it
+runs, so it only pays off for **expensive, in-room, stationary-ish** bodies whose worksite is near the
+spawn. Gates, in order:
+
+1. **No remote creeps** — remote renewal is handled separately (`manageRemoteRenewal`).
+2. **No CLAIM parts** — the game forbids renewing CLAIM bodies.
+3. **Archetype allow-list** (`HOME_RENEWABLE_ARCHETYPES` = `worker`, `hauler`). Static `miner`/
+   `mineralMiner` are excluded so they never leave their source; combat (`patrol`, `doctor`) and
+   claimers are excluded so they always field full-TTL fresh bodies.
+4. **Body-cost floor** (`HOME_RENEW_MIN_BODY_COST` = 1000) — cheap early-RCL bodies are trivial to
+   respawn, so renewal isn't worth the spawn occupation.
+5. **Body-staleness guard** (`HOME_RENEW_STALE_BODY_RATIO` = 0.8) — if a freshly planned body at the
+   room's current budget (`energyCapacityAvailable × BODY_BUDGET_RATIO`) would be meaningfully larger
+   than the creep's current body, skip renewal so the creep is replaced at the new, larger size rather
+   than locking in an outdated body after RCL/extension growth.
+
+Once renewing, the creep self-renews when TTL drops below 250 (`HOME_RENEW_START_TTL`) and stops at
+1300 (`HOME_RENEW_STOP_TTL`). During home recovery, local renew is blocked unless TTL is critical
+(`HOME_RENEW_CRITICAL_TTL` = 120); active recovery renews stop at the short recovery ceiling of 350
+(`HOME_RENEW_RECOVERY_STOP_TTL`).
 
 ## Job Reservation System
 

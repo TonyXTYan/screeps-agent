@@ -14,7 +14,7 @@ import {
     markRemoteMaintenanceRefresh,
 } from './room/remote/maintenance';
 import { findHostiles, isHostile } from './hostileUtils';
-import { bodyCost } from './creep/capabilities';
+import { bodyCost, ensureArchetype, planBodyForArchetype, BODY_BUDGET_RATIO, BODY_MIN_BUDGET } from './creep/capabilities';
 import { BUILD_COMMIT } from './env';
 import { acquireRenewSpawn, nearestSpawn } from './spawn/renewal';
 import { wrapWithProfiler } from './profiler';
@@ -28,6 +28,14 @@ const HOME_RENEW_START_TTL = 250;
 const HOME_RENEW_STOP_TTL = 1300;
 const HOME_RENEW_CRITICAL_TTL = 120;
 const HOME_RENEW_RECOVERY_STOP_TTL = 350;
+// Only stationary in-room workers/haulers benefit from renewal. Static miners and
+// mineral miners must stay on their source — pulling them home idles the source and
+// ties up the spawn — so they always spawn fresh. Combat/claim creeps are excluded
+// elsewhere (CLAIM guard, patrol's own role path) and want full-TTL fresh bodies.
+const HOME_RENEWABLE_ARCHETYPES: ReadonlySet<CreepArchetype> = new Set<CreepArchetype>(['worker', 'hauler']);
+// Stop renewing a body the room has outgrown: if a fresh creep would be this much
+// larger (RCL/extension growth since spawn), let it die and respawn at the new size.
+const HOME_RENEW_STALE_BODY_RATIO = 0.8;
 const STANDBY_MINER_PARK_MIN_RANGE = 2;
 const STANDBY_MINER_PARK_MAX_RANGE = 4;
 const DEBUG_PATH_SCAN_INTERVAL = 25;
@@ -495,12 +503,23 @@ function tryRenewHomeCreep(creep: Creep): boolean {
     if (!ttl) { return false; }
 
     if (creep.body.some(b => b.type === CLAIM)) { return false; }
-    if (bodyCost(creep.body.map(b => b.type)) < HOME_RENEW_MIN_BODY_COST) { return false; }
+
+    const archetype = ensureArchetype(creep);
+    if (!HOME_RENEWABLE_ARCHETYPES.has(archetype)) { return false; }
+
+    const currentBodyCost = bodyCost(creep.body.map(b => b.type));
+    if (currentBodyCost < HOME_RENEW_MIN_BODY_COST) { return false; }
 
     const homeRoomName = creep.memory.homeRoom ?? creep.room.name;
     if (creep.room.name !== homeRoomName) { return false; }
     const room = Game.rooms[homeRoomName];
     if (!room) { return false; }
+
+    // Body-staleness guard: budget mirrors the spawn planner (capacity × ratio). If a
+    // fresh body would be meaningfully larger, prefer replacement over renew.
+    const plannableBudget = Math.max(BODY_MIN_BUDGET, Math.floor(room.energyCapacityAvailable * BODY_BUDGET_RATIO));
+    const plannableCost = bodyCost(planBodyForArchetype(archetype, plannableBudget));
+    if (currentBodyCost < plannableCost * HOME_RENEW_STALE_BODY_RATIO) { return false; }
 
     const renewBlockedByEconomy =
         room.memory.energyRecoveryActive === true ||

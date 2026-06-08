@@ -21,6 +21,7 @@ type VisibleThreat = {
     hostiles: Creep[];
     invaderCore: StructureInvaderCore | null;
     isHomeThreat: boolean;
+    hasKnownCore?: boolean;
 };
 
 // Keep as a dedicated function so cadence can become dynamic later.
@@ -32,13 +33,15 @@ export function run(creep: Creep): void {
     const homeRoom = creep.memory.homeRoom ?? creep.room.name;
     const enabledRemotes = enabledRemoteRooms(homeRoom);
     const visibleThreats = visibleRemoteThreats(homeRoom, enabledRemotes);
+    const coreThreats = knownInvaderCoreThreats(homeRoom, enabledRemotes, visibleThreats);
+    const allThreats = [...visibleThreats, ...coreThreats];
 
-    if (shouldRenewPatrolNow(creep, visibleThreats) && tryRenewPatrol(creep, homeRoom)) {
+    if (shouldRenewPatrolNow(creep, allThreats) && tryRenewPatrol(creep, homeRoom)) {
         return;
     }
 
-    if (visibleThreats.length > 0) {
-        runThreatResponse(creep, visibleThreats);
+    if (allThreats.length > 0) {
+        runThreatResponse(creep, allThreats);
         return;
     }
 
@@ -53,6 +56,9 @@ function runThreatResponse(creep: Creep, threats: VisibleThreat[]): void {
     healFriendly(creep);
 
     if (creep.room.name !== targetRoom.roomName) {
+        if (targetRoom.hasKnownCore && !targetRoom.invaderCore && Game.time % 100 === 0) {
+            console.log(`[PATROL-CORE] t=${Game.time} ${creep.name} → ${targetRoom.roomName} (invader core in memory)`);
+        }
         movePatrolToRoom(creep, targetRoom.roomName, homeRoom, '#ef4444');
         return;
     }
@@ -303,6 +309,24 @@ function visibleRemoteThreats(homeRoom: string, remoteRooms: string[]): VisibleT
     return threats;
 }
 
+// Dispatch patrols to remote rooms known (from plan memory) to have an invader core
+// but not currently visible. Once the patrol arrives, visibleRemoteThreats picks up
+// the live core object and runThreatResponse attacks it normally.
+function knownInvaderCoreThreats(homeRoom: string, enabledRemotes: string[], visibleThreats: VisibleThreat[]): VisibleThreat[] {
+    const visibleRooms = new Set(visibleThreats.map((t) => t.roomName));
+    const remotes = Memory.rooms[homeRoom]?.plan?.remoteRooms;
+    if (!remotes) { return []; }
+    const threats: VisibleThreat[] = [];
+    for (const roomName of enabledRemotes) {
+        if (visibleRooms.has(roomName)) { continue; }
+        if (Game.rooms[roomName]) { continue; }
+        const plan = remotes[roomName];
+        if (!plan?.lastSeenInvaderCoreAt) { continue; }
+        threats.push({ roomName, hostiles: [], invaderCore: null, isHomeThreat: false, hasKnownCore: true });
+    }
+    return threats;
+}
+
 function selectThreatRoomForPatrol(
     creep: Creep,
     threats: VisibleThreat[],
@@ -471,7 +495,7 @@ function findHostileInvaderCore(room: Room): StructureInvaderCore | null {
 function threatPriority(threat: VisibleThreat, originRoomName: string): number {
     const homeBoost = threat.isHomeThreat && threat.hostiles.length > 0 ? 10000 : 0;
     const armedBoost = threat.hostiles.length > 0 ? 1000 : 0;
-    const coreBoost = threat.invaderCore ? 100 : 0;
+    const coreBoost = (threat.invaderCore || threat.hasKnownCore) ? 100 : 0;
     const distancePenalty = Game.map.getRoomLinearDistance(originRoomName, threat.roomName);
     return homeBoost + armedBoost + coreBoost - distancePenalty;
 }

@@ -104,12 +104,11 @@ export function updateRemoteRoomPlans(homeRoom: Room): void {
             }
             if (hostileCore) {
                 remote.lastSeenInvaderCoreAt = Game.time;
+            } else {
+                remote.lastSeenInvaderCoreAt = undefined;
             }
             if (hostileController) {
                 remote.lastSeenHostileControllerAt = Game.time;
-            }
-            if (!hostileCore && remote.lastSeenInvaderCoreAt && remote.lastSeenInvaderCoreAt + REMOTE_THREAT_MEMORY_TTL <= Game.time) {
-                remote.lastSeenInvaderCoreAt = undefined;
             }
             if (!hostileController && remote.lastSeenHostileControllerAt && remote.lastSeenHostileControllerAt + REMOTE_THREAT_MEMORY_TTL <= Game.time) {
                 remote.lastSeenHostileControllerAt = undefined;

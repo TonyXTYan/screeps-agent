@@ -18,7 +18,7 @@ import {
     countRemoteMinersForSource, remoteSourceActiveMinerLimit, hasRemoteStandbyMinerForSource,
     countRemoteHaulersForSource, hasIdleRemoteHauler, remoteNeedsMaintainer, countRemoteMaintainersForRoom,
     remoteSourceHasContainerStation, remoteSourceReplacementHorizon, countFleetForArchetype,
-    remoteReserverReplacementHorizon,
+    remoteReserverReplacementHorizon, remoteMaintainerReplacementHorizon,
 } from './fleet';
 import { findHostiles } from '../../hostileUtils';
 import { remoteArmedFailsafeActive, remoteNeedsRouteHealthMaintainer } from './planning';
@@ -484,7 +484,8 @@ function remoteSpawnRequest(
             }
 
             const maintainerTarget = desiredRemoteMaintainerCount(remote);
-            const maintainerCount = countRemoteMaintainersForRoom(homeFleet, roomName);
+            const maintainerHorizon = remoteMaintainerReplacementHorizon(context, remote, context.room.name, roomName);
+            const maintainerCount = countRemoteMaintainersForRoom(homeFleet, roomName, maintainerHorizon);
             const pendingMaintainerCount = pendingRemoteArchetypeCount(pending, 'remoteMaintainer', roomName);
             if (remote.maintainRoads !== false &&
                 remoteNeedsMaintainer(roomName) &&

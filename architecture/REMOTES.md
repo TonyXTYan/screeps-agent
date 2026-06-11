@@ -90,6 +90,12 @@ CLAIM creeps only auto-attack controllers in NPC Invader states (`owner/reservat
 - Haulers that no longer have enough TTL for a round trip return home and idle until death.
 - Home idle/wander behavior when no pickup target is available.
 
+## Maintainer Lifecycle & Priorities
+
+- **No renewal; pre-spawned replacement.** Maintainers work until death (renewal stays disabled to avoid the home↔remote bounce). A live incumbent whose TTL falls below `remoteMaintainerReplacementHorizon` (one-way travel + successor spawn time + `REMOTE_REPLACEMENT_BUFFER_TICKS`) is discounted from `countRemoteMaintainersForRoom`, so a successor spawns and arrives as the incumbent dies — closing the road-decay gap that an after-death replacement left open.
+- **Home-storage top-up on the way out.** A freshly-spawned maintainer fills from home storage before trekking out (so it arrives ready to repair instead of starving on contested remote energy), guarded by `REMOTE_MAINTAINER_HOME_REFILL_FLOOR` so a low home isn't drained; otherwise it travels empty and collects energy in the remote room.
+- **Upkeep before building (50% floor).** Priority: (1) repair any road/container below 50% up to full (worst-first; a critical preempts an in-progress build but never an in-progress repair, which always runs to full to avoid oscillation), (2) build construction sites once nothing is below 50%, (3) top up roads/containers below 90%, (4) collect energy only when work is queued, else idle in the remote room.
+
 ## Maintenance Telemetry
 
 Remote maintenance pressure remains event-driven (`setup`, `maintainerDeath`, `maintainerTtl500`, `memoryAudit`) and is used for maintainer target sizing.

@@ -55,7 +55,7 @@ import {
     LINK_TRANSFER_THRESHOLD,
     REMOTE_SCOUT_KEEP_COUNT, REMOTE_HAULER_RETARGET_STUCK_TICKS,
     REMOTE_MINER_NO_PROGRESS_REPLAN_TICKS,
-    REMOTE_CONTAINER_CRITICAL_REPAIR_THRESHOLD,
+    REMOTE_CONTAINER_CRITICAL_REPAIR_THRESHOLD, REMOTE_MAINTAINER_HOME_REFILL_FLOOR,
     REMOTE_MINER_REPAIR_THRESHOLD, REMOTE_MINER_REPAIR_RANGE,
     WORKER_DEFENSE_BOOTSTRAP_HITS,
 } from './constants';
@@ -223,6 +223,20 @@ export function assignRemoteCreep(creep: Creep): boolean {
         primeRemoteMinerTravelStation(creep, remotePlan);
     }
 
+    // Maintainers top up from home storage before the long trek out, so they arrive ready to
+    // repair instead of starving on contested remote energy. Guarded by a storage floor so a
+    // struggling home isn't drained; otherwise falls through to travel + remote energy collection.
+    if (archetype === 'remoteMaintainer' &&
+        creep.room.name === homeRoom &&
+        creep.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
+        const homeStorage = creep.room.storage;
+        if (homeStorage &&
+            homeStorage.store.getUsedCapacity(RESOURCE_ENERGY) > REMOTE_MAINTAINER_HOME_REFILL_FLOOR) {
+            setJob(creep, 'withdrawEnergy', homeStorage);
+            return true;
+        }
+    }
+
     if (creep.room.name !== remoteRoom) {
         setTravelJob(creep, remoteRoom);
         return true;
@@ -375,77 +389,62 @@ export function assignRemoteCreep(creep: Creep): boolean {
         const claimedTargets = remoteMaintainerClaims ?? remoteMaintainerClaimedTargetIds(creep);
         const hasEnergy = creep.store.getUsedCapacity(RESOURCE_ENERGY) > 0;
 
-        // Sticky: keep the current repair or build job while the target still needs work,
-        // rather than re-evaluating to the globally worst target every tick.  This prevents
-        // oscillation between two similarly-degraded structures and avoids wasted travel.
         const currentJobType = creep.memory.jobType;
         const currentTargetId = creep.memory.jobTargetId;
-        if (hasEnergy && currentTargetId && (currentJobType === 'repair' || currentJobType === 'build')) {
-            if (currentJobType === 'build') {
-                const site = Game.getObjectById(currentTargetId as Id<ConstructionSite>);
-                if (site && site.progress < site.progressTotal) { return true; }
-            } else {
-                const structure = Game.getObjectById(currentTargetId as Id<AnyStructure>);
-                if (structure && structure.hits < structure.hitsMax && !isMaintenanceDisabled(structure)) { return true; }
-            }
-        }
 
-        // 1. Critical container repair: most-degraded container below 50%.
-        const criticalContainer = selectRemoteMaintainerRepairTarget(
+        // Upkeep before building: roads and containers are kept above a 50% safety floor first,
+        // and new construction is only started once nothing is below that floor. A critical
+        // (<50%) structure therefore preempts an in-progress build, but never an in-progress
+        // repair (which always runs to full, preventing oscillation between two targets).
+
+        // 1. Critical floor: most-degraded road or container below 50% — repaired up to hitsMax.
+        const criticalRepair = selectRemoteMaintainerRepairTarget(
             creep,
             claimedTargets,
-            (s) => s.structureType === STRUCTURE_CONTAINER && s.hits < s.hitsMax * REMOTE_CONTAINER_CRITICAL_REPAIR_THRESHOLD
+            (s) => (s.structureType === STRUCTURE_ROAD || s.structureType === STRUCTURE_CONTAINER) &&
+                s.hits < s.hitsMax * REMOTE_CONTAINER_CRITICAL_REPAIR_THRESHOLD
         );
-        if (criticalContainer && hasEnergy) {
-            setJob(creep, 'repair', criticalContainer);
+
+        // Sticky repair: finish the current repair target to full before re-evaluating, rather
+        // than flip-flopping to the globally worst target every tick.
+        if (hasEnergy && currentJobType === 'repair' && currentTargetId) {
+            const structure = Game.getObjectById(currentTargetId as Id<AnyStructure>);
+            if (structure && structure.hits < structure.hitsMax && !isMaintenanceDisabled(structure)) { return true; }
+        }
+
+        if (criticalRepair && hasEnergy) {
+            setJob(creep, 'repair', criticalRepair);
             return true;
         }
 
-        // 2. Container repair: most-degraded container below 90% — prioritised over building.
-        const worstContainer = selectRemoteMaintainerRepairTarget(
-            creep,
-            claimedTargets,
-            (s) => s.structureType === STRUCTURE_CONTAINER && s.hits < s.hitsMax * 0.9
-        );
-        if (worstContainer && hasEnergy) {
-            setJob(creep, 'repair', worstContainer);
-            return true;
+        // 2. Build — only reached once every structure is at/above the 50% floor. Sticky-continue
+        // an in-progress build (no critical preempted it above); otherwise pick a new site.
+        if (hasEnergy && currentJobType === 'build' && currentTargetId) {
+            const activeSite = Game.getObjectById(currentTargetId as Id<ConstructionSite>);
+            if (activeSite && activeSite.progress < activeSite.progressTotal) { return true; }
         }
-
-        // 3. Road repair: most-degraded road below 80% — prioritised over building.
-        const worstCriticalRoad = selectRemoteMaintainerRepairTarget(
-            creep,
-            claimedTargets,
-            (s) => s.structureType === STRUCTURE_ROAD && s.hits < s.hitsMax * 0.8
-        );
-        if (worstCriticalRoad && hasEnergy) {
-            setJob(creep, 'repair', worstCriticalRoad);
-            return true;
-        }
-
-        // 4. Build construction sites (roads and containers only; falls back to any site).
         const site = selectRemoteMaintainerBuildSite(creep, claimedTargets);
         if (site && hasEnergy) {
             setJob(creep, 'build', site);
             return true;
         }
 
-        // 5. Road upkeep: roads below 90% — lower threshold than step 3, runs after building
-        // to catch gradual road decay before it hits the 80% critical threshold.
-        const worstMinorRoad = selectRemoteMaintainerRepairTarget(
+        // 3. Upkeep: top up roads/containers below 90% to full, after building is caught up.
+        const upkeepRepair = selectRemoteMaintainerRepairTarget(
             creep,
             claimedTargets,
-            (s) => s.structureType === STRUCTURE_ROAD && s.hits < s.hitsMax * 0.9
+            (s) => (s.structureType === STRUCTURE_ROAD || s.structureType === STRUCTURE_CONTAINER) &&
+                s.hits < s.hitsMax * 0.9
         );
-        if (worstMinorRoad && hasEnergy) {
-            setJob(creep, 'repair', worstMinorRoad);
+        if (upkeepRepair && hasEnergy) {
+            setJob(creep, 'repair', upkeepRepair);
             return true;
         }
 
-        // 6. Collect energy — only when there is actual work queued.  Prevents the creep
+        // 4. Collect energy — only when there is actual work queued.  Prevents the creep
         // from filling up on energy when all structures are healthy, which would otherwise
         // trigger the generic fallback and cause a pointless home↔remote bounce cycle.
-        const hasWorkQueued = !!(criticalContainer || worstContainer || worstCriticalRoad || site || worstMinorRoad);
+        const hasWorkQueued = !!(criticalRepair || site || upkeepRepair);
         if (hasWorkQueued && creep.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
             const remoteEnergy = findRemoteEnergySource(creep, remotePlan, {
                 droppedFirst: false,

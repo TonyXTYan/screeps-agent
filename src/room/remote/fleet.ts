@@ -430,15 +430,52 @@ export function hasRemoteMaintainer(creeps: Creep[], remoteRoom: string): boolea
     return false;
 }
 
-export function countRemoteMaintainersForRoom(creeps: Creep[], remoteRoom: string): number {
+export function countRemoteMaintainersForRoom(
+    creeps: Creep[],
+    remoteRoom: string,
+    minTicksToLive: number = 0
+): number {
     let count = 0;
     for (const creep of creeps) {
-        if (creep.spawning) { continue; }
         if (ensureArchetype(creep) !== 'remoteMaintainer') { continue; }
         if (creep.memory.remoteRoom !== remoteRoom) { continue; }
+        // Pre-spawn overlap: a live incumbent whose ttl is too low to be replaced before it
+        // dies no longer counts as coverage, so a successor is requested while it still lives
+        // and arrives as the incumbent dies — eliminating the maintenance gap. Spawning creeps
+        // always count (the fresh replacement is already on the way).
+        if (minTicksToLive > 0 && !creep.spawning && (creep.ticksToLive ?? 0) <= minTicksToLive) { continue; }
         count++;
     }
     return count;
+}
+
+// Ticks of coverage a maintainer must still have to count as live: one-way travel to the
+// remote + the successor's spawn time + buffer. Mirrors the miner/hauler/reserver replacement
+// horizon so a dying maintainer is pre-replaced rather than leaving roads to decay during the
+// successor's travel.
+export function remoteMaintainerReplacementHorizon(
+    context: RoomControllerContext,
+    remote: RemoteRoomPlan,
+    homeRoomName: string,
+    remoteRoomName: string
+): number {
+    let oneWayDistance = Infinity;
+    if (remote.sources) {
+        for (const sourceId in remote.sources) {
+            const pathDistance = remote.sources[sourceId]?.pathDistance;
+            if (pathDistance && pathDistance > 0) { oneWayDistance = Math.min(oneWayDistance, pathDistance); }
+        }
+    }
+    if (!isFinite(oneWayDistance)) {
+        try {
+            oneWayDistance = Math.max(25, Game.map.getRoomLinearDistance(homeRoomName, remoteRoomName) * 50);
+        } catch {
+            oneWayDistance = 25;
+        }
+    }
+    const body = planBodyForArchetype('remoteMaintainer', context.room.energyCapacityAvailable);
+    const spawnTime = Math.max(1, body.length * CREEP_SPAWN_TIME);
+    return oneWayDistance + spawnTime + REMOTE_REPLACEMENT_BUFFER_TICKS;
 }
 
 export function remoteNeedsMaintainer(remoteRoom: string): boolean {

@@ -102,6 +102,10 @@ export const REMOTE_HAULER_ABSOLUTE_MIN_COST = 600;
 export const REMOTE_HAULER_USEFUL_MIN_COST = 900;
 export const REMOTE_HAULER_MIN_DEMAND_RATIO = 0.4;
 export const REMOTE_MAINTAINER_MIN_COST = 500;
+// Home storage energy floor below which a freshly-spawned remote maintainer will NOT top up
+// from storage on its way out (so a struggling home isn't drained for remote upkeep). The
+// maintainer falls back to collecting energy in the remote room instead.
+export const REMOTE_MAINTAINER_HOME_REFILL_FLOOR = 10000;
 export const REMOTE_CONTAINER_CRITICAL_REPAIR_THRESHOLD = 0.5;
 export const REMOTE_MINER_REPAIR_THRESHOLD = 0.5;
 export const REMOTE_MINER_REPAIR_RANGE = 3;

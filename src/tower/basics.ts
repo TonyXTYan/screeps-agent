@@ -5,9 +5,10 @@ const DEFENSE_CRITICAL_HITS = 10_000;
 const DEFENSE_CRITICAL_MIN_ENERGY = 0.5;
 
 export function run(room: Room): void {
-    const towers = room.find(FIND_STRUCTURES, {
-        filter: (s) => s.structureType === STRUCTURE_TOWER
-    }) as StructureTower[];
+    const allStructures = room.find(FIND_STRUCTURES);
+    const towers = allStructures.filter(
+        (s) => s.structureType === STRUCTURE_TOWER
+    ) as StructureTower[];
 
     if (towers.length === 0) { return; }
 
@@ -15,40 +16,43 @@ export function run(room: Room): void {
     const armedHostiles = room.find(FIND_HOSTILE_CREEPS, {
         filter: isHostile
     });
+    const injuredCreeps = room.find(FIND_MY_CREEPS, {
+        filter: (c) => c.hits < c.hitsMax
+    });
 
     // Pre-compute repair candidates sorted by hits ascending, then distribute across towers
     // so each tower repairs a different structure instead of all piling on the same target.
-    const veryUrgent = room.find(FIND_STRUCTURES, {
-        filter: (s) => s.hits < 500 &&
+    const veryUrgent = allStructures.filter(
+        (s) => s.hits < 500 &&
             s.hitsMax > 500 &&
             s.structureType !== STRUCTURE_WALL &&
             s.structureType !== STRUCTURE_RAMPART
-    }).sort((a, b) => a.hits - b.hits);
-    const urgent = room.find(FIND_STRUCTURES, {
-        filter: (s) => s.hits < 10_000 &&
+    ).sort((a, b) => a.hits - b.hits);
+    const urgent = allStructures.filter(
+        (s) => s.hits < 10_000 &&
             s.hitsMax > 10_000 &&
             s.structureType !== STRUCTURE_WALL &&
             s.structureType !== STRUCTURE_RAMPART
-    }).sort((a, b) => a.hits - b.hits);
+    ).sort((a, b) => a.hits - b.hits);
     // Non-defense structures: < 500 (veryUrgent), < 10K (urgent), or < 10% HP (criticalNormal) caught by absolute/percent thresholds;
     // walls/ramparts below 10K hits handled at 50% energy gate in a separate branch
-    const normal = room.find(FIND_STRUCTURES, {
-        filter: (s) => repairStructureFilter(s, rcl) &&
+    const normal = allStructures.filter(
+        (s) => repairStructureFilter(s as AnyStructure, rcl) &&
             s.structureType !== STRUCTURE_WALL && s.structureType !== STRUCTURE_RAMPART
-    }).sort((a, b) => a.hits - b.hits);
-    const defense = room.find(FIND_STRUCTURES, {
-        filter: (s) => repairStructureFilter(s, rcl) &&
+    ).sort((a, b) => a.hits - b.hits);
+    const defense = allStructures.filter(
+        (s) => repairStructureFilter(s as AnyStructure, rcl) &&
             (s.structureType === STRUCTURE_WALL || s.structureType === STRUCTURE_RAMPART)
-    }).sort((a, b) => a.hits - b.hits);
-    const criticalNormal = room.find(FIND_STRUCTURES, {
-        filter: (s) => s.structureType !== STRUCTURE_WALL &&
+    ).sort((a, b) => a.hits - b.hits);
+    const criticalNormal = allStructures.filter(
+        (s) => s.structureType !== STRUCTURE_WALL &&
             s.structureType !== STRUCTURE_RAMPART &&
             s.hits < s.hitsMax * 0.1
-    }).sort((a, b) => a.hits - b.hits);
-    const criticalDefense = room.find(FIND_STRUCTURES, {
-        filter: (s) => (s.structureType === STRUCTURE_WALL || s.structureType === STRUCTURE_RAMPART) &&
+    ).sort((a, b) => a.hits - b.hits);
+    const criticalDefense = allStructures.filter(
+        (s) => (s.structureType === STRUCTURE_WALL || s.structureType === STRUCTURE_RAMPART) &&
             s.hits < DEFENSE_CRITICAL_HITS
-    }).sort((a, b) => a.hits - b.hits);
+    ).sort((a, b) => a.hits - b.hits);
 
     const claimedIds = new Set<string>();
 
@@ -63,9 +67,7 @@ export function run(room: Room): void {
             tower.attack(closestHostile);
         } else if (energyRatio >= minEnergyForRepair) {
             // Heal uses closest-by-range because tower heal power decreases with distance
-            const closestDamagedCreep = tower.pos.findClosestByRange(FIND_MY_CREEPS, {
-                filter: (c) => c.hits < c.hitsMax
-            });
+            const closestDamagedCreep = tower.pos.findClosestByRange(injuredCreeps);
 
             if (closestDamagedCreep) {
                 tower.heal(closestDamagedCreep);

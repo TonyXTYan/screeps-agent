@@ -1,11 +1,10 @@
 export function run(creep: Creep): void {
-    const sources = creep.room.find(FIND_SOURCES);
-    const sourcesClosest = creep.pos.findClosestByPath(FIND_SOURCES);
-
     if (creep.memory.harvestTargetSourceIndex === undefined) {
         creep.memory.harvestTargetSourceIndex = 0;
     }
     if (creep.memory.harvestTargetSourceId === undefined) {
+        const sources = creep.room.find(FIND_SOURCES);
+        const sourcesClosest = creep.pos.findClosestByPath(FIND_SOURCES);
         creep.memory.harvestTargetSourceId = (sourcesClosest ?? sources[0]).id;
     }
 

@@ -331,16 +331,24 @@ export function findRemoteEnergySource(
     const followDroppedTopUp = opts?.followDroppedTopUp === true;
 
     if (assignedSourceId && remotePlan.sources?.[assignedSourceId]) {
-        const assignedTarget = bestRemoteEnergyTargetForSource(
-            creep,
-            remotePlan,
-            assignedSourceId,
-            avoidTargetId,
-            droppedMinAmount,
-            followDroppedTopUp
+        // Compute targets once; derive both availability and best-target from that single result
+        // to avoid calling remoteEnergyTargetsForSource (which does room.find) twice.
+        const allAssignedTargets = remoteEnergyTargetsForSource(
+            creep, remotePlan, assignedSourceId, droppedMinAmount, false
         );
-        const assignedAvailable = remoteEnergyAvailableForSource(creep, remotePlan, assignedSourceId, droppedMinAmount);
+        const assignedAvailable = allAssignedTargets.reduce(
+            (total, candidate) =>
+                total + remoteEnergyAvailableAfterClaims(creep, candidate.target as StructureContainer | Resource<RESOURCE_ENERGY>),
+            0
+        );
         const assignedIsDry = assignedAvailable < REMOTE_HAULER_ASSIGNED_SOURCE_MIN_ENERGY;
+        const targetPool = followDroppedTopUp
+            ? remoteEnergyTargetsForSource(creep, remotePlan, assignedSourceId, droppedMinAmount, true)
+            : allAssignedTargets;
+        const assignedTarget = pickRemoteEnergySourceTarget(
+            creep,
+            targetPool.filter(c => !shouldAvoidRemoteEnergyTarget(creep, c.target, avoidTargetId))
+        );
 
         if (assignedTarget && !assignedIsDry) {
             return assignedTarget;

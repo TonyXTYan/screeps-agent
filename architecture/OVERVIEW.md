@@ -2,130 +2,77 @@
 
 ## Project
 
-A TypeScript Screeps AI bot that manages a colony economy — source mining, hauling, construction, repair,
-upgrading, remote harvesting, and defense. Bundled via Rollup into `dist/main.js` and pushed to the
-Screeps server via `grunt-screeps`.
+TypeScript Screeps AI managing economy, remotes, and defense. Build output is `dist/main.js`.
 
-## Source Map (21 modules)
+## Source Map
 
 ```
 src/
-  main.ts                  Entry point — Screeps calls loop() every tick
-  env.ts                   BUILD_COMMIT from git hash (injected by rollup banner)
-  hostileUtils.ts          Shared hostile detection helpers (`isHostile`, `findHostiles`)
+  main.ts                  Entry point
+  env.ts                   BUILD_COMMIT injection surface
+  hostileUtils.ts          Armed-hostile detection (`isHostile`, `findHostiles`)
+  memoryAudit.ts           Deploy-time memory consistency audit
+  debug.ts                 Console/debug helpers
+  types.d.ts               Memory/type unions
 
-  creep.capabilities.ts    Body → capability derivation, archetype inference, body planning
-  creep.jobRunner.ts       Job execution dispatch (19 job types)
-  creep.memoryManagement.ts Dead creep cleanup, fallback role assignment
-  creep.populationControl.ts Emergency defender spawning
-  creep.harvest.ts         Legacy direct-harvest helper
-  creep.roleBalance.ts     Legacy body planner (defender only)
+  creep/
+    capabilities.ts        Archetype inference, body capabilities, body planning
+    jobRunner.ts           Strategic job execution
+    memoryManagement.ts    Dead-memory cleanup + legacy-role migration
+    movement.ts            Pathing helpers
+    traffic.ts             Yield negotiation/priorities + head-on swap
+    harvest.ts             Legacy harvest helper
+  role/
+    patrol.ts              Patrol defense behavior (expel mode)
+    doctor.ts              Shared repair-cap helpers + legacy fallback
+    builder.ts             Legacy fallback role
+    harvester.ts           Legacy fallback role
+    upgrader.ts            Legacy fallback role
+    manual.ts              Manual stub
 
-  room.controller.ts       Main economic controller (~3100 lines)
-  room.structures.ts       Structure discovery, link classification
+  room/
+    controller.ts          Context build + assignment + remote assignment
+    constants.ts           Shared tuning constants
+    spawn.ts               Local spawn capability accounting helpers
+    remote/spawn.ts        Strategic spawn request selection (including patrol)
+    remote/planning.ts     Remote planning + fail-safe danger telemetry
+    remote/*               Remote fleet/miner/hauler/road/maintenance subsystems
 
-  tower.basics.ts          Tower attack/heal/repair
-
-  role.harvester.ts        Legacy harvester fallback
-  role.builder.ts          Legacy builder fallback
-  role.upgrader.ts         Legacy upgrader fallback
-  role.doctor.ts           Legacy doctor fallback + shared repair utilities
-  role.defender.ts         Defender combat behavior
-  role.manual.ts           Manual-control stub
-
-  memoryAudit.ts           Memory consistency audit (runs on deploy)
-  debug.ts                 Console debug helpers
-  types.d.ts               All Memory extensions and type unions
+  tower/
+    basics.ts              Tower attack/heal/repair logic
+  spawn/
+    renewal.ts             Renew reservation helpers
 ```
 
-## Tick Loop (main.ts)
+## Tick Loop (`main.ts`)
 
-```
-┌─────────────────────────────────────────────┐
-│ loop() — called by Screeps every tick       │
-├─────────────────────────────────────────────┤
-│ 1. Refresh debug-path state                 │
-│ 2. Install console helpers (once)           │
-│ 3. Log tick, generate pixel if bucket ≥10k  │
-├─────────────────────────────────────────────┤
-│ 4. creepMemoryManagement.run()              │
-│    - Delete dead creep memory               │
-│    - Restore remote assignments for orphans │
-│    - Assign fallback roles                  │
-├─────────────────────────────────────────────┤
-│ 5. memoryAudit.runIfBuildChanged()          │
-│    - Full consistency audit on new deploy   │
-│    - Skipped if CPU bucket < 500            │
-├─────────────────────────────────────────────┤
-│ 6. For each owned room:                     │
-│    a. populationControl.checkDefenders()    │
-│    b. roomController.run()                  │
-│    c. towerBasics.run()                     │
-├─────────────────────────────────────────────┤
-│ 7. For each non-spawning creep:             │
-│    a. Assign remote jobs if remoteRoom set  │
-│    b. Try to renew standby miners           │
-│    c. Run defender combat (bypasses jobs)   │
-│    d. Flee hostiles (or emergency heal)     │
-│    e. creepJobRunner.run() — execute job    │
-│    f. Fallback: role.harvester/builder/...  │
-├─────────────────────────────────────────────┤
-│ 8. debug.tickRemoteCreepLog() — periodic    │
-└─────────────────────────────────────────────┘
-```
-
-## Data Flow
-
-```
-Room state
-    ↓
-RoomController builds context (structures, sources, creeps, sites, ...)
-    ↓
-Measure capabilities & demand
-    ↓
-Compute deficits (miner, hauler, worker, heal, mineral)
-    ↓
-Spawn planning — chooseSpawnRequest() → spawnCreep()
-    ↓
-Job assignment — setJob(type, target) on creep memory
-    ↓
-Job execution — creepJobRunner.run() each tick
-    ↓
-Job completion → clearJob() → reassigned next tick
-```
-
-## Two Execution Paths
-
-| Path | How | Used for |
-|------|-----|----------|
-| **Strategic** | `room.controller` assigns `jobType`/`jobTargetId` → `creep.jobRunner` executes | All economic creeps (miners, haulers, workers, healers, remote roles, mineral miners) |
-| **Legacy fallback** | Boolean state flags in creep memory (`dumping`, `building`, `repairing`, `upgrading`) | Runs when `creepJobRunner` returns false (no job assigned) |
-
-The strategic path is the primary path. Legacy fallback exists for compatibility and should shrink over time.
+1. Refresh debug hooks/helpers.
+2. Run `creepMemoryManagement.run()`.
+3. Run `memoryAudit.runFullAudit()` on build change.
+4. For each owned room: `roomController.run(room)` then `towerBasics.run(room)`.
+5. For each non-spawning creep:
+   - Assign remote jobs if `remoteRoom` is set.
+   - Handle standby miner parking.
+   - If role is `patrol`, run `role/patrol.ts` and skip economic flow.
+   - Otherwise run hostile-evade flow (`REMOTE_HOSTILE_EVADE_DISTANCE`).
+   - Try home renew.
+   - Run strategic job runner.
+   - Fall back to legacy role scripts when needed.
 
 ## Key Type Unions
 
-**CreepArchetype** — spawn intent + capability label:
-```
-worker | miner | hauler | doctor | claimer | remoteMiner |
-remoteHauler | remoteMaintainer | remoteScout | mineralMiner | defender
-```
+`CreepArchetype` includes `patrol` and retains `doctor` as the active HEAL-body archetype. The `defender` archetype has been removed; `memoryAudit.ts` migrates any surviving `defender` memory entries to `patrol` on each deploy.
 
-**CreepJobType** — executable work unit:
-```
-harvestSource | withdrawEnergy | withdrawResource | pickupEnergy |
-pickupResource | depositEnergy | depositResource | refillSpawn |
-refillTower | build | repair | upgrade | heal | mineMineral |
-depositMineral | reserveController | claimController | travelRoom | idle
-```
+`CreepJobType` remains the strategic job union used by `jobRunner`.
 
-## Build & Deploy
+## Defense Model
 
-```
-npm run build    → rollup -c → dist/main.js
-npm run push     → grunt-screeps → Screeps server
-npm run deploy   → build + push
-npm run watch    → auto-rebuild on file save
-```
+- Towers are first line.
+- Patrol creeps are strategic expel units (RCL6+ baseline plus hostile surge), with low-RCL home-only emergency fallback.
+- Non-patrol creeps evade nearby armed hostiles.
+- Armed-hostile remotes with zero patrol coverage trigger a temporary non-combat retreat/spawn block failsafe.
 
-Build injects the 8-char git commit hash via rollup `output.banner` (`var __BUILD_COMMIT__ = "abcd1234"`). The server detects new deploys by comparing against `Memory.lastBuildCommit` and triggers a one-time memory audit.
+## Build
+
+- `npm run build` compiles TypeScript to `dist/main.js`.
+- Build hash is written into bundle; changed hash triggers memory audit on next tick.

@@ -8,7 +8,7 @@ approach.
 
 ## Room Controller Pipeline
 
-`room.controller.run(room)` executes each tick:
+`room/controller.run(room)` executes each tick:
 
 ```
 buildContext()       → gather structures, sources, creeps, sites, resources
@@ -30,37 +30,49 @@ runSpawnPlanner()   → spawn creeps to fill measured deficits
 | Archetype | Body Strategy |
 |-----------|--------------|
 | `miner` | WORK-heavy, static (5W1C1M) or mobile (5W1C3M), scales down with energy |
-| `hauler` | CARRY+MOVE triples (2C1M per 150 energy), optional trailing WORK when budget allows |
-| `worker` | WORK:CARRY:MOVE at configurable `workRatio` (1–3 WORK per CARRY+MOVE pair) |
-| `doctor` | Fixed templates with HEAL; WORK+CARRY for energy handling |
+| `hauler` | CARRY+MOVE triples (2C1M per 150 energy), optional trailing WORK when budget allows; capped at 30 CARRY (1500 carry capacity) |
+| `worker` | WORK×workRatio + CARRY + MOVE×ceil((workRatio+1)/2) per unit; MOVE count gives full road speed. workRatio 1→[W,C,M], 2→[W,W,C,M,M], 3→[W,W,W,C,M,M]; capped at 30 CARRY (1500 carry capacity) |
+| `patrol` | Combat interceptor template (`2 TOUGH, 6 ATTACK, 7 MOVE, 1 HEAL`) with scaled fallbacks |
 | `mineralMiner` | Same body as static miner, assigned to mineral |
 | `remoteMiner` | Static (container) or mobile variant, WORK-heavy |
-| `remoteHauler` | CARRY+MOVE triples, optional trailing WORK at higher budgets |
+| `remoteHauler` | CARRY+MOVE triples + WORK+MOVE (unless minimal [CARRY, MOVE] fallback) |
 | `remoteMaintainer` | WORK+CARRY+MOVE fixed templates |
 | `remoteScout` | 1–2 MOVE parts only |
 | `claimer` | CLAIM+MOVE pairs scaled to budget; min 1 part, reserve mode min 2 |
 
-Body planning lives in `planBodyForArchetype()` in `creep.capabilities.ts`. Legacy body planning
-(`balanceSpec()` in `creep.roleBalance.ts`) is used only for emergency defenders.
+Body planning lives in `planBodyForArchetype()` in `creep/capabilities.ts`. Legacy body planning
+(`balanceSpec()` in `creep/roleBalance.ts`) is retained for legacy compatibility modules.
 
-**Body budget cap:** All archetypes are planned against `max(BODY_MIN_BUDGET, floor(energyCapacityAvailable × BODY_BUDGET_RATIO))` rather than the raw `energyCapacityAvailable`. With `BODY_BUDGET_RATIO = 0.5` and `BODY_MIN_BUDGET = 300`, bodies target at most 50% of room energy capacity, so creeps can spawn with partial extension fill. Demand calculations (`desiredHaulerCapacity`, `desiredWorkerWork`) use the same capped budget so population counts stay consistent with actual body sizes. At RCL 8 the 50-part body limit typically binds first, so those bodies are unaffected.
+**Body budget cap:** Most archetypes are planned against `max(BODY_MIN_BUDGET, floor(energyCapacityAvailable × BODY_BUDGET_RATIO))` rather than the raw `energyCapacityAvailable`. With `BODY_BUDGET_RATIO = 0.5` and `BODY_MIN_BUDGET = 300`, bodies target at most 50% of room energy capacity, so creeps can spawn with partial extension fill. Demand calculations (`desiredHaulerCapacity`, `desiredWorkerWork`) use the same capped budget so population counts stay consistent with actual body sizes. At RCL 8 the 50-part body limit typically binds first, so those bodies are unaffected.
+
+Exceptions:
+- Reserve-mode `claimer` requests can use full room energy capacity to reach the requested CLAIM-part count.
+- Low-RCL emergency home-defense `patrol` requests (`RCL < 6`, armed hostile visible in home) use full room energy capacity and wait for that planned body instead of falling back to the normal 50% capped body.
+
+**Carry capacity cap:** Dynamic body builders (`hauler`, `remoteHauler`, `worker`) are hard-capped at `MAX_CARRY_CAPACITY = 1500` units (30 CARRY parts). This applies regardless of energy budget or room RCL. Fixed-template archetypes (miners, remoteMaintainer, patrol, etc.) are unaffected as their CARRY counts are already low.
 
 ## Spawn Planning Priority
 
-`chooseSpawnRequest()` in `room.controller.ts` selects the next creep to spawn:
+`chooseSpawnRequest()` in `room/remote/spawn.ts` selects the next creep to spawn:
 
 ```
 1. Emergency worker          → if no creeps exist (recovery)
 2. Local source miner        → per uncovered source
 3. Standby local miner       → 1 per room (renewable substitute)
-4. Doctor                    → if no heal capability & energy ≥ 450
+4. Patrol                    → `RCL >= 6`, `target = min(ceil(enabledRemotes / 2) + hostileRooms, 2 + 2*enabledRemotes)`; `RCL < 6`, up to 1 only when home has armed hostiles
 5. Hauler                    → minimum 2 at RCL4+ with storage
 6. Hauler capacity           → capacity deficit
 7. Worker work capacity      → work deficit
 8. Mineral miner             → if mineral ready (extractor exists, container exists, mineral.mineralAmount > 0)
 9. Claim target              → configured claimTargets
 10. Remote creeps            → via remoteSpawnRequest() (see REMOTES.md)
+11. Storage upgrade worker   → lowest-priority RCL < 8 surplus-energy target
 ```
+
+Storage-backed upgrade workers are spawned only after all higher-priority local
+and remote requests decline. At `RCL < 8`, storage energy `>200k`, `>300k`, and
+`>400k` targets total worker counts of 2, 3, and 4 respectively. RCL 8 excludes
+this path because upgrade throughput is capped.
 
 **Gates**:
 - If any local spawn request is pending (not enough energy), remote requests are skipped entirely.
@@ -81,7 +93,7 @@ For haulers/workers with free capacity:
      - Local haulers require at least 50% of their total carry capacity at the mineral site
   3. Withdraw from storage / structures:
      - Workers: storage-first whenever room storage has energy
-     - Haulers: source containers (at miner/mineral sites), then source links, then hub/controller/sink links
+     - Haulers: hub/controller/sink links first (drain them so runLinks always has a free receiver), then terminal, then source containers, then source links as overflow
      - For local haulers only, mining-site source containers/links are considered only if they hold at least 50% of hauler carry capacity
      - Terminal energy is available as a fallback withdrawal source with a reserve policy:
        - Keep reserve in normal mode: RCL6=5k, RCL7=10k, RCL8=50k
@@ -89,6 +101,12 @@ For haulers/workers with free capacity:
 
 For haulers carrying energy but with free capacity & available drops:
   → Continue gathering dropped resources (skip spending phase)
+
+For workers carrying partial energy:
+  → Continue available build/repair work before topping up, so chains of small wall/rampart sites do not cause refill bounces
+
+Emergency refill preemption:
+  → During spawn/extension pressure, energy-carrying local haulers and support creeps interrupt idle/deposit/withdraw/build/repair/upgrade work to refill spawn/extensions first, then low towers.
 
 Exclusive for workers (fallback if nothing above):
   4. Harvest from source (temporary fallback; reassigned once energy is loaded)
@@ -117,7 +135,7 @@ When a creep has energy and needs a spending job:
 
 ## Job Execution
 
-Jobs are stored in creep memory and executed by `creep.jobRunner.run()`:
+Jobs are stored in creep memory and executed by `creep/jobRunner.run()`:
 
 ```
 Job fields: jobType, jobTargetId, jobRoomName, jobResourceType, jobAssignedAt
@@ -137,14 +155,15 @@ Each tick the runner:
 Target: 1 miner per source
           │
           ▼
-Miner assigned to source ──→ TTL < 500? ──→ Renew at spawn
-          │                               │
-          │                               ▼
-    Stay on source                    Renew loop (TTL ≥ 1300 stop)
+Miner assigned to source ──→ Stay on source until death ──→ Respawn fresh
 ```
 
-The miner self-renews at spawn when TTL drops below 500 (`HOME_RENEW_START_TTL`) and stops renewing
-once TTL reaches 1300 (`HOME_RENEW_STOP_TTL`). The same miner stays assigned to its source throughout.
+Local static miners (`miner`/`mineralMiner`) **do not renew at the home spawn**. Renewing would pull a
+miner off its container, idling the source and tying up the spawn for the duration; a fresh replacement
+only walks out once and then mines for a full lifetime, so replacement is strictly better. Home renewal
+(`tryRenewHomeCreep`) is restricted to an explicit allow-list (`HOME_RENEWABLE_ARCHETYPES` = `worker`,
+`hauler`) — see [Home creep renewal](#home-creep-renewal). The same miner stays assigned to its source
+until it dies, then the population planner respawns one.
 
 ### Remote miners
 
@@ -155,10 +174,34 @@ Remote miners do not renew at the home spawn. Instead, handoff replacement uses 
 - The standby travels to the remote room and pre-positions near the mining site (kept within range 4-10).
 - When the incumbent miner dies, the standby is promoted and takes over harvesting that source.
 
+## Home Creep Renewal
+
+`tryRenewHomeCreep` (`main.ts`) decides whether a home creep walks to a spawn to renew instead of
+dying and being respawned. Renew is energy-neutral per unit of life and occupies the spawn while it
+runs, so it only pays off for **expensive, in-room, stationary-ish** bodies whose worksite is near the
+spawn. Gates, in order:
+
+1. **No remote creeps** — remote renewal is handled separately (`manageRemoteRenewal`).
+2. **No CLAIM parts** — the game forbids renewing CLAIM bodies.
+3. **Archetype allow-list** (`HOME_RENEWABLE_ARCHETYPES` = `worker`, `hauler`). Static `miner`/
+   `mineralMiner` are excluded so they never leave their source; combat (`patrol`, `doctor`) and
+   claimers are excluded so they always field full-TTL fresh bodies.
+4. **Body-cost floor** (`HOME_RENEW_MIN_BODY_COST` = 1000) — cheap early-RCL bodies are trivial to
+   respawn, so renewal isn't worth the spawn occupation.
+5. **Body-staleness guard** (`HOME_RENEW_STALE_BODY_RATIO` = 0.8) — if a freshly planned body at the
+   room's current budget (`energyCapacityAvailable × BODY_BUDGET_RATIO`) would be meaningfully larger
+   than the creep's current body, skip renewal so the creep is replaced at the new, larger size rather
+   than locking in an outdated body after RCL/extension growth.
+
+Once renewing, the creep self-renews when TTL drops below 250 (`HOME_RENEW_START_TTL`) and stops at
+1300 (`HOME_RENEW_STOP_TTL`). During home recovery, local renew is blocked unless TTL is critical
+(`HOME_RENEW_CRITICAL_TTL` = 120); active recovery renews stop at the short recovery ceiling of 350
+(`HOME_RENEW_RECOVERY_STOP_TTL`).
+
 ## Job Reservation System
 
 To prevent multiple creeps targeting the same resource (e.g., three haulers all going for the same
-dropped energy), `room.controller.ts` builds a `JobReservations` object each tick:
+dropped energy), `room/controller.ts` builds a `JobReservations` object each tick:
 
 ```
 Reservations track:
@@ -173,17 +216,20 @@ Reservations track:
   - upgraderWork: total                  for controller upgrade
 ```
 
-Creeps are sorted by archetype priority (miner=1, mineralMiner=2, hauler=3, doctor=4, worker=5)
-and assigned jobs in order, deducting from reservations to avoid pile-ups.
+Creeps are sorted by economic archetype priority (miner=1, mineralMiner=2, hauler=3, worker=5), then assigned jobs in order while deducting reservations to avoid pile-ups. Patrol creeps are excluded from economic assignment.
 
 ## Links
 
-Links are classified into groups by `room.structures.ts`:
-- **source** — near sources (≤2 range), send energy outward
-- **hub** — near storage/spawn (≤3 range), receive energy
-- **controller** — near controller (≤4 range), receive energy for upgrading
-- **sink** — near ≥3 extensions, receive energy for spawn refill
-- **other** — unclassified
+Links are classified into groups by `room/structures.ts`. **A link can belong to multiple groups simultaneously** if it is near multiple qualifying structures:
+- **source** — within range 2 of any source; sends energy outward
+- **hub** — within range 3 of storage or any spawn; receives energy
+- **controller** — within range 4 of the room controller; receives energy for upgrading
+- **sink** — within range 3 of ≥3 extensions; receives energy for spawn refill
+- **other** — matches none of the above
 
-`runLinks()` transfers energy from sources/hubs/other to receivers (sinks, hubs, controller links).
-Transfer threshold: 400 energy. Only hub links send when spawn pressure is zero.
+`runLinks()` transfers energy from senders (source links and other links) to receivers (sink, hub, controller links), with one-way flow enforced by excluding source-class links from the receiver pool. This means source+controller/source+hub dual-class links are treated as sender-side only. The sender list is deduplicated so multi-classified links are only processed once. Transfer threshold: 200 energy.
+
+**Hauler interaction with links:**
+- Haulers drain hub/controller/sink links first (primary pickup) to keep them ready for incoming transfers from `runLinks`.
+- Source containers and source links are fallback overflow — only picked if no demand links have energy.
+- This means the intended energy flow is: miner → source link → [runLinks] → hub/controller link → hauler → storage/spawn/tower.

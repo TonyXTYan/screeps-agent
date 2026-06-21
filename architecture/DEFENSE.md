@@ -12,145 +12,111 @@
                      │
                      ▼
 ┌──────────────────────────────────────────┐
-│ Layer 2: Defender Creeps                  │
-│ - Emergency spawn override                │
-│ - Runs before economic spawn planning     │
-│ - Combat behavior bypasses job runner     │
+│ Layer 2: Patrol Creeps                    │
+│ - Strategic patrol spawn at RCL >= 6      │
+│ - Baseline + hostile surge sizing          │
+│ - Converge on visible armed hostiles       │
 └──────────────────────────────────────────┘
                      │
                      ▼
 ┌──────────────────────────────────────────┐
-│ Layer 3: Non-Combat Flee                  │
-│ - All non-defender creeps flee hostiles   │
-│ - Heal-capable creeps do emergency heal   │
-│   instead of fleeing                      │
+│ Layer 3: Non-Combat Evade                 │
+│ - Non-patrol creeps dodge nearby hostiles │
+│ - HEAL creeps can emergency-heal allies   │
 └──────────────────────────────────────────┘
 ```
 
-## Layer 1: Towers (tower.basics.ts)
+## Layer 1: Towers (tower/basics.ts)
 
 Executed every tick per room in `towerBasics.run(room)`.
 
-### Priority per tower (in order):
+### Priority per tower (in order)
 
-```
-1. Attack closest armed hostile creep                        (always, any energy)
-2. Heal/Repair phase (energy ≥ minEnergyForRepair: 70% peace / 50% combat)
-   a. Heal closest injured friendly creep                    (if any damaged creeps exist)
-   b. Repair (else):
-      i.    Very urgent     (< 500 hits, non-wall)          [hits ascending]
-      ii.   Urgent          (< 10K hits, non-wall)          [hits ascending]
-      iii.  Critical        (non-wall, < 10% HP)            [hits ascending]
-      iv.   Normal          (repairStructureFilter, non-wall) [hits ascending]
-      v.    Crit defense    (wall/rampart < 10K hits)       [hits ascending]
-      vi.   Walls/ramparts  (full defense list)             (only if energy ≥ minEnergyForDefense)
-3. Critical-only phase (energy ≥ 50%, peace only; < 70%):
-   - non-wall < 10% HP  OR  wall/rampart < 10K hits        [hits ascending]
-```
+1. Attack closest armed hostile creep (always, any energy).
+2. Heal/repair branch when tower energy is above staged thresholds.
+3. Critical-only repair branch at mid energy in peace mode.
 
-**Claim distribution**: Towers track claimed repair IDs per tick so multiple towers don't all
-repair the same target. Each tower picks the next-most-urgent unclaimed structure.
+Wall/rampart caps are still provided by `wallRampartRepairCap()` in `role/doctor.ts`.
 
-### Energy thresholds (dynamic based on combat state)
+## Layer 2: Patrol Creeps (`room/remote/spawn.ts` + `role/patrol.ts`)
 
-`minEnergyForRepair` — gates entry into heal/repair phase:
+### Spawn sizing
 
-**During peace** (no armed hostiles): ≥ 70% energy
-**During combat** (armed hostiles present): ≥ 50% energy
+At `RCL >= 6`, patrol target per home room is:
 
-`minEnergyForDefense` — gates wall/rampart repair specifically (tier 2b-v):
+- `baseline = ceil(enabledRemoteRooms / 2)`
+- `hostileRooms = (homeArmedHostiles > 0 ? 1 : 0) + enabledRemotesWithVisibleArmedHostiles`
+- `cap = 2 + 2 * enabledRemoteRooms`
+- `target = min(baseline + hostileRooms, cap)`
 
-**During peace**: ≥ 75% energy
-**During combat**: ≥ 40% energy
+At `RCL < 6`, patrol **spawning** is limited to an emergency home-defense fallback:
 
-`DEFENSE_CRITICAL_MIN_ENERGY` — gates critical defense tier (tier 3):
+- `target = 1` when any armed hostile is visible in home room (hostile-room count model)
+- no remote baseline patrol is spawned below RCL 6
+- the emergency patrol request uses full room energy capacity rather than the normal 50% body-budget cap, and waits for that body instead of scaling down
 
-**Always**: ≥ 50% energy (no dynamic change based on combat state)
+The patrol **behavior** (`role/patrol.ts`) is not RCL-gated. An existing patrol — including one spawned as RCL < 6 home defense — runs `visibleRemoteThreats` every tick and will respond to remote threats just like an RCL 6+ patrol.
 
-This tier activates only during peace when `energyRatio < minEnergyForRepair` (70%), filling
-the 50–70% energy gap. During combat, `minEnergyForRepair` is already 0.5, so critical defense
-is handled within the main branch (tier 2b-iv).
+`enabledRemoteRooms` counts all enabled remote modes (`harvest`, `reserve`, `claim`).
 
-Attack always proceeds regardless of energy level.
+Patrol body costs, checked against spawn + extension capacity:
 
-### Repair structure criteria
+| RCL | Room energy capacity | Best emergency patrol body |
+|-----|----------------------|----------------------------|
+| 1 | 300 | 140 energy: `TOUGH, ATTACK, MOVE` |
+| 2 | 550 | 440 energy: `TOUGH, ATTACK, MOVE, MOVE, HEAL` |
+| 3 | 800 | 770 energy: `TOUGH, ATTACK x2, RANGED_ATTACK, MOVE x4, HEAL` |
+| 4 | 1300 | 1160 energy: `TOUGH x2, ATTACK x3, RANGED_ATTACK x2, MOVE x7, HEAL` |
+| 5 | 1800 | 1160 energy: same as RCL 4 |
 
-- **Normal structures**: repair when hits < 90% of max
-- **Walls/ramparts**: staged cap by RCL (see below)
+The full-capacity exception mainly matters at RCL 3: the global 50% cap would plan against 400 energy and select a 320-energy no-HEAL patrol, even though the room can support a 770-energy self-healing hybrid patrol once extensions are filled.
 
-### Wall/rampart staged caps
+### Patrol behavior (expel mode)
 
-| RCL | Max hits  |
-|-----|-----------|
-| 2   | 20,000    |
-| 3   | 30,000    |
-| 4   | 50,000    |
-| 5   | 75,000    |
-| 6   | 100,000   |
-| 7   | 300,000   |
-| 8   | Infinity  |
+- Patrols use coordinated room allocation under simultaneous threats:
+  - first pass assigns one patrol per armed-threat room when available,
+  - remaining patrols are assigned by threat score priority.
+- Hostile target priority: `HEAL` parts first, then `RANGED_ATTACK`, then `ATTACK`.
+- Combat pursuit is **clamped to the threat room**: `moveToCombatTarget` paths with `maxRooms: 1` and treats the room's exit tiles as impassable, and the threat loop nudges the patrol off any edge tile before moving. This prevents a border-hugging hostile from dragging the patrol across the room boundary (crossing would drop room vision and revert the patrol to rotation, producing a cross-boundary ping-pong). A hostile that leaves the remote is treated as expelled rather than chased out of the room.
+- When no armed hostile is visible in the chosen room, patrols can clear visible invader cores.
+- If no active threat is visible, patrols rotate through enabled remotes.
+- Rotation cadence is provided by `getPatrolRotationTicks()` (currently returns `50`).
+- During threat-free rotation, patrols loiter around the remote controller (about range 5) with short jitter for one cadence window, then rotate to the next remote.
+- Patrols start renew at `TTL <= 300`; while armed threats are **visible in any enabled remote or home room** (`visibleRemoteThreats` scans all rooms in `Game.rooms`) they continue renewing only until `TTL > 500`, then re-engage; without armed threats they renew until `TTL >= 1400`. A renewing patrol is in the home room — remote rooms that no other patrol is covering become invisible, so those threats typically won't be seen during the renew window. If a remote threat appears while the sole patrol for that remote is renewing, the fail-safe danger marker fires and the remote shuts down; no extra patrol is spawned (the threat is invisible so `hostileRooms` does not spike). The patrol resumes normal rotation after renewal and responds on the next visit, or the fail-safe clears via `dangerUntil` expiry.
 
-From `wallRampartRepairCap()` in `role.doctor.ts`.
+## Layer 3: Non-Combat Evade (`main.ts`)
 
-### Tower under-siege override
+When a non-patrol creep has an armed hostile nearby:
 
-`tryFillTowerUnderSiege(creep)` — when hostiles are present, any creep carrying energy will
-fill the nearest tower before doing other work. This is called from legacy role scripts.
+1. HEAL-capable creeps may prioritize emergency ally healing.
+2. If an armed-hostile fail-safe retreat is active and the creep is already traveling home, it steers toward the exit to home with hostile-avoid costs.
+3. Otherwise use `PathFinder` flee from hostile danger zones.
+4. Fallback to edge nudge if no flee path.
 
-## Layer 2: Defender Creeps (creep.populationControl.ts + role.defender.ts)
+Remote creeps no longer hard-retreat to home room on contact by default.
 
-### Spawning
+### Tunable evade distance
 
-`populationControl.checkDefenders(room)` runs before the room controller's spawn planner:
+Evade radius is controlled by:
 
-```
-If room has armed hostiles:
-  1. Count current defenders in room
-  2. Target defenders = ceil(hostile_count × 1.5)
-  3. If below target every 5 ticks:
-     a. Use balanceSpec() defender body (TOUGH+MOVE+ATTACK+RANGED_ATTACK)
-     b. Minimum body: [TOUGH, MOVE, ATTACK] at 300 energy
-     c. Spawn with role = 'defender', attacking = true, homeRoom = room.name
-```
+- `REMOTE_HOSTILE_EVADE_DISTANCE` in `room/constants.ts` (default `5`).
 
-### Combat behavior (role.defender.ts)
+## Patrol Fail-Safe Danger Marker
 
-When `attacking`:
-- Find closest armed hostile by range
-- Ranged attack + melee attack
-- Move into range
+`dangerUntil/skipReason` is primarily telemetry, with one armed-threat fail-safe gate.
 
-When no hostiles present:
-- Rally near `rallySpawnId` (nearest spawn)
-- Renew at spawn when TTL is low (request under 800, top up toward 1000)
+A remote is marked danger only when:
 
-### Execution priority
+- armed hostiles are visible, and
+- no non-renewing patrol from the same home room is physically deployed in that threatened remote room.
 
-In the main loop, defenders run **before** the job runner:
-```
-if (creep.memory.role === 'defender') { roleDefender.run(creep); continue; }
-```
-This gives defenders immediate combat/renewal behavior and bypasses economic job assignment.
+When that happens, the bot logs and sends `Game.notify` (cooldown throttled per remote), and:
 
-## Layer 3: Non-Combat Flee (main.ts)
+- non-combat remote creeps assigned to that remote retreat to home room.
+- non-combat remote spawns for that remote are blocked until danger clears.
+- when the room is visible and armed hostiles are gone, danger hold applies for 50 ticks before `dangerUntil/skipReason` clears and retreat/spawn blocking stops.
+- if the room is not visible, the fail-safe can remain active until `dangerUntil` expires.
 
-### Flee behavior
+Reviewer note: this fail-safe gate is intentionally armed-hostile-only; invader cores and hostile controller states remain telemetry-only and do not trigger retreat/spawn blocking by themselves.
 
-When a non-defender creep has a hostile within range 5:
-
-1. **Emergency heal**: if the creep has HEAL parts and there's a critically injured ally
-   (hits < 35% or in hostile radius 4), chase and heal them instead of fleeing.
-2. **Retreat heal**: if fleeing but has HEAL, heal lowest-hp ally in range 1 (melee) or 3 (ranged).
-3. **PathFinder flee**: `PathFinder.search()` with `{ flee: true }` from hostiles at range 5.
-4. **Edge nudge**: if at room edge, move inward.
-5. **Home retreat**: if in foreign room, move toward home room.
-
-### Emergency heal target criteria
-
-```ts
-target.hits / target.hitsMax <= 0.35          // critically injured
-// OR
-target has hostile within 4 range             // in combat danger zone
-```
-
-The most critical target is selected by: lowest ratio → most missing HP → closest range.
+Controller attack fallback for CLAIM creeps is restricted to NPC Invader controller states only (`owner/reservation.username === 'Invader'`).

@@ -1,13 +1,15 @@
 import typescript from '@rollup/plugin-typescript';
 import resolve from '@rollup/plugin-node-resolve';
+import commonjs from '@rollup/plugin-commonjs';
 import { execSync } from 'child_process';
 
 let buildCommit = 'unknown';
 try {
-    buildCommit = execSync('git rev-parse --short=8 HEAD', { encoding: 'utf8' }).trim();
+    buildCommit = execSync('git rev-parse HEAD', { encoding: 'utf8' }).trim().slice(0, 8);
 } catch {
     // not a git repo or git not available
 }
+console.log(`[build] commit ${buildCommit}`);
 
 export default {
   input: 'src/main.ts',
@@ -17,5 +19,5 @@ export default {
     sourcemap: true,
     banner: `var __BUILD_COMMIT__ = "${buildCommit}";`,
   },
-  plugins: [resolve(), typescript()],
+  plugins: [resolve(), commonjs(), typescript()],
 };

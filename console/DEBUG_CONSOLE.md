@@ -46,6 +46,12 @@ Output:
     miner=Bob  W=12  TTL=300  traveling  pos=[?,?]
 ```
 
+When the remote is in danger lockout the header line includes a warning suffix:
+
+```
+[REMOTE] t=71219200 W9N9 (home: W7N9):  ⚠ DANGER until=71220700 (~1500t)
+```
+
 Columns: `archetype  name  ttl  currentRoom  status  energy  sourceId  pos  [stn=[x,y]]  [target]  body  [job=...] [tgt=...] [res=...] [clm=...] [stuck=...] [to=... ex=...] [trg=[x,y] r=.. p=..]`
 
 Status values:

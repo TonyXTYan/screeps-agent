@@ -5,3 +5,4 @@
 - [Code Map](CODEMAP.md) — Quick mapping from architecture concepts to implementation files
 - [Known Issues](KNOWN_ISSUES.md) — Current cleanup, alignment, and deferred automation follow-up work
 - [Architecture Overview](../../architecture/OVERVIEW.md) — Runtime flow, module ownership, and data-path reference
+- [Codegraph](codegraph.md) — Call-graph/symbol-search tool; CLI commands, MCP server setup, per-machine init instructions

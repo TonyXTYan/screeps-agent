@@ -19,9 +19,9 @@ type CreepArchetype =
     'worker' |
     'miner' |
     'hauler' |
+    'patrol' |
     'doctor' |
     'claimer' |
-    'defender' |
     'remoteMiner' |
     'remoteHauler' |
     'remoteMaintainer' |
@@ -51,6 +51,7 @@ type CreepJobType =
 
 type RemoteRoomMode = 'harvest' | 'reserve' | 'claim';
 type RemoteRouteHealth = 'healthy' | 'degraded';
+type EnergyRecoveryReason = 'none' | 'spawn' | 'tower' | 'spawn+tower' | 'hysteresis';
 
 interface RemoteSourcePlan {
     sourceId: string;
@@ -148,6 +149,43 @@ interface MineralPlanMemory {
     staticMining: boolean;
 }
 
+type RemoteMaintenanceTrigger = 'setup' | 'maintainerDeath' | 'maintainerTtl500' | 'memoryAudit';
+
+interface RemoteMaintenanceDecayPressure {
+    roadCount: number;
+    containerCount: number;
+    roadHits: number;
+    roadHitsMax: number;
+    containerHits: number;
+    containerHitsMax: number;
+    roadDecayHitsPerTick: number;
+    containerDecayHitsPerTick: number;
+    totalDecayHitsPerTick: number;
+    roadDecayEnergyPerTick: number;
+    containerDecayEnergyPerTick: number;
+    totalDecayEnergyPerTick: number;
+}
+
+interface RemoteMaintenanceBacklogPressure {
+    roadRepairEnergy: number;
+    containerRepairEnergy: number;
+    totalRepairEnergy: number;
+    roadBuildEnergy: number;
+    containerBuildEnergy: number;
+    totalBuildEnergy: number;
+    totalBacklogEnergy: number;
+}
+
+interface RemoteMaintenancePressure {
+    observedAt?: number;
+    stale: boolean;
+    lastTrigger?: RemoteMaintenanceTrigger;
+    needsRefresh: boolean;
+    lastMaintainerCount: number;
+    decay: RemoteMaintenanceDecayPressure;
+    backlog: RemoteMaintenanceBacklogPressure;
+}
+
 interface RemoteRoomPlan {
     enabled: boolean;
     roomName: string;
@@ -158,9 +196,14 @@ interface RemoteRoomPlan {
     debugPaths?: boolean;
     debugCreeps?: boolean;
     dangerUntil?: number;
+    manualPauseUntil?: number;
     lastScouted?: number;
     lastSeenHostiles?: number;
+    lastSeenInvaderCoreAt?: number;
+    lastSeenHostileControllerAt?: number;
     skipReason?: string;
+    lastPatrolDangerNotifyAt?: number;
+    maintenance?: RemoteMaintenancePressure;
     sources?: { [sourceId: string]: RemoteSourcePlan };
 }
 
@@ -216,13 +259,20 @@ interface CreepMemory {
     remoteRenewing?: boolean;
     remoteStandby?: boolean;
     remoteHaulerRenewAfterTrip?: boolean;
+    remoteHaulerReturning?: boolean;
     remoteHaulerIdleUntil?: number;
+    remoteHaulerLastPickupWasDropped?: boolean;
     remoteHaulerWanderX?: number;
     remoteHaulerWanderY?: number;
     remoteHaulerWanderUntil?: number;
     travelLastX?: number;
     travelLastY?: number;
     travelLastRoom?: string;
+    // Position two ticks ago — used to detect oscillation (a creep that returns to a
+    // tile it just left is looping around a blocker, not making progress).
+    travelPrevX?: number;
+    travelPrevY?: number;
+    travelPrevRoom?: string;
     travelStuckTicks?: number;
     remoteStationStuckSourceId?: string;
     remoteStationPrevX?: number;
@@ -239,9 +289,16 @@ interface CreepMemory {
     trafficYieldY?: number;
     trafficYieldRoom?: string;
     trafficYieldUntil?: number;
+    patrolRoom?: string;
+    patrolRotateAt?: number;
+    patrolRouteIndex?: number;
+    patrolLoiterRoom?: string;
+    patrolLoiterUntil?: number;
     standbyParkStuckTicks?: number;
     standbyParkLastX?: number;
     standbyParkLastY?: number;
+    standbyParkTargetX?: number;
+    standbyParkTargetY?: number;
 }
 
 interface RoomMemory {
@@ -249,6 +306,8 @@ interface RoomMemory {
     structures?: RoomStructureMemory;
     load?: RoomLoadMemory;
     plan?: RoomPlanMemory;
+    energyRecoveryActive?: boolean;
+    energyRecoveryReason?: EnergyRecoveryReason;
     debug_tower?: boolean;
     debug_home?: boolean;
     debug_remotes?: boolean;
@@ -260,4 +319,5 @@ interface SpawnMemory {
 
 interface Memory {
     lastBuildCommit?: string;
+    legacyDefenseMigrationDone?: boolean;
 }

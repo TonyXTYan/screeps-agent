@@ -24,3 +24,6 @@ screeps_console/.venv/
 screeps_console/env/
 screeps_console
 .qwen
+
+# codegraph local index (each developer runs codegraph init)
+.codegraph/

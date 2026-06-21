@@ -1,5 +1,6 @@
-import { ensureArchetype } from './creep.capabilities';
-import { getRoomStructures } from './room.structures';
+import { ensureArchetype } from './creep/capabilities';
+import { getRoomStructures } from './room/structures';
+import { desiredRemoteMaintainerCount } from './room/remote/maintenance';
 
 const DEBUG_CREEP_INTERVAL = 10;
 let debugCreepsLastPrintedAt: number | undefined;
@@ -208,6 +209,12 @@ function remoteSourceMinerCap(sourceId: string, sourcePlan: RemoteSourcePlan): n
     return Math.max(1, Math.min(2, slots));
 }
 
+function formatPressure(value: number): string {
+    if (Number.isInteger(value)) { return String(value); }
+    if (Math.abs(value) >= 10) { return value.toFixed(1); }
+    return value.toFixed(3);
+}
+
 export function ownedRooms(): Room[] {
     const rooms: { [roomName: string]: Room } = {};
     for (const spawnName in Game.spawns) {
@@ -314,7 +321,16 @@ function printRemoteCreepStatus(filterHome?: string, filterRemote?: string): voi
                     a.slice(17, 31).localeCompare(b.slice(17, 31));
             });
 
-            console.log(`[REMOTE] t=${Game.time} ${remoteName} (home: ${room.name}):`);
+            const dangerSuffix = plan.dangerUntil && plan.dangerUntil > Game.time
+                ? `  ⚠ DANGER until=${plan.dangerUntil} (~${plan.dangerUntil - Game.time}t)`
+                : '';
+            const coreSuffix = plan.lastSeenInvaderCoreAt
+                ? `  coreSeen=${plan.lastSeenInvaderCoreAt}`
+                : '';
+            const controllerSuffix = plan.lastSeenHostileControllerAt
+                ? `  hostileCtlSeen=${plan.lastSeenHostileControllerAt}`
+                : '';
+            console.log(`[REMOTE] t=${Game.time} ${remoteName} (home: ${room.name}):${dangerSuffix}${coreSuffix}${controllerSuffix}`);
             for (const line of lines) {
                 console.log(`  ${line}`);
             }
@@ -466,6 +482,44 @@ function printRemoteCreepStatus(filterHome?: string, filterRemote?: string): voi
                 }
             }
 
+            if (plan.maintenance) {
+                const maintenance = plan.maintenance;
+                console.log(`  --- Maintenance Pressure ---`);
+                console.log(
+                    `  meta trigger=${maintenance.lastTrigger ?? 'none'}` +
+                    ` observedAt=${maintenance.observedAt ?? '-'}` +
+                    ` stale=${maintenance.stale ? 'yes' : 'no'}` +
+                    ` needsRefresh=${maintenance.needsRefresh ? 'yes' : 'no'}` +
+                    ` maintainers=${maintenance.lastMaintainerCount}` +
+                    ` target=${desiredRemoteMaintainerCount(plan)}`
+                );
+                console.log(
+                    `  decay roads=${maintenance.decay.roadCount}` +
+                    ` containers=${maintenance.decay.containerCount}` +
+                    ` roadHits=${formatPressure(maintenance.decay.roadHits)}/${formatPressure(maintenance.decay.roadHitsMax)}` +
+                    ` containerHits=${formatPressure(maintenance.decay.containerHits)}/${formatPressure(maintenance.decay.containerHitsMax)}`
+                );
+                console.log(
+                    `  decay/tick roadHits=${formatPressure(maintenance.decay.roadDecayHitsPerTick)}` +
+                    ` containerHits=${formatPressure(maintenance.decay.containerDecayHitsPerTick)}` +
+                    ` totalHits=${formatPressure(maintenance.decay.totalDecayHitsPerTick)}` +
+                    ` roadEnergy=${formatPressure(maintenance.decay.roadDecayEnergyPerTick)}` +
+                    ` containerEnergy=${formatPressure(maintenance.decay.containerDecayEnergyPerTick)}` +
+                    ` totalEnergy=${formatPressure(maintenance.decay.totalDecayEnergyPerTick)}`
+                );
+                console.log(
+                    `  backlog repair road=${formatPressure(maintenance.backlog.roadRepairEnergy)}` +
+                    ` container=${formatPressure(maintenance.backlog.containerRepairEnergy)}` +
+                    ` total=${formatPressure(maintenance.backlog.totalRepairEnergy)}`
+                );
+                console.log(
+                    `  backlog build road=${formatPressure(maintenance.backlog.roadBuildEnergy)}` +
+                    ` container=${formatPressure(maintenance.backlog.containerBuildEnergy)}` +
+                    ` total=${formatPressure(maintenance.backlog.totalBuildEnergy)}` +
+                    ` overall=${formatPressure(maintenance.backlog.totalBacklogEnergy)}`
+                );
+            }
+
             const droppedLines: string[] = [];
             const remoteRoomObj = Game.rooms[remoteName];
             if (remoteRoomObj) {
@@ -518,6 +572,48 @@ function printMineralStatus(room: Room): void {
         `container=${containerStr}`);
 }
 
+function countAssignedRemoteMaintainers(homeRoom: string, remoteRoom: string): number {
+    let count = 0;
+    for (const name in Game.creeps) {
+        const creep = Game.creeps[name];
+        if (creep.spawning) { continue; }
+        if (ensureArchetype(creep) !== 'remoteMaintainer') { continue; }
+        if (creep.memory.homeRoom !== homeRoom) { continue; }
+        if (creep.memory.remoteRoom !== remoteRoom) { continue; }
+        count++;
+    }
+    return count;
+}
+
+function printRemoteMaintainerTargetStatus(homeRoom: string): void {
+    const remotes = Memory.rooms[homeRoom]?.plan?.remoteRooms ?? {};
+    for (const remoteRoom in remotes) {
+        const plan = remotes[remoteRoom];
+        if (!plan.enabled) { continue; }
+        if (plan.mode !== 'harvest') { continue; }
+
+        const maintenance = plan.maintenance;
+        const currentMaintainers = countAssignedRemoteMaintainers(homeRoom, remoteRoom);
+        const snapshotMaintainers = maintenance?.lastMaintainerCount ?? 0;
+        const targetMaintainers = desiredRemoteMaintainerCount(plan);
+        const stale = maintenance?.stale ? 'yes' : 'no';
+        const needsRefresh = maintenance?.needsRefresh ? 'yes' : 'no';
+        const trigger = maintenance?.lastTrigger ?? 'none';
+        const observedAt = maintenance?.observedAt ?? '-';
+
+        console.log(
+            `[REMOTE-MAINT] t=${Game.time} ${homeRoom}->${remoteRoom}` +
+            ` current=${currentMaintainers}` +
+            ` snapshot=${snapshotMaintainers}` +
+            ` target=${targetMaintainers}` +
+            ` stale=${stale}` +
+            ` needsRefresh=${needsRefresh}` +
+            ` trigger=${trigger}` +
+            ` observedAt=${observedAt}`
+        );
+    }
+}
+
 function printHomeCreepStatus(homeRoom: string): void {
     const room = Game.rooms[homeRoom];
     if (room) { printMineralStatus(room); }
@@ -566,7 +662,10 @@ function printHomeCreepStatus(homeRoom: string): void {
         const storeInfo = storeCap === 0
             ? '--'
             : `${creep.store.getUsedCapacity(RESOURCE_ENERGY)}/${storeCap}`;
-        const jobLabel = statusLabels[creep.memory.jobType ?? ''] ?? creep.memory.jobType ?? '-';
+        const isRenewing = creep.memory.renewing === true;
+        const jobLabel = isRenewing
+            ? 'renewing'
+            : (statusLabels[creep.memory.jobType ?? ''] ?? creep.memory.jobType ?? '-');
         const src = (creep.memory.assignedSourceId ?? creep.memory.sourceId ?? '').slice(-8);
         const w = creep.getActiveBodyparts(WORK);
         const c = creep.getActiveBodyparts(CARRY);
@@ -627,10 +726,13 @@ function printHomeCreepStatus(homeRoom: string): void {
             s => s.structureType === STRUCTURE_TOWER
         ) as StructureTower[];
         const lowTowers = towers.filter(t => t.store.getUsedCapacity(RESOURCE_ENERGY) / t.store.getCapacity(RESOURCE_ENERGY) < 0.55);
-        const needsRecovery = room.find(FIND_STRUCTURES).some(s =>
-            s.structureType === STRUCTURE_SPAWN || s.structureType === STRUCTURE_EXTENSION
-        ) && (room.energyAvailable < room.energyCapacityAvailable * 0.5 || lowTowers.length > 0);
-        parts.push(`recovery=${needsRecovery ? 'YES' : 'no'}`);
+        const spawnExtensionPressure = room.find(FIND_STRUCTURES)
+            .filter((s) => s.structureType === STRUCTURE_SPAWN || s.structureType === STRUCTURE_EXTENSION)
+            .reduce((total, structure) => total + (structure as StructureSpawn | StructureExtension).store.getFreeCapacity(RESOURCE_ENERGY), 0);
+        const hasEnergyDemand = spawnExtensionPressure > 0 || lowTowers.length > 0;
+        parts.push(`demand=${hasEnergyDemand ? 'YES' : 'no'}`);
+        parts.push(`recoveryPull=${room.memory.energyRecoveryActive ? 'YES' : 'no'}`);
+        parts.push(`recoveryReason=${room.memory.energyRecoveryReason ?? 'none'}`);
         if (parts.length > 0) {
             enStr += '  ' + parts.join('  ');
         }
@@ -661,9 +763,14 @@ export type DebugConsoleApi = {
 };
 
 export function tickAutoDebug(): void {
-    const tick = Game.time % 10;
-    if (tick === 0){
+    
+    if (Game.time % 5 === 0){
         console.log(`--- Shard ${Game.shard.name} --- Tick ${Game.time} --- ${new Date().toLocaleTimeString()} --- ${Game.cpu.bucket} bucket --- ${Game.market.credits} credits ---`);
+    }
+
+    const tick = Game.time % 19;
+    if (tick === 0){
+        return
     } else if (tick === 1) {
         for (const room of ownedRooms()) {
             if (room.memory.debug_home) { printHomeCreepStatus(room.name); }
@@ -673,9 +780,13 @@ export function tickAutoDebug(): void {
         }
     } else if (tick === 2) {
         for (const room of ownedRooms()) {
-            if (room.memory.debug_remotes) { printRemoteCreepStatus(room.name); }
+            if (room.memory.debug_remotes) {
+                printRemoteCreepStatus(room.name);
+                printRemoteMaintainerTargetStatus(room.name);
+            }
         }
     }
+    
 }
 
 export function tickRemoteCreepLog(): void {

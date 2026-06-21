@@ -1,0 +1,36 @@
+# Patrol Defense Modes Plan
+
+## Implemented Now
+
+### `expel` mode (active)
+
+- Home rooms at `RCL >= 6` maintain patrol coverage:
+  - `baseline = ceil(enabledRemoteRooms / 2)`
+  - `hostileRooms = (homeArmedHostiles > 0 ? 1 : 0) + enabledRemotesWithVisibleArmedHostiles`
+  - `cap = 2 + 2 * enabledRemoteRooms`
+  - `target = min(baseline + hostileRooms, cap)`
+- Patrol creeps rotate enabled remotes and converge on visible armed hostiles.
+- Target priority: hostile `HEAL` > `RANGED_ATTACK` > `ATTACK`.
+- Remote economy creeps no longer auto-retreat home by default; they evade near hostiles.
+- Armed-hostile remotes with zero patrol coverage trigger a fail-safe retreat/block for non-combat remote operations.
+
+## Deferred Modes
+
+### `war-defense` mode (deferred)
+
+- Defensive concentration around owned-room perimeters and critical remote corridors.
+- Explicit fallback from remote expel into home-border hold logic.
+- Threat-tier policies (NPC invader vs player skirmish vs boosted squad).
+
+### `war-offense` mode (deferred)
+
+- Intentional assault mode for hostile rooms/structures.
+- Target package planning (harass, deny mining, structure teardown).
+- Formation-level orchestration and boost-aware composition.
+- Explicit opt-in policy for player-controller attack (default remains NPC Invader-only controller attack fallback).
+
+## Entry Criteria For Future Work
+
+- Patrol expel telemetry is stable and false positives are low.
+- Threat classification and patrol routing are tested across multi-remote contention.
+- CPU budget remains acceptable under simultaneous hostile events.

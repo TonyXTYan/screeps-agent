@@ -9,7 +9,7 @@
     "noUnusedLocals": false,
     "rootDir": "src",
     "outDir": "dist",
-    "types": ["screeps"],
+    "types": ["screeps", "screeps-profiler"],
     "sourceMap": true,
     "declaration": false,
     "allowSyntheticDefaultImports": true

@@ -1,4 +1,9 @@
-import { ensureArchetype } from './creep.capabilities';
+import { ensureArchetype } from './creep/capabilities';
+import {
+    markRemoteMaintenanceRefresh,
+    refreshRemoteMaintenancePressureIfNeeded,
+    snapshotRemoteMaintainerCount,
+} from './room/remote/maintenance';
 
 export function runFullAudit(): number {
     let fixed = 0;
@@ -12,11 +17,13 @@ export function runFullAudit(): number {
     }
 
     fixed += cleanupOrphanedRoomMemory(activeRooms);
+    fixed += migrateLegacyDefenseRoles();
     fixed += cleanupStaleRemotePlans(activeRooms);
     fixed += fixDuplicateSourceAssignments(activeRooms);
     fixed += fixOrphanedSourceReferences(activeRooms);
     fixed += fixStaleTravelMemory();
     fixed += cleanupInvalidCreepMemory(activeRooms);
+    refreshRemoteMaintenanceTelemetry(activeRooms);
 
     if (fixed > 0) {
         console.log(`[memoryAudit] Done: ${fixed} issue(s) fixed`);
@@ -25,6 +32,73 @@ export function runFullAudit(): number {
     }
 
     return fixed;
+}
+
+function migrateLegacyDefenseRoles(): number {
+    let changed = 0;
+    for (const name in Memory.creeps) {
+        const memory = Memory.creeps[name];
+        if (!memory) { continue; }
+
+        if (memory.role === 'defender' || (memory.archetype as string) === 'defender') {
+            memory.role = 'patrol';
+            memory.archetype = 'patrol';
+            memory.attacking = undefined;
+            memory.rallySpawnId = undefined;
+            changed++;
+            continue;
+        }
+        if (memory.role === 'doctor') {
+            memory.role = 'builder';
+            memory.archetype = 'worker';
+            changed++;
+        }
+    }
+
+    if (changed > 0) {
+        console.log(`[memoryAudit] Migrated legacy defense roles: ${changed}`);
+    }
+    Memory.legacyDefenseMigrationDone = true;
+    return changed;
+}
+
+function refreshRemoteMaintenanceTelemetry(activeRooms: Set<string>): void {
+    let refreshed = 0;
+    let stalePending = 0;
+
+    for (const homeRoomName of activeRooms) {
+        const remotes = Memory.rooms[homeRoomName]?.plan?.remoteRooms;
+        if (!remotes) { continue; }
+
+        for (const remoteRoomName in remotes) {
+            const remote = remotes[remoteRoomName];
+            if (!remote.enabled) { continue; }
+            markRemoteMaintenanceRefresh(remote, 'memoryAudit');
+            snapshotRemoteMaintainerCount(remote, countAssignedRemoteMaintainers(homeRoomName, remoteRoomName));
+            if (refreshRemoteMaintenancePressureIfNeeded(remote, remoteRoomName)) {
+                refreshed++;
+            } else if (remote.maintenance?.stale) {
+                stalePending++;
+            }
+        }
+    }
+
+    if (refreshed > 0 || stalePending > 0) {
+        console.log(`[memoryAudit] Remote maintenance telemetry: refreshed=${refreshed} stalePending=${stalePending}`);
+    }
+}
+
+function countAssignedRemoteMaintainers(homeRoomName: string, remoteRoomName: string): number {
+    let count = 0;
+    for (const name in Game.creeps) {
+        const creep = Game.creeps[name];
+        if (creep.spawning) { continue; }
+        if (ensureArchetype(creep) !== 'remoteMaintainer') { continue; }
+        if (creep.memory.homeRoom !== homeRoomName) { continue; }
+        if (creep.memory.remoteRoom !== remoteRoomName) { continue; }
+        count++;
+    }
+    return count;
 }
 
 function cleanupOrphanedRoomMemory(activeRooms: Set<string>): number {
@@ -85,6 +159,14 @@ function cleanupStaleRemotePlans(activeRooms: Set<string>): number {
 
             if (remote.lastSeenHostiles && remote.lastSeenHostiles + 5000 < Game.time) {
                 remote.lastSeenHostiles = undefined;
+                count++;
+            }
+            if (remote.lastSeenInvaderCoreAt && remote.lastSeenInvaderCoreAt + 5000 < Game.time) {
+                remote.lastSeenInvaderCoreAt = undefined;
+                count++;
+            }
+            if (remote.lastSeenHostileControllerAt && remote.lastSeenHostileControllerAt + 5000 < Game.time) {
+                remote.lastSeenHostileControllerAt = undefined;
                 count++;
             }
 

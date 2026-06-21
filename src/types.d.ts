@@ -297,6 +297,8 @@ interface CreepMemory {
     standbyParkStuckTicks?: number;
     standbyParkLastX?: number;
     standbyParkLastY?: number;
+    standbyParkTargetX?: number;
+    standbyParkTargetY?: number;
 }
 
 interface RoomMemory {

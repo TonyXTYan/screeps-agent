@@ -579,15 +579,49 @@ function tryRenewStandbyMiner(creep: Creep): void {
 
 function parkStandbyMinerAwayFromSpawn(creep: Creep, spawn: StructureSpawn): void {
     const range = creep.pos.getRangeTo(spawn);
-    if (range >= STANDBY_MINER_PARK_MIN_RANGE && range <= STANDBY_MINER_PARK_MAX_RANGE) { return; }
+    if (range >= STANDBY_MINER_PARK_MIN_RANGE && range <= STANDBY_MINER_PARK_MAX_RANGE) {
+        creep.memory.standbyParkTargetX = undefined;
+        creep.memory.standbyParkTargetY = undefined;
+        return;
+    }
 
-    const park = standbyMinerParkingTarget(creep, spawn);
+    // Reuse cached target while still en route — only rescan when we arrive or have no target.
+    let park: RoomPosition | null = null;
+    const cx = creep.memory.standbyParkTargetX;
+    const cy = creep.memory.standbyParkTargetY;
+    if (cx !== undefined && cy !== undefined && !(creep.pos.x === cx && creep.pos.y === cy)) {
+        park = new RoomPosition(cx, cy, creep.room.name);
+    }
+
+    if (!park) {
+        park = standbyMinerParkingTarget(creep, spawn);
+        if (park) {
+            creep.memory.standbyParkTargetX = park.x;
+            creep.memory.standbyParkTargetY = park.y;
+        }
+    }
+
     if (!park) { return; }
     creep.moveTo(park, { reusePath: 6, visualizePathStyle: { stroke: '#d1d5db' } });
 }
 
 function standbyMinerParkingTarget(creep: Creep, spawn: StructureSpawn): RoomPosition | null {
     const terrain = creep.room.getTerrain();
+
+    // Two room.find calls replace up to 162 per-tile lookFor calls (81 positions × 2 types).
+    const occupiedByOther = new Set<string>();
+    for (const c of creep.room.find(FIND_MY_CREEPS)) {
+        if (c.id !== creep.id) { occupiedByOther.add(`${c.pos.x},${c.pos.y}`); }
+    }
+    const blockedByStructure = new Set<string>();
+    for (const s of creep.room.find(FIND_STRUCTURES)) {
+        if (s.structureType !== STRUCTURE_ROAD &&
+            s.structureType !== STRUCTURE_CONTAINER &&
+            s.structureType !== STRUCTURE_RAMPART) {
+            blockedByStructure.add(`${s.pos.x},${s.pos.y}`);
+        }
+    }
+
     let best: RoomPosition | null = null;
     let bestRange = Infinity;
 
@@ -601,14 +635,10 @@ function standbyMinerParkingTarget(creep: Creep, spawn: StructureSpawn): RoomPos
             if (rangeFromSpawn < STANDBY_MINER_PARK_MIN_RANGE || rangeFromSpawn > STANDBY_MINER_PARK_MAX_RANGE) { continue; }
             if (terrain.get(x, y) === TERRAIN_MASK_WALL) { continue; }
 
-            const pos = new RoomPosition(x, y, creep.room.name);
-            if (pos.lookFor(LOOK_CREEPS).some((other) => other.id !== creep.id)) { continue; }
-            const blocked = pos.lookFor(LOOK_STRUCTURES).some((structure) =>
-                structure.structureType !== STRUCTURE_ROAD &&
-                structure.structureType !== STRUCTURE_CONTAINER &&
-                structure.structureType !== STRUCTURE_RAMPART);
-            if (blocked) { continue; }
+            const key = `${x},${y}`;
+            if (occupiedByOther.has(key) || blockedByStructure.has(key)) { continue; }
 
+            const pos = new RoomPosition(x, y, creep.room.name);
             const rangeFromCreep = creep.pos.getRangeTo(pos);
             if (rangeFromCreep < bestRange) {
                 best = pos;

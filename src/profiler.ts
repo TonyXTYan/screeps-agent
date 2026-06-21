@@ -12,7 +12,7 @@
 
 import screepsProfiler from 'screeps-profiler';
 
-const PROFILER_ENABLED = true;
+const PROFILER_ENABLED = false;
 
 if (PROFILER_ENABLED) {
     screepsProfiler.enable();

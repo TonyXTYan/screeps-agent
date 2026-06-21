@@ -48,7 +48,7 @@ function migrateLegacyDefenseRoles(): number {
             changed++;
             continue;
         }
-        if (memory.role === 'doctor' || memory.archetype === 'doctor') {
+        if (memory.role === 'doctor') {
             memory.role = 'builder';
             memory.archetype = 'worker';
             changed++;

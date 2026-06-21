@@ -585,12 +585,25 @@ function parkStandbyMinerAwayFromSpawn(creep: Creep, spawn: StructureSpawn): voi
         return;
     }
 
-    // Reuse cached target while still en route — only rescan when we arrive or have no target.
+    // Reuse cached target while still en route, but revalidate occupancy each tick so a creep
+    // or blocking structure that appears on the tile triggers a rescan rather than congesting spawn.
     let park: RoomPosition | null = null;
     const cx = creep.memory.standbyParkTargetX;
     const cy = creep.memory.standbyParkTargetY;
     if (cx !== undefined && cy !== undefined && !(creep.pos.x === cx && creep.pos.y === cy)) {
-        park = new RoomPosition(cx, cy, creep.room.name);
+        const cached = new RoomPosition(cx, cy, creep.room.name);
+        const nowOccupied = cached.lookFor(LOOK_CREEPS).some(c => c.id !== creep.id);
+        const nowBlocked = !nowOccupied && cached.lookFor(LOOK_STRUCTURES).some(s =>
+            s.structureType !== STRUCTURE_ROAD &&
+            s.structureType !== STRUCTURE_CONTAINER &&
+            s.structureType !== STRUCTURE_RAMPART
+        );
+        if (!nowOccupied && !nowBlocked) {
+            park = cached;
+        } else {
+            creep.memory.standbyParkTargetX = undefined;
+            creep.memory.standbyParkTargetY = undefined;
+        }
     }
 
     if (!park) {
